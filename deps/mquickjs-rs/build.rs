@@ -1,11 +1,15 @@
 use std::env;
 use std::path::PathBuf;
 use std::process::Command;
+use std::fs;
 
 fn main() {
     // 获取项目根目录路径
     let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
     let mquickjs_path = format!("{}/../mquickjs", crate_dir);
+    
+    // 复制mqjs_stdlib_impl.c到mquickjs目录
+    copy_stdlib_impl(&crate_dir, &mquickjs_path);
     
     // 生成标准库扩展
     generate_stdlib_extensions(&mquickjs_path);
@@ -24,6 +28,15 @@ fn main() {
     
     // 也链接系统库
     println!("cargo:rustc-link-lib=m");
+}
+
+fn copy_stdlib_impl(crate_dir: &str, mquickjs_path: &str) {
+    let src_path = format!("{}/mqjs_stdlib_impl.c", crate_dir);
+    let dst_path = format!("{}/mqjs_stdlib_impl.c", mquickjs_path);
+    
+    // 复制mqjs_stdlib_impl.c到mquickjs目录
+    fs::copy(&src_path, &dst_path)
+        .expect("Failed to copy mqjs_stdlib_impl.c to mquickjs directory");
 }
 
 fn generate_stdlib_extensions(mquickjs_path: &str) {

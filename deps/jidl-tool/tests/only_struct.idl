@@ -1,0 +1,5 @@
+json struct TestStruct {
+    name: string;
+    count: int;
+    active: bool;
+}

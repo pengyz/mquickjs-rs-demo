@@ -1,0 +1,4 @@
+interface TestInterface {
+    void doSomething(int value);
+    bool checkStatus(string message);
+}

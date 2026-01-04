@@ -1,0 +1,7 @@
+interface TestInterface1 {
+    void doSomething(int value);
+}
+
+interface TestInterface2 {
+    bool checkStatus(string message);
+}

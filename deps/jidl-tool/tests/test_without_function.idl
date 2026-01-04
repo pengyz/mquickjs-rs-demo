@@ -1,0 +1,25 @@
+interface TestInterface {
+    void doSomething(int value);
+    bool checkStatus(string message);
+}
+
+class TestClass {
+    const MAX_VALUE: int = 100;
+    readonly property name: string;
+    property value: int;
+    TestClass(int initialValue);
+    void updateValue(int newValue);
+}
+
+enum TestEnum {
+    VALUE_A,
+    VALUE_B,
+    VALUE_C,
+}
+
+json struct TestStruct {
+    name: string,
+    count: int,
+    active: bool,
+}
+

@@ -1,0 +1,105 @@
+// RIDL grammar definition
+whitespace = _{ (" " | "\t" | "\n" | "\r")+ }
+
+// Comments
+comment = { "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!NEWLINE ~ ANY)* ~ (NEWLINE | EOI) }
+
+// Keywords - separate lexical rule for keywords
+keyword = _{ 
+    "interface" | "class" | "enum" | "struct" | "const" | 
+    "readonly" | "property" | "callback" | "array" | "map" | 
+    "true" | "false" | "fn" | "import" | "as" | "from" | 
+    "json" | "msgpack" | "protobuf" | "using" | "="
+}
+
+// Identifier - must not match keywords
+identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
+
+// Main entry point
+idl = { SOI ~ (WS? ~ (import_stmt | using_stmt | interface_def | class_def | enum_def | struct_def | callback_def | global_function) ~ WS?)* ~ EOI }
+
+// Import statement
+import_stmt = { "import" ~ WS ~ import_list ~ WS? ~ "from" ~ WS? ~ string_literal ~ WS? ~ ";" }
+import_list = { identifier ~ (WS? ~ "," ~ WS? ~ identifier)* ~ (WS? ~ "as" ~ WS? ~ identifier)? }
+
+// Using statement for type aliases
+using_stmt = { "using" ~ WS ~ identifier ~ WS? ~ "=" ~ WS? ~ type ~ WS? ~ ";" }
+
+// Interface definition
+interface_def = { "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ interface_member ~ WS? ~ ";")* ~ WS? ~ "}" }
+interface_member = { identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ (WS? ~ "->" ~ WS? ~ type)? }
+
+// Class definition
+class_def = { "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ class_member ~ WS? ~ ";")* ~ WS? ~ "}" }
+class_member = { 
+    const_member | 
+    readonly_prop | 
+    readwrite_prop | 
+    class_method | 
+    constructor 
+}
+
+// Enum definition
+enum_def = { "enum" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ enum_value ~ WS?)* ~ WS? ~ "}" }
+enum_value = { identifier ~ (WS? ~ "=" ~ WS? ~ number_literal)? ~ (WS? ~ "," ~ WS?)? }
+
+// Struct definition (with optional serialization format)
+struct_def = { (json_format | msgpack_format | protobuf_format)? ~ WS? ~ "struct" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ field_def ~ WS? ~ ";")* ~ WS? ~ "}" }
+
+// Serialization formats
+json_format = { "json" }
+msgpack_format = { "msgpack" }
+protobuf_format = { "protobuf" }
+
+// Callback definition
+callback_def = { "callback" ~ WS ~ identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ WS? ~ ";" }
+
+// Global function
+global_function = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ (WS? ~ "->" ~ WS? ~ type)? ~ WS? ~ ";" }
+
+// Class members
+const_member = { "const" ~ WS ~ identifier ~ WS? ~ ":" ~ WS? ~ type ~ WS? ~ "=" ~ WS? ~ literal }
+readonly_prop = { "readonly" ~ WS ~ "property" ~ WS ~ identifier ~ WS? ~ ":" ~ WS? ~ type }
+readwrite_prop = { "property" ~ WS ~ identifier ~ WS? ~ ":" ~ WS? ~ type }
+class_method = { identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ (WS? ~ "->" ~ WS? ~ type)? }
+constructor = { identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" }
+
+// Field definition - using type-postfix syntax
+field_def = { identifier ~ WS? ~ ":" ~ WS? ~ type }
+
+// Parameter list
+param_list = { param ~ (WS? ~ "," ~ WS? ~ param)* }
+param = { identifier ~ WS? ~ ":" ~ WS? ~ type }
+
+// Type definition
+type = { union_type }
+union_type = { nullable_type ~ (WS? ~ "|" ~ WS? ~ nullable_type)* }
+nullable_type = { non_nullable_type ~ "?"? }
+non_nullable_type = { 
+    basic_type | 
+    custom_type | 
+    array_type | 
+    map_type | 
+    callback_type |
+    parenthesized_type
+}
+parenthesized_type = { "(" ~ type ~ ")" }
+callback_type = { "callback" ~ WS? ~ identifier? ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" }
+array_type = { "array" ~ "<" ~ type ~ ">" }
+map_type = { "map" ~ "<" ~ type ~ "," ~ WS? ~ type ~ ">" }
+
+// Basic types
+basic_type = { "bool" | "int" | "float" | "double" | "string" | "object" | "function" | "null" | "void" | "any" }
+
+// Custom type
+custom_type = @{ identifier }
+
+// Whitespace (including comments)
+WS = _{ (whitespace | comment)+ }
+
+// Literal values
+literal = { string_literal | number_literal | boolean_literal | null_literal }
+string_literal = { ("\"" ~ ("\\\"" | (!("\"" | EOI) ~ ANY))* ~ "\"") | ("'" ~ ("\\'" | (!("'" | EOI) ~ ANY))* ~ "'") }
+number_literal = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+boolean_literal = { "true" | "false" }
+null_literal = { "null" }

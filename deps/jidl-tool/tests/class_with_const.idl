@@ -1,0 +1,1 @@
+class ClassWithConst { const MAX_VALUE: int = 100; }

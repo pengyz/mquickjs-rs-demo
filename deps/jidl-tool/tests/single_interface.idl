@@ -1,0 +1,4 @@
+interface TestInterface1 {
+    void doSomething(int value);
+}
+
