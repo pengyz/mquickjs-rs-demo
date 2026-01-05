@@ -720,6 +720,7 @@ singleton console {
 }
 
 // 模块化接口定义
+// 注意：module声明必须位于文件开头
 module system.network@1.0
 interface Network {
     fn getStatus() -> string;
@@ -735,10 +736,185 @@ interface DeviceInfo {
 
 ### 模块注册规则
 
-- 无`module`声明：全局注册到global对象
+- **无`module`声明**：全局注册到global对象
   - 函数直接注册到global中
   - 单例对象作为属性注册到global上（如global.console）
-- 有`module`声明：通过`require("module.name")`访问
+- **有`module`声明**：通过`require("module.name")`访问
+- **module声明作用域**：应用于整个RIDL文件，一个文件只能有一个module声明
+- **module声明位置**：必须位于文件开头，在任何接口、类或其他定义之前
+- **版本号格式**：module声明中的版本号格式为`主版本号.次版本号`（如`1.0`）或仅包含主版本号（如`1`），不允许超过两个部分的版本号（如`1.0.2.5`无效）
+
+### 错误处理机制
+
+为确保用户能够快速定位和修复RIDL文件中的错误，需要实现一个全面的错误处理系统。
+
+#### 1. 错误类型分类
+
+##### 1.1 语法错误 (Syntax Errors)
+- 词法错误：无效字符、未闭合的字符串、无效标识符等
+- 语法错误：缺少分号、括号不匹配、错误的语法规则等
+
+##### 1.2 语义错误 (Semantic Errors) 
+- 无效标识符：使用了关键字作为标识符
+- 无效类型：引用了不存在的类型
+- 重复定义：同一作用域内重复定义标识符
+- 无效的类型引用：引用了不存在的类型
+- 模块声明位置错误：module声明不在文件开头
+
+#### 2. 技术方案
+
+##### 2.1 语法错误处理
+利用pest内置的错误处理机制，它已经可以提供：
+- 错误位置（行号、列号）
+- 错误原因描述
+- 问题代码的上下文显示
+
+##### 2.2 语义错误处理
+在AST构建阶段进行额外的语义验证，实现一个专门的验证器模块，对以下方面进行检查：
+
+1. **标识符验证**：检查是否使用了关键字作为标识符
+2. **类型引用验证**：验证所有类型引用是否有效
+3. **重复定义检查**：确保没有重复定义
+4. **模块声明位置验证**：验证module声明是否在文件开头
+
+#### 3. 错误报告格式
+
+建议的错误报告格式：
+
+``rust
+#[derive(Debug, Clone)]
+pub struct RIDLError {
+    pub message: String,
+    pub line: usize,
+    pub column: usize,
+    pub file: String,
+    pub error_type: RIDLErrorType,
+}
+
+#[derive(Debug, Clone)]
+pub enum RIDLErrorType {
+    SyntaxError,
+    SemanticError,
+    ValidationError,
+}
+```
+
+#### 4. 实现策略
+
+##### 4.1 阶段一：利用pest的错误处理
+- 使用pest的错误处理机制处理语法错误
+- 直接将pest错误转换为更友好的RIDL错误格式
+
+##### 4.2 阶段二：实现语义验证器
+- 创建`validator`模块
+- 实现各种语义检查功能
+- 在AST构建后执行验证
+
+##### 4.3 阶段三：错误信息优化
+- 提供详细的错误上下文
+- 添加错误位置的代码片段显示
+- 提供可能的修复建议
+
+#### 5. 用户体验考虑
+
+- **清晰的错误信息**：错误信息应该清晰易懂，避免技术术语
+- **准确的位置信息**：提供精确的行号和列号
+- **上下文信息**：显示错误行的上下文，帮助用户定位问题
+- **修复建议**：当可能时，提供如何修复错误的建议
+
+#### 6. 需要考虑的细节
+
+- 如何处理多个错误：是报告第一个错误还是收集所有错误？
+- 如何在错误发生时保持解析过程的稳定性？
+- 如何将内部错误信息转换为用户友好的错误信息？
+
+#### 7. 实现的功能
+
+##### 7.1 语法错误处理
+- 使用pest解析器检测语法错误
+- 提取错误位置信息（行号、列号）
+- 将pest错误转换为自定义的RIDL错误格式
+
+##### 7.2 语义错误处理
+- 实现了语义验证器模块
+- 检测RIDL定义中的语义错误
+- 验证类型引用、标识符等语义正确性
+
+##### 7.3 错误报告机制
+- 统一的错误类型枚举（RIDLErrorType）
+- 包含详细位置信息的错误结构体（RIDLError）
+- 支持批量错误收集与报告
+
+#### 8. 核心组件
+
+##### 8.1 语义验证器
+```rust
+pub struct SemanticValidator {
+    pub file_path: String,
+    pub errors: Vec<RIDLError>,
+}
+```
+
+##### 8.2 核心API
+实现了`parse_ridl_content`函数，作为错误处理的核心API：
+```rust
+pub fn parse_ridl_content(content: &str, file_path: &str) -> Result<Vec<ast::IDLItem>, Vec<validator::RIDLError>>
+```
+
+此函数的功能包括：
+1. 首先使用pest解析器检查语法
+2. 如果语法正确，使用现有parse_idl函数解析内容
+3. 构建AST包装器以进行语义验证
+4. 使用语义验证器进行额外检查
+5. 返回解析结果或错误列表
+
+#### 9. 实现细节
+
+##### 9.1 语法错误捕获
+- 使用pest解析器的错误处理机制
+- 通过`line_col`字段提取错误位置
+- 将pest错误转换为统一的RIDL错误格式
+
+##### 9.2 语义验证
+- 遍历AST节点进行语义检查
+- 验证类型引用的有效性
+- 检查重复定义等问题
+
+#### 10. 测试结果
+
+测试程序验证了错误处理功能的有效性：
+
+1. **语法错误检测**：
+   - 输入：`interface Test { fn method(int x) -> string; `（缺少右括号）
+   - 输出：成功捕获语法错误，报告错误位置（第1行第28列）
+
+2. **有效输入处理**：
+   - 输入：有效的RIDL定义
+   - 输出：成功解析，返回定义列表
+
+#### 11. 使用示例
+
+``rust
+use jidl_tool;
+
+fn main() {
+    let invalid_ridl = r#"interface Test { fn method(int x) -> string; "# ;  // 缺少右括号
+    let result = jidl_tool::parse_ridl_content(invalid_ridl, "test.ridl");
+    
+    match result {
+        Ok(_) => println!("解析成功，没有检测到错误"),
+        Err(errors) => {
+            for error in errors {
+                println!("  - 错误: {}", error.message);
+                println!("    位置: {}:{}", error.file, error.line);
+                println!("    类型: {:?}", error.error_type);
+            }
+        }
+    }
+}
+```
+
+错误处理功能的实现显著提升了RIDL解析器的可用性，通过提供详细的错误信息，使用户能够快速定位和修复RIDL定义中的问题。该实现遵循了设计文档中的规范，支持语法和语义错误的全面检测与报告。
 
 ### singleton对象定义
 

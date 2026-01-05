@@ -1,1 +1,0 @@
-class ClassWithConstructor { ClassWithConstructor(int value); }

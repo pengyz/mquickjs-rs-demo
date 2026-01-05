@@ -1,3 +1,0 @@
-json struct TestStruct {
-    name: string;
-}

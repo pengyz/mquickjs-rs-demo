@@ -1,63 +1,81 @@
-// IDL grammar definition
+// RIDL grammar definition for pest parser
 whitespace = _{ (" " | "\t" | "\n" | "\r")+ }
 
 // Comments
 comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 
 // Keywords - separate lexical rule for keywords
-keyword = _{ "interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "callback" | "array" | "map" | "true" | "false" | "fn" | "import" | "as" | "from" | "using" }
+keyword = _{ 
+    "interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | 
+    "array" | "map" | "true" | "false" | "fn" | "import" | "as" | 
+    "from" | "using" | "module" | "singleton"
+}
 
 // Identifier - must not match keywords
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Main entry point
-idl = { SOI ~ (WS? ~ (interface_def | class_def | enum_def | struct_def | global_function | callback_def | using_def | import_stmt) ~ WS?)* ~ EOI }
+idl = { SOI ~ (WS? ~ module_decl ~ WS)? ~ (WS? ~ definition ~ WS?)* ~ EOI }
+definition = { interface_def | class_def | enum_def | struct_def | global_function | callback_def | using_def | import_stmt | singleton_def }
+module_decl = { "module" ~ WS ~ module_path ~ ("@" ~ WS ~ version)? }
+module_path = { identifier ~ ("." ~ identifier)* }
+version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 
-interface_def = { "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ method_def ~ WS ~ ";")* ~ WS ~ "}" }
-class_def = { "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ class_member ~ WS ~ ";")* ~ WS ~ "}" }
-enum_def = { "enum" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ enum_value ~ WS ~ ",")* ~ WS ~ ","? ~ WS ~ "}" }
+interface_def = { WS? ~ "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ method_def ~ WS ~ ";")* ~ WS ~ "}" }
+class_def = { WS? ~ "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ class_member ~ WS ~ ";")* ~ WS ~ "}" }
+enum_def = { WS? ~ "enum" ~ WS ~ identifier ~ WS ~ "{" ~ WS? ~ enum_value ~ (WS ~ "," ~ WS ~ enum_value)* ~ (WS ~ ",")? ~ WS? ~ "}" }
 
 // Using definition for type aliases
-using_def = { "using" ~ WS ~ identifier ~ WS ~ "=" ~ WS ~ type ~ WS ~ ";" }
+using_def = { WS? ~ "using" ~ WS ~ identifier ~ WS ~ "=" ~ WS ~ type ~ WS ~ ";" }
 
 // Import statement
-import_stmt = { "import" ~ WS ~ (identifier ~ ("as" ~ WS ~ identifier)? ~ (WS ~ "," ~ WS ~ identifier ~ ("as" ~ WS ~ identifier)?)* | "*" ~ WS ~ "as" ~ WS ~ identifier) ~ WS ~ "from" ~ WS ~ string_literal ~ WS ~ ";" }
+import_stmt = { WS? ~ "import" ~ WS ~ import_list ~ WS ~ "from" ~ WS ~ string_literal ~ WS ~ ";" }
+import_list = { (identifier ~ ("as" ~ WS ~ identifier)? ~ (WS ~ "," ~ WS ~ identifier ~ ("as" ~ WS ~ identifier)?)*)
+              | ("*" ~ WS ~ "as" ~ WS ~ identifier) }
 
 // Struct definitions with serialization format
-struct_def = { (json_format | msgpack_format | protobuf_format)? ~ WS? ~ "struct" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ field_def ~ WS ~ ";")* ~ WS ~ "}" }
-global_function = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ WS ~ ("->")? ~ WS ~ type ~ WS ~ ";" }
-callback_def = { "callback" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ WS ~ ";" }
+struct_def = { 
+    WS? ~ 
+    ( 
+        ("json" ~ WS ~ "struct" | "msgpack" ~ WS ~ "struct" | "protobuf" ~ WS ~ "struct") | 
+        "struct" 
+    ) ~ 
+    WS ~ identifier ~ WS ~ "{" ~ (WS ~ field_def ~ WS ~ ";")* ~ WS ~ "}" 
+}
+global_function = { WS? ~ "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ (WS ~ ("->") ~ WS ~ type)? ~ WS ~ ";" }
+callback_def = { WS? ~ "callback" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ WS ~ ";" }
 
-// Serialization formats - these should be treated as literals in struct definitions, not keywords
-json_format = { "json" ~ WS ~ "struct" }
-msgpack_format = { "msgpack" ~ WS ~ "struct" }
-protobuf_format = { "protobuf" ~ WS ~ "struct" }
+// Singleton definition
+singleton_def = { WS? ~ "singleton" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ singleton_member ~ WS ~ ";")* ~ WS ~ "}" }
+singleton_member = { method_def | readonly_prop | readwrite_prop | normal_prop }
 
 // Class members
 class_member = { const_member | readonly_prop | readwrite_prop | normal_prop | method_def | constructor }
 const_member = { "const" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type ~ WS ~ "=" ~ WS ~ literal }
 readonly_prop = { "readonly" ~ WS ~ "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
 readwrite_prop = { "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
-// 新增普通属性定义，没有特殊关键字修饰
+// New property type without special keyword
 normal_prop = { identifier ~ WS ~ ":" ~ WS ~ type }
-// 方法定义：支持 fn name(params) -> type 格式，返回值可选
+// Method definition: support fn name(params) -> type format, return type is optional
 method_def = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ (WS ~ ("->") ~ WS ~ type)? }
 constructor = { identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
 
-// Enum definition
+// Enum definition - fixed to handle comma properly
 enum_value = { identifier ~ (WS ~ "=" ~ WS ~ integer)? }
 
 // Field definition
 field_def = { identifier ~ WS ~ ":" ~ WS ~ type }
 
 // Type definitions - using precedence for handling left recursion
-type = { union_type | optional_type | primary_type }
-primary_type = { basic_type | array_type | map_type | custom_type | callback_type | group_type }
-basic_type = { "bool" | "int" | "float" | "double" | "string" | "void" | "object" | "function" | "callback" | "null" | "any" }
+type = { union_type | nullable_type | primary_type }
+// We need to make sure basic_type comes before custom_type to avoid basic types being parsed as custom types
+primary_type = { array_type | map_type | callback_type | group_type | basic_type | custom_type }
+basic_type = { "bool" | "int" | "float" | "double" | "string" | "void" | "object" | "null" | "any" }
 array_type = { "array" ~ WS ~ "<" ~ WS ~ type ~ WS ~ ">" }
 map_type = { "map" ~ WS ~ "<" ~ WS ~ type ~ WS ~ "," ~ WS ~ type ~ WS ~ ">" }
 union_type = { primary_type ~ (WS ~ "|" ~ WS ~ primary_type)+ }
-optional_type = { primary_type ~ (WS ~ "?")+ }
+// 修改nullable_type，防止嵌套，并使用负前瞻防止重复的?符号
+nullable_type = { (basic_type | array_type | map_type | custom_type | callback_type | group_type) ~ (WS? ~ "?") ~ (!"?") }
 custom_type = { identifier }
 callback_type = { "callback" ~ WS ~ identifier? ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
 group_type = { "(" ~ WS ~ type ~ WS ~ ")" }

@@ -1,1 +1,0 @@
-class ClassWithProps { property value: int; }

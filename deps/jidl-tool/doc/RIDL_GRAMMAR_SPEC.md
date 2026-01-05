@@ -86,11 +86,11 @@ keyword = _{
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Main entry point
-idl = { SOI ~ (WS? ~ definition ~ WS?)* ~ EOI }
-definition = { (module_decl ~ WS)? ~ (interface_def | class_def | enum_def | struct_def | global_function | callback_def | using_def | import_stmt | singleton_def) }
+idl = { SOI ~ (WS? ~ module_decl ~ WS)? ~ (WS? ~ definition ~ WS?)* ~ EOI }
+definition = { interface_def | class_def | enum_def | struct_def | global_function | callback_def | using_def | import_stmt | singleton_def }
 module_decl = { "module" ~ WS ~ module_path ~ ("@" ~ WS ~ version)? }
 module_path = { identifier ~ ("." ~ identifier)* }
-version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)* }
+version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }  // 版本号格式：主版本号.次版本号（可选）
 
 interface_def = { WS? ~ "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ method_def ~ WS ~ ";")* ~ WS ~ "}" }
 class_def = { WS? ~ "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ class_member ~ WS ~ ";")* ~ WS ~ "}" }

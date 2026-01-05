@@ -1,1 +1,0 @@
-interface TestInterface { void doSomething(int value); bool checkStatus(string message); } class TestClass { void updateValue(int newValue); }

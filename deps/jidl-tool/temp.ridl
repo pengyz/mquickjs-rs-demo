@@ -1,1 +1,0 @@
-callback ProcessCallback(success: bool, result: string);

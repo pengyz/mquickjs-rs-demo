@@ -1,55 +1,148 @@
-use serde::{Deserialize, Serialize};
+use std::fmt;
+use serde::{Serialize, Deserialize};
 
-/// IDL项的枚举
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ModuleDeclaration {
+    pub module_path: String,
+    pub version: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct IDL {
+    pub module: Option<ModuleDeclaration>,
+    pub interfaces: Vec<Interface>,
+    pub classes: Vec<Class>,
+    pub enums: Vec<Enum>,
+    pub structs: Vec<StructDef>,
+    pub functions: Vec<Function>,
+    pub using: Vec<Using>,
+    pub imports: Vec<Import>,
+    pub singletons: Vec<Singleton>,
+    pub callbacks: Vec<Function>, // 为简单起见，将回调作为函数处理
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum IDLItem {
     Interface(Interface),
     Class(Class),
     Enum(Enum),
     Struct(StructDef),
     Function(Function),
-    Using(UsingDef),
-    Namespace(Namespace),
-    Import(ImportStmt),
-    Exception(Exception),
+    Using(Using),
+    Import(Import),
+    Singleton(Singleton),
 }
 
-/// 接口定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Interface {
     pub name: String,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
+    pub module: Option<ModuleDeclaration>,
 }
 
-/// 类定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Class {
     pub name: String,
     pub constructor: Option<Function>,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
+    pub module: Option<ModuleDeclaration>,
 }
 
-/// 枚举定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Enum {
     pub name: String,
     pub values: Vec<EnumValue>,
+    pub module: Option<ModuleDeclaration>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct EnumValue {
-    pub name: String,
-    pub value: Option<i32>, // 可选的显式值
-}
-
-/// 结构体定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StructDef {
     pub name: String,
     pub fields: Vec<Field>,
     pub serialization_format: SerializationFormat,
+    pub module: Option<ModuleDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Singleton {
+    pub name: String,
+    pub methods: Vec<Method>,
+    pub properties: Vec<Property>,
+    pub module: Option<ModuleDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Function {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Type,
+    pub is_async: bool,
+    pub module: Option<ModuleDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Method {
+    pub name: String,
+    pub params: Vec<Param>,
+    pub return_type: Type,
+    pub is_async: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Property {
+    pub modifiers: Vec<PropertyModifier>,
+    pub name: String,
+    pub property_type: Type,
+    pub default_value: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum PropertyModifier {
+    ReadOnly,
+    ReadWrite,
+    Const,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Field {
+    pub name: String,
+    pub field_type: Type,
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EnumValue {
+    pub name: String,
+    pub value: Option<i32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Param {
+    pub name: String,
+    pub param_type: Type,
+    pub optional: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Using {
+    pub name: String,
+    pub alias_type: Type,
+    pub module: Option<ModuleDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Import {
+    pub imports: Vec<ImportItem>,
+    pub path: String,
+    pub module: Option<ModuleDeclaration>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ImportItem {
+    pub name: String,
+    pub alias: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -59,93 +152,6 @@ pub enum SerializationFormat {
     Protobuf,
 }
 
-/// 字段定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Field {
-    pub name: String,
-    pub field_type: Type,
-    pub optional: bool,
-}
-
-/// 属性定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Property {
-    pub modifiers: Vec<PropertyModifier>,
-    pub name: String,
-    pub property_type: Type,
-    pub default_value: Option<String>, // 仅对const有效
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub enum PropertyModifier {
-    ReadOnly,
-    Const,
-    ReadWrite,
-}
-
-/// 方法定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Method {
-    pub name: String,
-    pub params: Vec<Param>,
-    pub return_type: Type,
-    pub is_async: bool,
-}
-
-/// 函数定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Function {
-    pub name: String,
-    pub params: Vec<Param>,
-    pub return_type: Type,
-    pub is_async: bool,
-}
-
-/// 使用定义（类型别名）
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UsingDef {
-    pub name: String,
-    pub alias: String,
-    pub target: String,
-}
-
-/// 命名空间定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Namespace {
-    pub name: String,
-    pub items: Vec<IDLItem>,
-}
-
-/// 导入语句
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImportStmt {
-    pub module: String,
-    pub items: Vec<ImportItem>,
-}
-
-/// 导入项
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ImportItem {
-    pub original_name: String,
-    pub alias: Option<String>,
-}
-
-/// 异常定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Exception {
-    pub name: String,
-    pub fields: Vec<Field>,
-}
-
-/// 参数定义
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Param {
-    pub name: String,
-    pub param_type: Type,
-    pub optional: bool,
-}
-
-/// 类型定义
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Type {
     Bool,
@@ -155,20 +161,20 @@ pub enum Type {
     String,
     Void,
     Object,
-    Function,
-    Callback,
-    Null,
-    Any,
     Array(Box<Type>),
     Map(Box<Type>, Box<Type>),
     Union(Vec<Type>),
     Optional(Box<Type>),
     Custom(String),
+    Callback,
+    CallbackWithParams(Vec<Param>),
     Group(Box<Type>),
+    Null,
+    Any,
 }
 
-impl std::fmt::Display for Type {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Bool => write!(f, "bool"),
             Type::Int => write!(f, "int"),
@@ -177,19 +183,24 @@ impl std::fmt::Display for Type {
             Type::String => write!(f, "string"),
             Type::Void => write!(f, "void"),
             Type::Object => write!(f, "object"),
-            Type::Function => write!(f, "function"),
-            Type::Callback => write!(f, "callback"),
-            Type::Null => write!(f, "null"),
-            Type::Any => write!(f, "any"),
             Type::Array(t) => write!(f, "array<{}>", t),
             Type::Map(k, v) => write!(f, "map<{}, {}>", k, v),
             Type::Union(types) => {
                 let type_strs: Vec<String> = types.iter().map(|t| t.to_string()).collect();
                 write!(f, "{}", type_strs.join(" | "))
-            }
+            },
             Type::Optional(t) => write!(f, "{}?", t),
             Type::Custom(name) => write!(f, "{}", name),
+            Type::Callback => write!(f, "callback"),
+            Type::CallbackWithParams(params) => {
+                let param_strs: Vec<String> = params.iter()
+                    .map(|p| format!("{}: {}", p.name, p.param_type))
+                    .collect();
+                write!(f, "callback({})", param_strs.join(", "))
+            },
             Type::Group(t) => write!(f, "({})", t),
+            Type::Null => write!(f, "null"),
+            Type::Any => write!(f, "any"),
         }
     }
 }

@@ -320,8 +320,8 @@ fn rust_type_name(idl_type: &Type) -> String {
         Type::String => "String".to_string(),
         Type::Void => "()".to_string(),
         Type::Object => "Object".to_string(),
-        Type::Function => "Function".to_string(),
         Type::Callback => "Callback".to_string(),
+        Type::CallbackWithParams(_) => "Callback".to_string(), // 回调类型表示为Callback
         Type::Null => "Option<()>".to_string(),
         Type::Any => "serde_json::Value".to_string(),
         Type::Array(inner) => format!("Vec<{}>", rust_type_name(inner)),
