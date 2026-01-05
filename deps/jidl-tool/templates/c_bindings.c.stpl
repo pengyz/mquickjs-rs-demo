@@ -1,0 +1,46 @@
+// Auto-generated C bindings
+#include "mquickjs.h"
+
+// Interfaces
+{% for interface in interfaces %}
+// C bindings for interface: {{ interface.name }}
+{% for method in interface.methods %}
+// Method: {{ interface.name }}::{{ method.name }}
+JSValue {{ interface.name|lower }}_{{ method.name }}_method(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+
+{% endfor %}
+{% endfor %}
+
+// Classes
+{% for class in classes %}
+// C bindings for class: {{ class.name }}
+{% if class.constructor %}
+// Constructor: {{ class.name }}
+JSValue {{ class.name|lower }}_constructor(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+
+{% endif %}
+{% for method in class.methods %}
+// Method: {{ class.name }}::{{ method.name }}
+JSValue {{ class.name|lower }}_{{ method.name }}_method(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+
+{% endfor %}
+{% endfor %}
+
+// Enums
+{% for enum_def in enums %}
+// C bindings for enum: {{ enum_def.name }}
+
+{% endfor %}
+
+// Structs
+{% for struct_def in structs %}
+// C bindings for struct: {{ struct_def.name }}
+
+{% endfor %}
+
+// Global Functions
+{% for function in functions %}
+// Global function: {{ function.name }}
+JSValue js_{{ function.name }}(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+
+{% endfor %}

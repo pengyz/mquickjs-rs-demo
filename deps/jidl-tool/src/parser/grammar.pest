@@ -1,105 +1,80 @@
-// RIDL grammar definition
+// IDL grammar definition
 whitespace = _{ (" " | "\t" | "\n" | "\r")+ }
 
 // Comments
-comment = { "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!NEWLINE ~ ANY)* ~ (NEWLINE | EOI) }
+comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 
 // Keywords - separate lexical rule for keywords
-keyword = _{ 
-    "interface" | "class" | "enum" | "struct" | "const" | 
-    "readonly" | "property" | "callback" | "array" | "map" | 
-    "true" | "false" | "fn" | "import" | "as" | "from" | 
-    "json" | "msgpack" | "protobuf" | "using" | "="
-}
+keyword = _{ "interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "callback" | "array" | "map" | "true" | "false" | "fn" | "import" | "as" | "from" | "using" }
 
 // Identifier - must not match keywords
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Main entry point
-idl = { SOI ~ (WS? ~ (import_stmt | using_stmt | interface_def | class_def | enum_def | struct_def | callback_def | global_function) ~ WS?)* ~ EOI }
+idl = { SOI ~ (WS? ~ (interface_def | class_def | enum_def | struct_def | global_function | callback_def | using_def | import_stmt) ~ WS?)* ~ EOI }
+
+interface_def = { "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ method_def ~ WS ~ ";")* ~ WS ~ "}" }
+class_def = { "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ class_member ~ WS ~ ";")* ~ WS ~ "}" }
+enum_def = { "enum" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ enum_value ~ WS ~ ",")* ~ WS ~ ","? ~ WS ~ "}" }
+
+// Using definition for type aliases
+using_def = { "using" ~ WS ~ identifier ~ WS ~ "=" ~ WS ~ type ~ WS ~ ";" }
 
 // Import statement
-import_stmt = { "import" ~ WS ~ import_list ~ WS? ~ "from" ~ WS? ~ string_literal ~ WS? ~ ";" }
-import_list = { identifier ~ (WS? ~ "," ~ WS? ~ identifier)* ~ (WS? ~ "as" ~ WS? ~ identifier)? }
+import_stmt = { "import" ~ WS ~ (identifier ~ ("as" ~ WS ~ identifier)? ~ (WS ~ "," ~ WS ~ identifier ~ ("as" ~ WS ~ identifier)?)* | "*" ~ WS ~ "as" ~ WS ~ identifier) ~ WS ~ "from" ~ WS ~ string_literal ~ WS ~ ";" }
 
-// Using statement for type aliases
-using_stmt = { "using" ~ WS ~ identifier ~ WS? ~ "=" ~ WS? ~ type ~ WS? ~ ";" }
+// Struct definitions with serialization format
+struct_def = { (json_format | msgpack_format | protobuf_format)? ~ WS? ~ "struct" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ field_def ~ WS ~ ";")* ~ WS ~ "}" }
+global_function = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ WS ~ ("->")? ~ WS ~ type ~ WS ~ ";" }
+callback_def = { "callback" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ WS ~ ";" }
 
-// Interface definition
-interface_def = { "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ interface_member ~ WS? ~ ";")* ~ WS? ~ "}" }
-interface_member = { identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ (WS? ~ "->" ~ WS? ~ type)? }
-
-// Class definition
-class_def = { "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ class_member ~ WS? ~ ";")* ~ WS? ~ "}" }
-class_member = { 
-    const_member | 
-    readonly_prop | 
-    readwrite_prop | 
-    class_method | 
-    constructor 
-}
-
-// Enum definition
-enum_def = { "enum" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ enum_value ~ WS?)* ~ WS? ~ "}" }
-enum_value = { identifier ~ (WS? ~ "=" ~ WS? ~ number_literal)? ~ (WS? ~ "," ~ WS?)? }
-
-// Struct definition (with optional serialization format)
-struct_def = { (json_format | msgpack_format | protobuf_format)? ~ WS? ~ "struct" ~ WS ~ identifier ~ WS ~ "{" ~ (WS? ~ field_def ~ WS? ~ ";")* ~ WS? ~ "}" }
-
-// Serialization formats
-json_format = { "json" }
-msgpack_format = { "msgpack" }
-protobuf_format = { "protobuf" }
-
-// Callback definition
-callback_def = { "callback" ~ WS ~ identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ WS? ~ ";" }
-
-// Global function
-global_function = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ (WS? ~ "->" ~ WS? ~ type)? ~ WS? ~ ";" }
+// Serialization formats - these should be treated as literals in struct definitions, not keywords
+json_format = { "json" ~ WS ~ "struct" }
+msgpack_format = { "msgpack" ~ WS ~ "struct" }
+protobuf_format = { "protobuf" ~ WS ~ "struct" }
 
 // Class members
-const_member = { "const" ~ WS ~ identifier ~ WS? ~ ":" ~ WS? ~ type ~ WS? ~ "=" ~ WS? ~ literal }
-readonly_prop = { "readonly" ~ WS ~ "property" ~ WS ~ identifier ~ WS? ~ ":" ~ WS? ~ type }
-readwrite_prop = { "property" ~ WS ~ identifier ~ WS? ~ ":" ~ WS? ~ type }
-class_method = { identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" ~ (WS? ~ "->" ~ WS? ~ type)? }
-constructor = { identifier ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" }
+class_member = { const_member | readonly_prop | readwrite_prop | normal_prop | method_def | constructor }
+const_member = { "const" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type ~ WS ~ "=" ~ WS ~ literal }
+readonly_prop = { "readonly" ~ WS ~ "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
+readwrite_prop = { "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
+// 新增普通属性定义，没有特殊关键字修饰
+normal_prop = { identifier ~ WS ~ ":" ~ WS ~ type }
+// 方法定义：支持 fn name(params) -> type 格式，返回值可选
+method_def = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ (WS ~ ("->") ~ WS ~ type)? }
+constructor = { identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
 
-// Field definition - using type-postfix syntax
-field_def = { identifier ~ WS? ~ ":" ~ WS? ~ type }
+// Enum definition
+enum_value = { identifier ~ (WS ~ "=" ~ WS ~ integer)? }
 
-// Parameter list
-param_list = { param ~ (WS? ~ "," ~ WS? ~ param)* }
-param = { identifier ~ WS? ~ ":" ~ WS? ~ type }
+// Field definition
+field_def = { identifier ~ WS ~ ":" ~ WS ~ type }
 
-// Type definition
-type = { union_type }
-union_type = { nullable_type ~ (WS? ~ "|" ~ WS? ~ nullable_type)* }
-nullable_type = { non_nullable_type ~ "?"? }
-non_nullable_type = { 
-    basic_type | 
-    custom_type | 
-    array_type | 
-    map_type | 
-    callback_type |
-    parenthesized_type
-}
-parenthesized_type = { "(" ~ type ~ ")" }
-callback_type = { "callback" ~ WS? ~ identifier? ~ WS? ~ "(" ~ WS? ~ (param_list)? ~ WS? ~ ")" }
-array_type = { "array" ~ "<" ~ type ~ ">" }
-map_type = { "map" ~ "<" ~ type ~ "," ~ WS? ~ type ~ ">" }
+// Type definitions - using precedence for handling left recursion
+type = { union_type | optional_type | primary_type }
+primary_type = { basic_type | array_type | map_type | custom_type | callback_type | group_type }
+basic_type = { "bool" | "int" | "float" | "double" | "string" | "void" | "object" | "function" | "callback" | "null" | "any" }
+array_type = { "array" ~ WS ~ "<" ~ WS ~ type ~ WS ~ ">" }
+map_type = { "map" ~ WS ~ "<" ~ WS ~ type ~ WS ~ "," ~ WS ~ type ~ WS ~ ">" }
+union_type = { primary_type ~ (WS ~ "|" ~ WS ~ primary_type)+ }
+optional_type = { primary_type ~ (WS ~ "?")+ }
+custom_type = { identifier }
+callback_type = { "callback" ~ WS ~ identifier? ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
+group_type = { "(" ~ WS ~ type ~ WS ~ ")" }
 
-// Basic types
-basic_type = { "bool" | "int" | "float" | "double" | "string" | "object" | "function" | "null" | "void" | "any" }
+// Parameter list - correctly handling empty parameter list
+param_list = { param ~ (WS ~ "," ~ WS ~ param)* }
+param = { identifier ~ WS ~ ":" ~ WS ~ type }
 
-// Custom type
-custom_type = @{ identifier }
+// Literals
+literal = { string_literal | integer_literal | float_literal | bool_literal }
+string_literal = { "\"" ~ (!"\"" ~ ANY)* ~ "\"" }
+integer_literal = { ASCII_DIGIT+ }
+float_literal = { ASCII_DIGIT+ ~ "." ~ ASCII_DIGIT+ }
+bool_literal = { "true" | "false" }
 
-// Whitespace (including comments)
-WS = _{ (whitespace | comment)+ }
+// Whitespace handling rule
+WS = _{ (whitespace | comment)* }
 
-// Literal values
-literal = { string_literal | number_literal | boolean_literal | null_literal }
-string_literal = { ("\"" ~ ("\\\"" | (!("\"" | EOI) ~ ANY))* ~ "\"") | ("'" ~ ("\\'" | (!("'" | EOI) ~ ANY))* ~ "'") }
-number_literal = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
-boolean_literal = { "true" | "false" }
-null_literal = { "null" }
+// Integer for enum values
+integer = @{ ASCII_DIGIT+ }

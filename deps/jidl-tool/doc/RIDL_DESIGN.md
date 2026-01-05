@@ -1,4 +1,4 @@
-# mquickjs RIDL (Rust Interface Description Language) 语法设计
+# mquickjs RIDL (Rust Interface Description Language) syntax design
 
 ## 概述
 
@@ -20,7 +20,7 @@ RIDL 采用类似 Rust 的类型后置语法，这体现在以下几个方面：
 
 函数参数采用 `name: type` 的形式，而不是 `type name`：
 
-``idl
+```
 interface Example {
     // 正确：类型后置
     fn correctExample(message: string, count: int);
@@ -34,7 +34,7 @@ interface Example {
 
 结构体和类的属性定义也采用类型后置：
 
-``idl
+```
 struct Person {
     name: string;
     age: int;
@@ -47,34 +47,34 @@ class Logger {
 }
 ```
 
-### 3. 可控类型 (Nullable Types)
+### 3. 可空类型 (Nullable Types)
 
-可控类型使用 `?` 后缀表示该值可以为 `null` 或 `undefined`，对应 Rust 的 `Option<T>` 类型：
+可空类型使用 `?` 后缀表示该值可以为 `null` 或 `undefined`，对应 Rust 的 `Option<T>` 类型：
 
-``idl
+```
 interface NullableExample {
-    // 可控基础类型
+    // 可空基础类型
     fn getName() -> string?;
     fn getAge() -> int?;
     
-    // 可控复杂类型
+    // 可空复杂类型
     fn getPerson() -> Person?;
     fn getItems() -> array<string>?;
     
-    // 可控联合类型
+    // 可空联合类型
     fn getValue() -> (string | int)?;
     
-    // 参数也可以是可控的
+    // 参数也可以是可空的
     fn processName(name: string?);
 }
 
-// 在结构体和类中使用可控类型
+// 在结构体和类中使用可空类型
 struct UserProfile {
     id: int;
     name: string;
-    email: string?;      // 可选邮箱
-    phone: string?;      // 可选电话
-    address: Address?;   // 可选地址
+    email: string?;      // 可空邮箱
+    phone: string?;      // 可空电话
+    address: Address?;   // 可空地址
 }
 
 class DataProcessor {
@@ -83,7 +83,7 @@ class DataProcessor {
 }
 ```
 
-在 JavaScript 中，可控类型可以接受 `null` 或实际类型的值。在 Rust 中，这些类型会被转换为 `Option<T>` 类型，其中 `Some(value)` 表示有值，`None` 表示空值。
+在 JavaScript 中，可空类型可以接受 `null` 或实际类型的值。在 Rust 中，这些类型会被转换为 `Option<T>` 类型，其中 `Some(value)` 表示有值，`None` 表示空值。
 
 ### 4. Callback 类型
 
@@ -142,7 +142,7 @@ interface Example {
 
 函数返回值使用 `->` 操作符声明，紧跟在函数参数列表之后：
 
-``idl
+```
 interface Example {
     // 有返回值的函数
     fn getValue() -> int;
@@ -165,7 +165,6 @@ interface Example {
 | `string` | String | `String` | 字符串 |
 | `array<T>` | Array | `Vec<T>` | 数组（T 为具体类型） |
 | `object` | Object | `Object` | 对象 |
-| `function` | Function | `Function` | 函数 |
 | `callback` | Function | `AsyncCallback` | 异步回调 |
 | `null` | null | `Option<T>` | 空值 |
 | `void` | undefined | `()` | 无返回值 |
@@ -176,7 +175,7 @@ interface Example {
 
 联合类型允许一个值可以是几种类型之一，用 `|` 分隔多个类型：
 
-``idl
+```
 interface DataProcessor {
     // 参数可以是字符串、数字或字符串数组
     fn processInput(data: string | int | array<string>);
@@ -188,11 +187,11 @@ interface DataProcessor {
 }
 ```
 
-### 可选类型 (Optional Types)
+### 可空类型 (Nullable Types)
 
-可选类型使用 `?` 后缀表示值可能是 `null` 或 `undefined`：
+可空类型使用 `?` 后缀表示值可能是 `null` 或 `undefined`：
 
-``idl
+```
 interface ConfigManager {
     // 配置项可以是字符串或 null
     fn getConfigValue(key: string) -> string?;
@@ -206,7 +205,7 @@ interface ConfigManager {
 
 字典类型使用 `map<K, V>` 语法表示键值对集合：
 
-``idl
+```
 interface DictionaryExample {
     fn getCounts() -> map<string, int>;
     fn setMetadata(metadata: map<string, string>);
@@ -238,7 +237,7 @@ msgpack struct Configuration {
     features: array<string>;
 }
 
-// 通过 import 语法导入 protobuf 序列化类型
+// 通过 import 语法导入 protobuf 序列化的类型
 // protobuf 定义通过 .proto 文件给出，RIDL 层通过 import 语法显式导入
 import NetworkPacket as Packet from Packet.proto
 import TypeA, TypeB from Types.proto
@@ -251,7 +250,7 @@ import TypeA, TypeB from Types.proto
 
 使用自定义类型的接口：
 
-``idl
+```
 interface ContactManager {
     // 接受 JSON 序列化的 Person 对象
     fn addPerson(person: Person);
@@ -281,7 +280,7 @@ interface ContactManager {
 
 使用自定义类型的接口：
 
-``idl
+```
 interface ContactManager {
     // 接受 JSON 序列化的 Person 对象
     fn addPerson(person: Person);
@@ -305,17 +304,9 @@ interface ContactManager {
 
 ## 语法定义
 
-### 1. 命名空间定义
+### 1. 接口定义
 
-``idl
-namespace Console {
-    // 在 Console 命名空间中定义接口
-}
 ```
-
-### 2. 接口定义
-
-``idl
 interface Console {
     fn log(message: string);
     fn error(message: string);
@@ -324,9 +315,9 @@ interface Console {
 }
 ```
 
-### 3. 类定义
+### 2. 类定义
 
-``idl
+```
 class Person {
     name: string;
     age: int;
@@ -338,30 +329,14 @@ class Person {
 }
 ```
 
-### 4. 枚举定义
+### 3. 枚举定义
 
-``idl
+```
 enum LogLevel {
     DEBUG = 0,
     INFO = 1,
     WARN = 2,
     ERROR = 3
-}
-```
-
-### 5. 可序列化结构体定义
-
-``idl
-serializable struct LogEntry {
-    level: LogLevel;
-    message: string;
-    timestamp: int;
-    metadata: map<string, string>;
-}
-
-serializable struct LogBatch {
-    entries: array<LogEntry>;
-    source: string;
 }
 ```
 
@@ -382,10 +357,10 @@ import TypeA, TypeB from Types.proto
 
 ### 7. 函数定义
 
-``idl
+```
 // 全局函数
-fn setTimeout(callback: function, delay: int);
-fn setInterval(callback: function, delay: int);
+fn setTimeout(callback: callback, delay: int);
+fn setInterval(callback: callback, delay: int);
 
 // 带返回值的函数
 fn add(a: int, b: int) -> int;
@@ -401,7 +376,7 @@ fn processBatch(batch: LogBatch);
 
 ### 8. 数组、字典和对象
 
-``idl
+```
 interface ComplexExample {
     fn getItems() -> array<string>;
     fn processArray(items: array<int>);
@@ -419,7 +394,7 @@ interface ComplexExample {
 
 ### 9. 可选参数和默认值
 
-``idl
+```
 interface OptionsExample {
     // 可选参数用 ? 标记
     fn drawCircle(x: int, y: int, radius: int?);
@@ -445,7 +420,7 @@ callback MixedCallback(data: string | int | array<string>);
 callback ErrorFirstCallback(error: string?, result: LogEntry?);
 callback ResultCallback(code: int, msg: string);
 
-``idl
+```
 interface CallbackExample {
     // 使用回调函数的方法
     fn processData(input: string, callback: ProcessCallback);
@@ -480,7 +455,7 @@ callback ProcessCallbackType(result: string | object, success: bool, code: int);
 
 ### 11. 异步方法
 
-``idl
+```
 interface AsyncExample {
     // 异步方法使用回调
     fn processAsync(input: string, callback: ProcessCallback);
@@ -498,18 +473,7 @@ interface AsyncExample {
 
 ### 12. 异常处理
 
-``idl
-interface FileOperations {
-    fn readFile(path: string) -> string throws FileError;
-    fn writeFile(path: string, content: string) throws FileError;
-}
-
-// 定义自定义错误类型
-exception FileError {
-    message: string;
-    code: int;
-}
-```
+RIDL不支持异常定义，错误处理需要通过返回值或回调实现。接口定义中不包含throws子句。
 
 ## 序列化机制
 
@@ -518,6 +482,7 @@ RIDL 支持多种序列化格式的结构体定义，系统将自动生成相应
 1. **JSON 序列化**：使用 `json struct` 关键字定义，系统会生成 JSON 序列化/反序列化代码
 2. **MessagePack 序列化**：使用 `msgpack struct` 关键字定义，系统会生成 MessagePack 序列化/反序列化代码
 3. **Protocol Buffers 序列化**：通过 `import` 语法从 `.proto` 文件导入，系统会生成 Protocol Buffers 序列化/反序列化代码
+
 
 对于 `json struct` 和 `msgpack struct` 类型，系统将自动生成序列化和反序列化代码：
 
@@ -572,7 +537,7 @@ callback ProcessCallbackType(result: string | object, success: bool, code: int);
 
 在接口中定义接受回调的异步方法：
 
-``idl
+```
 interface AsyncProcessor {
     // 接受回调的异步方法
     fn processAsync(data: string, callback: ProcessCallback);
@@ -668,7 +633,7 @@ struct Task {
 
 对于返回复合类型，括号是可选的，以下两种写法是等价的：
 
-``idl
+```
 // 使用括号
 fn someFunc() -> (bool | string);
 
@@ -682,6 +647,115 @@ fn complexFunc2() -> Person | LogEntry | string;
 ```
 
 这种灵活性允许开发者根据可读性需求选择是否使用括号，特别是在复杂的联合类型情况下，使用括号可以提高代码的可读性。
+
+## 标准库模块化机制
+
+为了解决全局命名冲突问题，mquickjs提供了基于`require`函数的标准库模块化机制。该机制符合ES5标准，允许用户通过模块名获取功能对象，避免了全局命名空间污染。
+
+### require机制设计
+
+在JavaScript端，用户可以通过`require`函数获取特定模块的功能对象：
+
+```
+// 获取网络模块
+var network = require("system.network");
+network.getStatus();
+
+// 获取设备信息模块
+var deviceinfo = require("system.deviceinfo");
+deviceinfo.getStatus();
+
+// 获取特定版本的模块（如果存在多个版本）
+var network_v1 = require("system.network@1.0");
+```
+
+### 模块化实现方案
+
+1. **RIDL文件层面**：RIDL文件本身不包含模块语法，每个RIDL文件定义一个逻辑模块
+2. **代码生成层面**：生成的代码将相关功能组织在对象中
+3. **标准库注册层面**：在mquickjs初始化时，注册全局`require`函数和模块映射
+
+### 模块命名规范
+
+模块名采用点分隔的层次结构：
+- `system.network` - 系统网络模块
+- `system.deviceinfo` - 系统设备信息模块
+- `ui.widget` - UI组件模块
+
+版本号可选地附加在模块名后：
+- `system.network@1.0` - 指定版本的系统网络模块
+
+### 与现有RIDL语法的兼容性
+
+现有的RIDL语法无需修改，所有定义的接口、类、函数将被自动组织到对应模块对象中：
+
+```
+// network.ridl
+interface Network {
+    fn getStatus() -> object;
+    fn connect(url: string) -> bool;
+}
+
+// 生成的JavaScript代码将类似：
+// var system = {
+//   network: {
+//     getStatus: function() { ... },
+//     connect: function(url) { ... }
+//   }
+// }
+```
+
+### 模块化语法扩展
+
+为了更好地支持模块化，RIDL语法扩展了模块声明功能：
+
+```
+// 全局函数，注册到global
+fn setTimeout(callback: callback, delay: int);
+
+// 全局单例对象，注册到global
+singleton console {
+    fn log(message: string);
+    fn error(message: string);
+}
+
+// 模块化接口定义
+module system.network@1.0
+interface Network {
+    fn getStatus() -> string;
+    fn connect(url: string) -> bool;
+}
+
+module system.deviceinfo@1.0
+interface DeviceInfo {
+    fn getStatus() -> string;
+    fn getBatteryLevel() -> int;
+}
+```
+
+### 模块注册规则
+
+- 无`module`声明：全局注册到global对象
+  - 函数直接注册到global中
+  - 单例对象作为属性注册到global上（如global.console）
+- 有`module`声明：通过`require("module.name")`访问
+
+### singleton对象定义
+
+为了解决`object`作为类型和实例的语义冲突，引入了`singleton`关键字：
+
+```
+singleton console {
+    fn log(message: string);
+    fn error(message: string);
+    fn warn(message: string);
+    readonly property enabled: bool;
+}
+```
+
+- `singleton`关键字仅允许用于全局注册，不允许在模块化注册中使用
+- 语义上，singleton表示全局唯一实例，与模块化命名空间概念冲突
+- 用于定义全局唯一的对象实例，如`console`
 
 ## 完整示例
 
@@ -821,3 +895,10 @@ fn processLogEntry(entry: LogEntry) -> bool;
 2. **装饰器**：可添加装饰器以支持元数据
 3. **模块系统**：可添加模块导入/导出机制
 4. **Promise 模拟**：可以添加 ES5 兼容的 Promise 模拟库
+
+## 相关文档
+
+- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
+- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
+- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
+- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划

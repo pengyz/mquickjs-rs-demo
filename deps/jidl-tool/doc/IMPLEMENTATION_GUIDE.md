@@ -28,11 +28,11 @@ AST (抽象语法树)
 ### 1. struct 映射
 
 #### IDL 定义
-```idl
+```
 json struct Person {
-    string name;
-    int age;
-    string? email;
+    name: string;
+    age: int;
+    email: string?;
 }
 ```
 
@@ -65,7 +65,7 @@ impl ToJs for Person {
 ### 2. interface 映射
 
 #### IDL 定义
-```idl
+```
 interface Console {
     void log(string message);
     void error(string message);
@@ -126,7 +126,7 @@ extern "C" fn console_error_js_binding(
 ```
 
 #### 生成的标准库描述代码 (mqjs_stdlib 部分)
-```c
+``c
 // 生成的 C 函数声明
 JSValue mqjs_console_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 JSValue mqjs_console_error(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -169,7 +169,7 @@ JSModuleDef *js_init_module_std(JSContext *ctx, const char *name) {
 ### 3. class 映射
 
 #### IDL 定义
-```idl
+```
 class Person {
     string name;
     int age;
@@ -237,7 +237,7 @@ extern "C" fn person_get_name(
 ```
 
 #### 生成的标准库描述代码 (mqjs_stdlib 部分)
-```c
+``c
 // 生成的 C 函数声明
 JSValue mqjs_person_constructor(JSContext *ctx, JSValueConst new_target, int argc, JSValueConst *argv);
 JSValue mqjs_person_get_name(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
@@ -278,8 +278,8 @@ static int js_person_init(JSContext *ctx, JSModuleDef *m) {
 ### 4. callback/异步处理映射
 
 #### IDL 定义
-```idl
-typedef ProcessCallback = callback(string | object result, bool success);
+```
+using ProcessCallback = callback(string | object result, bool success);
 
 interface AsyncProcessor {
     void processAsync(string data, ProcessCallback callback);
@@ -318,7 +318,7 @@ extern "C" fn async_processor_process_async(
 ```
 
 #### 生成的标准库描述代码 (mqjs_stdlib 部分)
-```c
+``c
 // 生成的 C 函数声明
 JSValue mqjs_async_processor_process_async(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
 
@@ -349,7 +349,7 @@ static int js_async_processor_init(JSContext *ctx, JSModuleDef *m) {
 开发者需要实现的具体内容：
 
 ### 1. 实现接口 trait
-```rust
+```
 struct ConsoleImpl;
 
 impl Console for ConsoleImpl {
@@ -368,7 +368,7 @@ impl Console for ConsoleImpl {
 ```
 
 ### 2. 实现异步接口
-```rust
+```
 struct AsyncProcessorImpl;
 
 impl AsyncProcessor for AsyncProcessorImpl {
@@ -405,12 +405,12 @@ impl AsyncProcessor for AsyncProcessorImpl {
 ### 2. 复杂类型转换
 
 - **联合类型**：生成匹配函数，按顺序尝试转换
-- **可选类型**：使用 `Option<T>`，映射到 JS 的 `null/undefined`
+- **可空类型**：使用 `Option<T>`，映射到 JS 的 `null/undefined`
 - **字典类型**：使用 `HashMap<String, V>`，映射到 JS 对象
 
 ### 3. 转换辅助函数
 
-```rust
+```
 // 生成的类型转换辅助函数
 pub fn convert_js_value_to_rust_type(
     js_value: JSValue,
@@ -449,3 +449,480 @@ pub fn convert_js_value_to_rust_type(
 - **绑定代码**：将用户实现与 JS 环境连接，包括函数注册、类定义等
 
 这种分离确保了开发者只需关注业务逻辑，而无需处理底层的类型转换和绑定细节。
+
+# RIDL Implementation Guide
+
+## 模块化机制实现方案
+
+### 1. 整体架构
+
+RIDL的模块化机制通过全局`require`函数实现，该函数允许用户通过模块名获取功能对象，避免全局命名冲突。
+
+1. **模块声明**：在RIDL中使用`module system.network@1.0`语法声明模块
+2. **对象注册**：模块中的接口、类等被注册为mquickjs中的class，但不提供构造函数
+3. **映射表**：维护模块名到ClassID的映射表
+4. **require函数**：全局函数，根据模块名查询映射表并创建对象实例
+
+### 2. 模块注册表实现
+
+#### 2.1 独立模块文件生成
+
+jidl-tool需要生成一个独立的模块注册表文件，通常命名为`module_registry.rs`，该文件将在mquickjs-rs编译时被引入：
+
+```
+// 生成的模块注册表文件: module_registry.rs
+use std::sync::{Mutex, LazyLock};
+use std::collections::HashMap;
+use mquickjs::{Context, JSValue, Object, Result};
+
+// 模块映射表 - 存储模块名到创建函数的映射
+static MODULE_CREATORS: LazyLock<Mutex<HashMap<String, fn(&Context) -> Result<JSValue>>>> = LazyLock::new(|| {
+    Mutex::new(HashMap::from([
+        ("system.network".to_string(), create_network_module as fn(&Context) -> Result<JSValue>),
+        ("system.deviceinfo".to_string(), create_deviceinfo_module as fn(&Context) -> Result<JSValue>),
+        ("ui.components".to_string(), create_ui_components_module as fn(&Context) -> Result<JSValue>),
+    ]))
+});
+
+// 为每个模块生成创建函数
+fn create_network_module(ctx: &Context) -> Result<JSValue> {
+    let obj = ctx.new_object()?;
+    
+    // 设置模块方法
+    obj.set("getStatus", ctx.new_function("getStatus", network_get_status)?)?;
+    obj.set("connect", ctx.new_function("connect", network_connect)?)?;
+    
+    Ok(obj.into())
+}
+
+fn create_deviceinfo_module(ctx: &Context) -> Result<JSValue> {
+    let obj = ctx.new_object()?;
+    
+    // 设置模块方法
+    obj.set("getStatus", ctx.new_function("getStatus", deviceinfo_get_status)?)?;
+    obj.set("getBatteryLevel", ctx.new_function("getBatteryLevel", deviceinfo_get_battery_level)?)?;
+    
+    Ok(obj.into())
+}
+
+fn create_ui_components_module(ctx: &Context) -> Result<JSValue> {
+    let obj = ctx.new_object()?;
+    
+    // 设置模块方法
+    obj.set("createButton", ctx.new_function("createButton", ui_create_button)?)?;
+    obj.set("createLabel", ctx.new_function("createLabel", ui_create_label)?)?;
+    
+    Ok(obj.into())
+}
+
+// require函数实现
+pub fn js_require(ctx: &Context, _this: JSValue, args: &[JSValue]) -> Result<JSValue> {
+    let module_name = args[0].as_string().ok_or("Module name must be a string")?;
+    
+    let creators = MODULE_CREATORS.lock().map_err(|e| {
+        mquickjs::Error::RustError(format!("Failed to acquire lock: {}", e))
+    })?;
+    
+    if let Some(creator_fn) = creators.get(&module_name) {
+        creator_fn(ctx)
+    } else {
+        Err(mquickjs::Error::RustError(format!("Module '{}' not found", module_name)))
+    }
+}
+
+// 在模块初始化时注册require函数到全局作用域
+pub fn register_require_function(ctx: &Context) -> Result<()> {
+    ctx.add_global_function("require", js_require)
+}
+```
+
+#### 2.2 代码生成器实现
+
+jidl-tool需要增强代码生成器，使其能够根据RIDL文件中的模块声明自动生成映射表：
+
+```
+// 伪代码：jidl-tool中的模块映射表生成器
+impl ModuleRegistryGenerator {
+    pub fn generate_module_registry(&self, items: &[IDLItem]) -> String {
+        let mut module_creators = Vec::new();
+        let mut creator_registrations = Vec::new();
+        let mut creator_functions = Vec::new();
+        
+        for item in items {
+            if let Some(ref module_info) = item.module_info {
+                let module_name = &module_info.path;
+                let module_fn_name = format!("create_{}_module", 
+                    module_name.replace(".", "_").replace("-", "_"));
+                
+                // 添加到映射表
+                creator_registrations.push(format!(
+                    "        (\"{}\".to_string(), {} as fn(&Context) -> Result<JSValue>),",
+                    module_name, module_fn_name
+                ));
+                
+                // 生成创建函数
+                let creator_fn = self.generate_module_creator_function(&module_fn_name, item, module_name);
+                creator_functions.push(creator_fn);
+            }
+        }
+        
+        // 生成完整的模块注册表文件内容
+        format!(r#"// 生成的模块注册表文件: module_registry.rs
+use std::sync::{{Mutex, LazyLock}};
+use std::collections::HashMap;
+use mquickjs::{{Context, JSValue, Object, Result}};
+
+// 模块映射表 - 存储模块名到创建函数的映射
+static MODULE_CREATORS: LazyLock<Mutex<HashMap<String, fn(&Context) -> Result<JSValue>>>> = LazyLock::new(|| {{
+    Mutex::new(HashMap::from([
+{}
+    ]))
+}});
+
+{}
+
+// require函数实现
+pub fn js_require(ctx: &Context, _this: JSValue, args: &[JSValue]) -> Result<JSValue> {{
+    let module_name = args[0].as_string().ok_or("Module name must be a string")?;
+    
+    let creators = MODULE_CREATORS.lock().map_err(|e| {{
+        mquickjs::Error::RustError(format!("Failed to acquire lock: {{}}", e))
+    }})?;
+    
+    if let Some(creator_fn) = creators.get(&module_name) {{
+        creator_fn(ctx)
+    }} else {{
+        Err(mquickjs::Error::RustError(format!("Module '{{}}' not found", module_name)))
+    }}
+}}
+
+// 在模块初始化时注册require函数到全局作用域
+pub fn register_require_function(ctx: &Context) -> Result<()> {{
+    ctx.add_global_function("require", js_require)
+}}
+"#,
+            creator_registrations.join("        "),
+            creator_functions.join("\n\n")
+        )
+    }
+    
+    fn generate_module_creator_function(&self, fn_name: &str, item: &IDLItem, module_name: &str) -> String {
+        // 生成创建函数的具体实现
+        format!(r#"fn {}(ctx: &Context) -> Result<JSValue> {{
+    let obj = ctx.new_object()?;
+    
+    // 设置模块方法
+    // TODO: 根据模块定义生成实际的方法设置代码
+    
+    Ok(obj.into())
+}}"#, fn_name)
+    }
+}
+```
+
+#### 2.3 线程安全考虑
+
+由于模块映射表需要在多线程环境中访问，使用了LazyLock和Mutex来确保线程安全：
+
+- LazyLock确保映射表在首次访问时初始化
+- Mutex保护对映射表的并发访问
+- 在获取锁失败时返回错误，避免死锁
+
+### 3. 代码生成流程
+
+1. **解析RIDL**：识别module声明，将定义与模块信息关联
+2. **生成模块注册表**：根据模块声明生成module_registry.rs文件
+3. **生成Rust绑定**：为模块中的接口/类生成Rust实现
+4. **生成C绑定**：生成对应的C函数用于JS调用
+5. **注册require函数**：将require函数注册到global对象
+
+### 4. singleton对象实现
+
+对于singleton对象（如`singleton console`），不使用模块化机制，而是直接注册到global对象：
+
+```
+// 生成的Rust代码将singleton对象注册为global属性
+context.add_global_object("console", console_object);
+```
+
+## 构建系统与构建流程
+
+### 1. 多Cargo工程结构
+
+为了支持复杂的系统，RIDL模块可以分散在不同目录中，每个模块作为一个独立的Cargo工程：
+
+```
+mquickjs-rs/
+├── Cargo.toml (workspace定义)
+├── deps/
+│   ├── jidl-tool/ (RIDL工具)
+│   ├── mquickjs-rs/ (Rust绑定)
+│   └── mquickjs/ (C引擎)
+├── features/
+│   ├── network/
+│   │   ├── Cargo.toml
+│   │   ├── src/
+│   │   └── network.ridl
+│   ├── deviceinfo/
+│   │   ├── Cargo.toml
+│   │   ├── src/
+│   │   └── deviceinfo.ridl
+│   └── ui/
+│       ├── Cargo.toml
+│       ├── src/
+│       └── ui.ridl
+└── target/
+```
+
+### 2. Workspace配置
+
+在主Cargo.toml中定义workspace：
+
+```toml
+[workspace]
+members = [
+    "deps/jidl-tool",
+    "deps/mquickjs-rs",
+    "features/network",
+    "features/deviceinfo",
+    "features/ui",
+]
+```
+
+### 3. RIDL收集与处理流程
+
+#### 3.1 RIDL文件扫描
+
+jidl-tool需要扫描workspace中所有子工程的RIDL文件：
+
+```rust
+// jidl-tool/src/main.rs
+use std::path::Path;
+use std::fs;
+
+fn find_all_ridl_files(workspace_root: &Path) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    let mut ridl_files = Vec::new();
+    
+    // 扫描workspace中的所有成员
+    for entry in fs::read_dir(workspace_root)? {
+        let entry = entry?;
+        let path = entry.path();
+        
+        // 检查是否为Cargo工程目录
+        if path.is_dir() && path.join("Cargo.toml").exists() {
+            // 在工程目录中搜索.ridl文件
+            for ridl_entry in fs::read_dir(&path)? {
+                let ridl_entry = ridl_entry?;
+                let ridl_path = ridl_entry.path();
+                
+                if ridl_path.extension().map_or(false, |ext| ext == "ridl") {
+                    ridl_files.push(ridl_path.to_string_lossy().to_string());
+                }
+            }
+        }
+    }
+    
+    Ok(ridl_files)
+}
+```
+
+#### 3.2 全局AST构建
+
+收集所有RIDL文件后，构建全局AST上下文：
+
+```rust
+// jidl-tool/src/main.rs
+fn build_global_context(ridl_files: &[String]) -> Result<GlobalContext, Error> {
+    let mut global_context = GlobalContext::new();
+    
+    for file_path in ridl_files {
+        let content = std::fs::read_to_string(file_path)?;
+        let ast = parse_ridl(&content)?;
+        global_context.merge(ast);
+    }
+    
+    Ok(global_context)
+}
+```
+
+### 4. 统一代码生成流程
+
+#### 4.1 C代码生成（mqjs_stdlib.c）
+
+对于有module声明的定义，生成对应的C代码结构：
+
+```
+// 生成的模块类ID
+static mquickjs_ffi::JSClassID js_network_module_class_id;
+
+// 生成的模块类定义
+static mquickjs_ffi::JSClassDef js_network_module_class_def = {
+    class_name: "NetworkModule\0".as_ptr() as *const i8,
+    finalizer: Some(js_network_module_finalizer),
+    gc_mark: None,
+};
+
+// 生成的模块方法定义
+static mquickjs_ffi::JSCFunctionListEntry js_network_module_funcs[] = {
+    JS_CFUNC_DEF("getStatus\0".as_ptr() as *const i8, 0, js_network_get_status),
+    JS_CFUNC_DEF("connect\0".as_ptr() as *const i8, 1, js_network_connect),
+};
+
+// 生成的模块初始化函数
+static int js_init_module_network(mquickjs_ffi::JSContext *ctx, mquickjs_ffi::JSModuleDef *m) {
+    mquickjs_ffi::JS_NewClassID(&js_network_module_class_id);
+    mquickjs_ffi::JS_NewClass(mquickjs_ffi::JS_GetRuntime(ctx), js_network_module_class_id, &js_network_module_class_def);
+
+    mquickjs_ffi::JSValue proto = mquickjs_ffi::JS_NewObject(ctx);
+    mquickjs_ffi::JS_SetPropertyFunctionList(ctx, proto, js_network_module_funcs, 
+        sizeof(js_network_module_funcs) / sizeof(mquickjs_ffi::JSCFunctionListEntry));
+
+    mquickjs_ffi::JSValue obj = mquickjs_ffi::JS_NewObjectProto(ctx, proto);
+    // 注意：不提供构造函数，只能通过require获取
+    if (m) {
+        mquickjs_ffi::JS_SetModuleExport(ctx, m, "network\0".as_ptr() as *const i8, obj);
+    }
+    return 0;
+}
+```
+
+#### 4.2 模块映射表生成
+
+生成一个统一的require函数，以及模块名到ClassID的映射表：
+
+```
+// 模块映射表
+typedef struct {
+    const char* name;
+    mquickjs_ffi::JSClassID* class_id_ptr;
+} ModuleClassMapping;
+
+static ModuleClassMapping module_mappings[] = {
+    {"system.network\0".as_ptr() as *const i8, &js_network_module_class_id},
+    {"system.deviceinfo\0".as_ptr() as *const i8, &js_deviceinfo_module_class_id},
+    {NULL, NULL}  // 结束标记
+};
+
+// require函数实现
+mquickjs_ffi::JSValue js_require(mquickjs_ffi::JSContext *ctx, mquickjs_ffi::JSValueConst this_val, 
+                                 mquickjs_ffi::c_int argc, mquickjs_ffi::JSValueConst *argv) {
+    const char *module_name = NULL;
+    mquickjs_ffi::JS_ToCString(ctx, argv[0]);
+    
+    // 查找模块映射表
+    for (int i = 0; module_mappings[i].name != NULL; i++) {
+        if (strcmp(module_name, module_mappings[i].name) == 0) {
+            // 创建模块对象实例
+            mquickjs_ffi::JSValue obj = mquickjs_ffi::JS_NewObjectClass(ctx, *module_mappings[i].class_id_ptr);
+            mquickjs_ffi::JS_FreeCString(ctx, module_name);
+            return obj;
+        }
+    }
+    
+    mquickjs_ffi::JS_FreeCString(ctx, module_name);
+    return mquickjs_ffi::JS_ThrowReferenceError(ctx, "Module '%s' not found\0".as_ptr() as *const i8, module_name);
+}
+
+// 在初始化时注册require函数
+void js_register_require(mquickjs_ffi::JSContext *ctx, mquickjs_ffi::JSModuleDef *m) {
+    mquickjs_ffi::JSValue global_obj = mquickjs_ffi::JS_GetGlobalObject(ctx);
+    mquickjs_ffi::JS_SetPropertyStr(ctx, global_obj, "require\0".as_ptr() as *const i8, 
+        mquickjs_ffi::JS_NewCFunction(ctx, js_require, "require\0".as_ptr() as *const i8, 1));
+    mquickjs_ffi::JS_FreeValue(ctx, global_obj);
+}
+```
+
+### 5. 构建流程
+
+#### 5.1 构建步骤
+
+完整的构建流程包括以下步骤：
+
+1. **依赖准备**：构建mquickjs C库
+   ```bash
+   cd deps/mquickjs && make
+   ```
+
+2. **RIDL收集**：扫描workspace中所有.ridl文件
+   ```bash
+   # jidl-tool扫描所有子工程的RIDL文件
+   jidl-tool --scan-workspace
+   ```
+
+3. **代码生成**：根据所有RIDL定义生成绑定代码
+   ```bash
+   jidl-tool --generate-bindings
+   ```
+
+4. **编译绑定**：编译生成的C/Rust代码到mqjs_stdlib静态库
+   ```bash
+   # 编译生成的绑定代码
+   cargo build -p mquickjs-rs
+   ```
+
+5. **编译应用**：编译最终的应用程序
+   ```bash
+   cargo build
+   ```
+
+#### 5.2 构建脚本示例
+
+创建构建脚本`build.sh`自动化整个流程：
+
+```
+#!/bin/bash
+set -e
+
+echo "Step 1: Building mquickjs C library..."
+cd deps/mquickjs
+make
+cd ../..
+
+echo "Step 2: Collecting RIDL files and generating bindings..."
+cargo run -p jidl-tool -- --scan-workspace
+
+echo "Step 3: Compiling generated bindings..."
+cargo build -p mquickjs-rs
+
+echo "Step 4: Compiling main application..."
+cargo build
+
+echo "Build completed successfully!"
+```
+
+#### 5.3 Cargo构建脚本（build.rs）
+
+在mquickjs-rs的build.rs中集成绑定生成：
+
+```rust
+use std::env;
+use std::path::PathBuf;
+
+fn main() {
+    // 获取项目根目录
+    let project_root = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let project_root = PathBuf::from(&project_root).parent().unwrap();
+    
+    // 扫描并生成绑定
+    let ridl_files = find_all_ridl_files(&project_root);
+    let global_context = build_global_context(&ridl_files).unwrap();
+    
+    // 生成C和Rust绑定代码
+    generate_bindings(&global_context);
+    
+    // 链接到生成的静态库
+    println!("cargo:rustc-link-search=native=deps/mquickjs");
+    println!("cargo:rustc-link-lib=static=mquickjs");
+    
+    // 链接到生成的绑定库
+    println!("cargo:rustc-link-lib=static=mqjs_stdlib");
+}
+```
+
+
+## 相关文档
+
+- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
+- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
+- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
+- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划

@@ -1,0 +1,49 @@
+/* Auto-generated standard library description */
+#include "mquickjs/mquickjs.h"
+
+// Class declarations
+{% for class in classes %}
+extern const JSClassDef {{ class.name|lower }}_class;
+{% endfor %}
+
+// Global function declarations
+{% for function in functions %}
+JSValue {{ function.name }}(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+{% endfor %}
+
+// Class constructor functions
+{% for class in classes %}
+static JSValue js_{{ class.name|lower }}_constructor(JSContext *ctx, JSValue new_target, int argc, JSValue *argv) {
+    // Delegate to Rust implementation
+    return {{ class.name|lower }}_constructor(ctx, new_target, argc, argv);
+}
+{% endfor %}
+
+// Global object definition
+static const JSCPropDef js_global_object[] = {
+    // Custom classes
+    {% for class in classes %}
+    JS_PROP_CLASS_DEF("{{ class.name }}", &{{ class.name|lower }}_class),
+    {% endfor %}
+    
+    // Global functions
+    {% for function in functions %}
+    JS_CFUNC_DEF("{{ function.name }}", 0, {{ function.name }}),
+    {% endfor %}
+    
+    JS_PROP_END,
+};
+
+// Initialization function
+int js_stdlib_init(JSContext *ctx, JSValue global_obj) {
+    {% for class in classes %}
+    if (JS_NewClass(ctx, js_{{ class.name|lower }}_class.class_id, &{{ class.name|lower }}_class) < 0)
+        return -1;
+    {% endfor %}
+    
+    if (JS_SetPropertyFunctionList(ctx, global_obj, js_global_object,
+                  sizeof(js_global_object) / sizeof(JSCPropDef)) < 0)
+        return -1;
+
+    return 0;
+}

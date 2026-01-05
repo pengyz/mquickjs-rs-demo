@@ -1,0 +1,14 @@
+interface Console {
+    fn log(message: string);
+    fn error(message: string);
+}
+
+class Person {
+    property name: string;
+    readonly property phone: string;
+    const age: int = 36;
+    school: string;
+    Person(name: string, school: string);
+    fn getName() -> string;
+    fn getAge() -> int;
+}
