@@ -1,8 +1,8 @@
-# mquickjs RIDL (Rust Interface Description Language) syntax design
+# RIDL 语法与扩展
 
 ## 概述
 
-mquickjs RIDL (Rust Interface Description Language) 是一种用于定义 JavaScript 接口的强类型接口定义语言，专门针对 mquickjs 的 ES5 功能集和 Rust 后端进行了优化。该 RIDL 旨在提供一种简洁、类型安全的方式来定义 JavaScript 接口，以便在 Rust 后端自动生成类型转换代码。当前实现的是 mquickjs 后端实现。
+RIDL (Rust Interface Definition Language) 是一种用于定义 JavaScript 接口的强类型接口定义语言，专门针对 mquickjs 的 ES5 功能集和 Rust 后端进行了优化。该 RIDL 旨在提供一种简洁、类型安全的方式来定义 JavaScript 接口，以便在 Rust 后端自动生成类型转换代码。当前实现的是 mquickjs 后端实现。
 
 ## 语法设计原则
 
@@ -87,7 +87,7 @@ class DataProcessor {
 
 ### 4. Callback 类型
 
-Callback 是 JIDL 中的一等类型，有以下特点：
+Callback 是 RIDL 中的一等类型，有以下特点：
 
 1. **作为结构体成员**：struct 中允许以 callback 作为变量，callback 在实现层会转换为 callbackId，可以序列化和反序列化：
 
@@ -134,7 +134,7 @@ interface Example {
 
 ```
 interface Example {
-    fn processData(input: string, callback: callback(success: bool, result: string));
+    fn processData(input: string, cb: callback(success: bool, result: string));
 }
 ```
 
@@ -156,7 +156,7 @@ interface Example {
 
 ## 基础类型映射
 
-| IDL 类型 | JS 类型 | Rust 类型 | 说明 |
+| RIDL 类型 | JS 类型 | Rust 类型 | 说明 |
 |----------|---------|-----------|------|
 | `bool` | Boolean | `bool` | 布尔值 |
 | `int` | Number | `i32` | 32位整数 |
@@ -278,30 +278,6 @@ interface ContactManager {
 - **MessagePack 序列化**：二进制格式，体积小，解析速度快，适合高频数据传输
 - **Protocol Buffers 序列化**：二进制格式，需要预定义 schema，性能最优，适合大规模数据处理
 
-使用自定义类型的接口：
-
-```
-interface ContactManager {
-    // 接受 JSON 序列化的 Person 对象
-    fn addPerson(person: Person);
-    
-    // 接受 msgpack 序列化的配置对象
-    fn updateConfig(config: Configuration);
-    
-    // 接受 protobuf 序列化的网络包
-    fn sendPacket(packet: NetworkPacket);
-    
-    // 返回序列化的 Person 对象
-    fn getPerson(id: string) -> Person;
-    
-    // 复杂类型参数
-    fn updateContact(person: Person, addresses: array<Address>);
-    
-    // 联合类型中使用自定义类型
-    fn find(query: string) -> (Person | Contact);
-}
-```
-
 ## 语法定义
 
 ### 1. 接口定义
@@ -340,7 +316,7 @@ enum LogLevel {
 }
 ```
 
-### 6. Import 语句
+### 4. Import 语句
 
 ```
 // 从 .proto 文件导入单个类型
@@ -355,7 +331,7 @@ import TypeA, TypeB from Types.proto
 
 2. **不支持导入其他RIDL文件**：RIDL被设计用来进行简单的接口声明，暂时不支持相互引用其他RIDL文件。后续会考虑是否支持此功能。
 
-### 7. 函数定义
+### 5. 函数定义
 
 ```
 // 全局函数
@@ -374,7 +350,7 @@ fn logMessage(entry: LogEntry) -> bool;
 fn processBatch(batch: LogBatch);
 ```
 
-### 8. 数组、字典和对象
+### 6. 数组、字典和对象
 
 ```
 interface ComplexExample {
@@ -392,25 +368,21 @@ interface ComplexExample {
 }
 ```
 
-### 9. 可选参数和默认值
+### 7. 可空类型 (Nullable Types)
+
+可空类型使用 `?` 后缀表示值可能是 `null` 或 `undefined`：
 
 ```
-interface OptionsExample {
-    // 可选参数用 ? 标记
-    fn drawCircle(x: int, y: int, radius: int?);
+interface ConfigManager {
+    // 配置项可以是字符串或 null
+    fn getConfigValue(key: string) -> string?;
     
-    // 带默认值的参数
-    fn showMessage(message: string, modal: bool = false);
-    
-    // 联合类型参数
-    fn renderContent(content: string | object, className: string?);
-    
-    // 自定义类型参数
-    fn renderLog(log: LogEntry?);
+    // 对象属性可以是多种类型或 null
+    fn setOption(key: string, value: string | int | bool | null);
 }
 ```
 
-### 10. 回调函数
+### 8. 回调函数
 
 ```
 // 定义命名回调类型
@@ -420,7 +392,6 @@ callback MixedCallback(data: string | int | array<string>);
 callback ErrorFirstCallback(error: string?, result: LogEntry?);
 callback ResultCallback(code: int, msg: string);
 
-```
 interface CallbackExample {
     // 使用回调函数的方法
     fn processData(input: string, callback: ProcessCallback);
@@ -437,7 +408,6 @@ interface CallbackExample {
     // 使用resultCallback示例
     fn processWithResultCallback(input: string, callback: ResultCallback);
 }
-```
 
 // 定义命名回调类型 - 基本回调
 callback SimpleCallback();
@@ -450,10 +420,9 @@ callback ErrorFirstCallbackType(error: string?, result: string | object?);
 
 // 定义命名回调类型 - 多参数回调
 callback ProcessCallbackType(result: string | object, success: bool, code: int);
-
 ```
 
-### 11. 异步方法
+### 9. 异步方法
 
 ```
 interface AsyncExample {
@@ -471,7 +440,7 @@ interface AsyncExample {
 }
 ```
 
-### 12. 异常处理
+### 10. 异常处理
 
 RIDL不支持异常定义，错误处理需要通过返回值或回调实现。接口定义中不包含throws子句。
 
@@ -505,7 +474,7 @@ import TypeA, TypeB from Something.proto
 
 ### 序列化类型转换
 
-| IDL 类型 | JS 类型 | Rust 类型 | 说明 |
+| RIDL 类型 | JS 类型 | Rust 类型 | 说明 |
 |----------|---------|-----------|------|
 | `json struct` | Object | `CustomStruct` | JSON序列化结构体 |
 | `msgpack struct` | Object | `CustomStruct` | MessagePack序列化结构体 |
@@ -565,7 +534,7 @@ interface DataFetcher {
 ```
 对应的 Rust 实现：
 
-``rust
+```rust
 impl DataFetcher {
     async fn fetch_data_impl(url: String) -> Result<serde_json::Value, String> {
         // 实际的异步实现
@@ -596,7 +565,7 @@ impl DataFetcher {
 
 ## 语法说明
 
-### 12. 使用 using 进行类型重命名
+### 11. 使用 using 进行类型重命名
 
 RIDL 使用 `using` 关键字对任意类型（包括函数类型）进行重命名，替代传统的 `typedef` 语法：
 
@@ -629,7 +598,7 @@ struct Task {
 
 这种语法提供了一种清晰的方式为复杂类型创建别名，提高代码的可读性和可维护性。
 
-### 13. 复合类型返回值的括号用法
+### 12. 复合类型返回值的括号用法
 
 对于返回复合类型，括号是可选的，以下两种写法是等价的：
 
@@ -648,103 +617,7 @@ fn complexFunc2() -> Person | LogEntry | string;
 
 这种灵活性允许开发者根据可读性需求选择是否使用括号，特别是在复杂的联合类型情况下，使用括号可以提高代码的可读性。
 
-## 标准库模块化机制
-
-为了解决全局命名冲突问题，mquickjs提供了基于`require`函数的标准库模块化机制。该机制符合ES5标准，允许用户通过模块名获取功能对象，避免了全局命名空间污染。
-
-### require机制设计
-
-在JavaScript端，用户可以通过`require`函数获取特定模块的功能对象：
-
-```
-// 获取网络模块
-var network = require("system.network");
-network.getStatus();
-
-// 获取设备信息模块
-var deviceinfo = require("system.deviceinfo");
-deviceinfo.getStatus();
-
-// 获取特定版本的模块（如果存在多个版本）
-var network_v1 = require("system.network@1.0");
-```
-
-### 模块化实现方案
-
-1. **RIDL文件层面**：RIDL文件本身不包含模块语法，每个RIDL文件定义一个逻辑模块
-2. **代码生成层面**：生成的代码将相关功能组织在对象中
-3. **标准库注册层面**：在mquickjs初始化时，注册全局`require`函数和模块映射
-
-### 模块命名规范
-
-模块名采用点分隔的层次结构：
-- `system.network` - 系统网络模块
-- `system.deviceinfo` - 系统设备信息模块
-- `ui.widget` - UI组件模块
-
-版本号可选地附加在模块名后：
-- `system.network@1.0` - 指定版本的系统网络模块
-
-### 与现有RIDL语法的兼容性
-
-现有的RIDL语法无需修改，所有定义的接口、类、函数将被自动组织到对应模块对象中：
-
-```
-// network.ridl
-interface Network {
-    fn getStatus() -> object;
-    fn connect(url: string) -> bool;
-}
-
-// 生成的JavaScript代码将类似：
-// var system = {
-//   network: {
-//     getStatus: function() { ... },
-//     connect: function(url) { ... }
-//   }
-// }
-```
-
-### 模块化语法扩展
-
-为了更好地支持模块化，RIDL语法扩展了模块声明功能：
-
-```
-// 全局函数，注册到global
-fn setTimeout(callback: callback, delay: int);
-
-// 全局单例对象，注册到global
-singleton console {
-    fn log(message: string);
-    fn error(message: string);
-}
-
-// 模块化接口定义
-// 注意：module声明必须位于文件开头
-module system.network@1.0
-interface Network {
-    fn getStatus() -> string;
-    fn connect(url: string) -> bool;
-}
-
-module system.deviceinfo@1.0
-interface DeviceInfo {
-    fn getStatus() -> string;
-    fn getBatteryLevel() -> int;
-}
-```
-
-### 模块注册规则
-
-- **无`module`声明**：全局注册到global对象
-  - 函数直接注册到global中
-  - 单例对象作为属性注册到global上（如global.console）
-- **有`module`声明**：通过`require("module.name")`访问
-- **module声明作用域**：应用于整个RIDL文件，一个文件只能有一个module声明
-- **module声明位置**：必须位于文件开头，在任何接口、类或其他定义之前
-- **版本号格式**：module声明中的版本号格式为`主版本号.次版本号`（如`1.0`）或仅包含主版本号（如`1`），不允许超过两个部分的版本号（如`1.0.2.5`无效）
-
-### 错误处理机制
+## 错误处理机制
 
 为确保用户能够快速定位和修复RIDL文件中的错误，需要实现一个全面的错误处理系统。
 
@@ -799,282 +672,4 @@ pub enum RIDLErrorType {
 }
 ```
 
-#### 4. 实现策略
-
-##### 4.1 阶段一：利用pest的错误处理
-- 使用pest的错误处理机制处理语法错误
-- 直接将pest错误转换为更友好的RIDL错误格式
-
-##### 4.2 阶段二：实现语义验证器
-- 创建`validator`模块
-- 实现各种语义检查功能
-- 在AST构建后执行验证
-
-##### 4.3 阶段三：错误信息优化
-- 提供详细的错误上下文
-- 添加错误位置的代码片段显示
-- 提供可能的修复建议
-
-#### 5. 用户体验考虑
-
-- **清晰的错误信息**：错误信息应该清晰易懂，避免技术术语
-- **准确的位置信息**：提供精确的行号和列号
-- **上下文信息**：显示错误行的上下文，帮助用户定位问题
-- **修复建议**：当可能时，提供如何修复错误的建议
-
-#### 6. 需要考虑的细节
-
-- 如何处理多个错误：是报告第一个错误还是收集所有错误？
-- 如何在错误发生时保持解析过程的稳定性？
-- 如何将内部错误信息转换为用户友好的错误信息？
-
-#### 7. 实现的功能
-
-##### 7.1 语法错误处理
-- 使用pest解析器检测语法错误
-- 提取错误位置信息（行号、列号）
-- 将pest错误转换为自定义的RIDL错误格式
-
-##### 7.2 语义错误处理
-- 实现了语义验证器模块
-- 检测RIDL定义中的语义错误
-- 验证类型引用、标识符等语义正确性
-
-##### 7.3 错误报告机制
-- 统一的错误类型枚举（RIDLErrorType）
-- 包含详细位置信息的错误结构体（RIDLError）
-- 支持批量错误收集与报告
-
-#### 8. 核心组件
-
-##### 8.1 语义验证器
-```rust
-pub struct SemanticValidator {
-    pub file_path: String,
-    pub errors: Vec<RIDLError>,
-}
-```
-
-##### 8.2 核心API
-实现了`parse_ridl_content`函数，作为错误处理的核心API：
-```rust
-pub fn parse_ridl_content(content: &str, file_path: &str) -> Result<Vec<ast::IDLItem>, Vec<validator::RIDLError>>
-```
-
-此函数的功能包括：
-1. 首先使用pest解析器检查语法
-2. 如果语法正确，使用现有parse_idl函数解析内容
-3. 构建AST包装器以进行语义验证
-4. 使用语义验证器进行额外检查
-5. 返回解析结果或错误列表
-
-#### 9. 实现细节
-
-##### 9.1 语法错误捕获
-- 使用pest解析器的错误处理机制
-- 通过`line_col`字段提取错误位置
-- 将pest错误转换为统一的RIDL错误格式
-
-##### 9.2 语义验证
-- 遍历AST节点进行语义检查
-- 验证类型引用的有效性
-- 检查重复定义等问题
-
-#### 10. 测试结果
-
-测试程序验证了错误处理功能的有效性：
-
-1. **语法错误检测**：
-   - 输入：`interface Test { fn method(int x) -> string; `（缺少右括号）
-   - 输出：成功捕获语法错误，报告错误位置（第1行第28列）
-
-2. **有效输入处理**：
-   - 输入：有效的RIDL定义
-   - 输出：成功解析，返回定义列表
-
-#### 11. 使用示例
-
-``rust
-use jidl_tool;
-
-fn main() {
-    let invalid_ridl = r#"interface Test { fn method(int x) -> string; "# ;  // 缺少右括号
-    let result = jidl_tool::parse_ridl_content(invalid_ridl, "test.ridl");
-    
-    match result {
-        Ok(_) => println!("解析成功，没有检测到错误"),
-        Err(errors) => {
-            for error in errors {
-                println!("  - 错误: {}", error.message);
-                println!("    位置: {}:{}", error.file, error.line);
-                println!("    类型: {:?}", error.error_type);
-            }
-        }
-    }
-}
-```
-
-错误处理功能的实现显著提升了RIDL解析器的可用性，通过提供详细的错误信息，使用户能够快速定位和修复RIDL定义中的问题。该实现遵循了设计文档中的规范，支持语法和语义错误的全面检测与报告。
-
-### singleton对象定义
-
-为了解决`object`作为类型和实例的语义冲突，引入了`singleton`关键字：
-
-```
-singleton console {
-    fn log(message: string);
-    fn error(message: string);
-    fn warn(message: string);
-    readonly property enabled: bool;
-}
-```
-
-- `singleton`关键字仅允许用于全局注册，不允许在模块化注册中使用
-- 语义上，singleton表示全局唯一实例，与模块化命名空间概念冲突
-- 用于定义全局唯一的对象实例，如`console`
-
-## 完整示例
-
-```
-// 定义日志级别枚举
-enum LogLevel {
-    DEBUG = 0,
-    INFO = 1,
-    WARN = 2,
-    ERROR = 3
-}
-
-// 定义回调类型
-callback ProcessCallback(result: string | object, success: bool);  // 回调函数无返回值
-
-// 定义可序列化的日志条目结构
-json struct LogEntry {
-    level: LogLevel;
-    message: string;
-    timestamp: int;
-    metadata: map<string, string>;
-}
-
-// 定义使用msgpack序列化的日志批次结构
-msgpack struct LogBatch {
-    entries: array<LogEntry>;
-    source: string;
-}
-
-// 通过 import 语法导入 protobuf 序列化的网络数据包
-import NetworkPacket from Packet.proto
-
-// 定义日志配置对象
-interface LogConfig {
-    level: LogLevel;
-    enabled: bool;
-}
-
-// 定义日志记录器类
-class Logger {
-    config: LogConfig;
-    
-    Logger(name: string);
-    fn log(level: LogLevel, message: string);
-    fn debug(message: string);
-    fn info(message: string);
-    fn warn(message: string);
-    fn error(message: string);
-    fn setConfig(config: LogConfig);
-    fn getConfig() -> LogConfig;
-    
-    // 使用自定义类型的接口
-    fn logEntry(entry: LogEntry);
-    fn getRecentLogs(count: int) -> array<LogEntry>;
-    fn processBatch(batch: LogBatch);
-}
-
-// 定义异步处理接口
-interface AsyncProcessor {
-    fn processAsync(data: string, callback: ProcessCallback);
-    fn processSync(data: array<string>) -> array<string>;
-}
-
-// 使用联合类型的接口
-interface DataHandler {
-    // 参数可以是字符串、数字数组或对象
-    fn handleData(data: string | array<int> | object);
-    
-    // 返回值可以是布尔值或对象
-    fn validate(input: string) -> (bool | object);
-    // 或者不使用括号，以下写法是等价的
-    fn validate2(input: string) -> bool | string;
-    
-    // 使用字典类型的参数
-    fn processMetadata(metadata: map<string, string | int>) -> map<string, string | int>;
-    
-    // 使用自定义类型的参数
-    fn handleLogEntry(entry: LogEntry);
-    fn processMixedData(input: string | LogEntry | LogBatch) -> (LogEntry | LogBatch);
-    // 或者不使用括号，以下写法是等价的
-    fn processMixedData2(input: string | LogEntry | LogBatch) -> LogEntry | LogBatch;
-    
-    // 异步处理自定义类型
-    fn handleLogAsync(entry: LogEntry, callback: callback(success: bool, error: string?));
-}
-
-// 定义全局函数
-fn getLogger(name: string) -> Logger;
-fn sleep(milliseconds: int);
-fn processData(input: string | int | float | array<string>) -> (bool | object);
-fn processLogEntry(entry: LogEntry) -> bool;
-```
-
-## 类型转换机制
-
-### JSValue 到 Rust 类型转换
-
-- `JS_TAG_INT` → `i32`
-- `JS_TAG_FLOAT64` → `f64`
-- `JS_TAG_BOOL` → `bool`
-- `JS_TAG_STRING` → `String`
-- `JS_TAG_OBJECT` → `Object` 或自定义类型（通过 JSON 序列化）
-- `JS_TAG_NULL` / `JS_TAG_UNDEFINED` → `Option<T>`
-- 函数类型 → `AsyncCallback` 或 `Function`
-
-### Rust 类型到 JSValue 转换
-
-- `i32` → `JS_TAG_INT`
-- `f64` → `JS_TAG_FLOAT64`
-- `bool` → `JS_TAG_BOOL`
-- `String` → `JS_TAG_STRING`
-- 自定义类型 → `JS_TAG_STRING`（JSON 格式）
-- 自定义类型对象 → `JS_TAG_OBJECT`（通过 JSON 反序列化）
-- `Future<T>` → 通过回调函数暴露给 JS
-
-## RIDL 处理流程
-
-1. **解析**：使用解析器解析 RIDL 文件
-2. **验证**：验证类型定义的正确性，包括联合类型和自定义类型的有效性
-3. **生成**：生成 Rust 代码和 C 绑定代码，包括序列化/反序列化实现和异步桥接代码
-4. **编译**：编译生成的代码到 mquickjs 标准库
-
-## 限制和考虑
-
-1. **ES5 限制**：不支持 ES6+ 特性如 Promise、async/await 等
-2. **性能**：序列化/反序列化可能带来性能开销，对于高频操作需要考虑缓存机制
-3. **内存管理**：确保 Rust 对象生命周期管理正确
-4. **错误处理**：提供清晰的错误信息给 JS 调用者
-5. **嵌套深度**：自定义类型支持嵌套，但需要限制最大嵌套深度以避免栈溢出
-6. **异步限制**：由于 ES5 不支持 Promise，异步操作只能通过回调模式实现
-
-## 扩展性
-
-该 RIDL 设计允许后续扩展：
-
-1. **其他序列化格式**：可扩展支持 protobuf、msgpack 等其他序列化格式
-2. **装饰器**：可添加装饰器以支持元数据
-3. **模块系统**：可添加模块导入/导出机制
-4. **Promise 模拟**：可以添加 ES5 兼容的 Promise 模拟库
-
-## 相关文档
-
-- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
-- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
-- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
-- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划
+有关 RIDL 标准库扩展机制的详细信息，请参见 [标准库扩展机制文档](stdlib-extension-mechanism.md)。

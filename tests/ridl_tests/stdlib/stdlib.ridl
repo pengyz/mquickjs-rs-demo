@@ -1,0 +1,28 @@
+// mquickjs标准库平台相关功能定义
+// 这些功能将通过全局注册方式注册到全局对象
+
+// 日期相关
+class Date {
+    fn now() -> double;
+}
+
+// 垃圾回收函数
+fn gc();
+
+// 性能相关函数
+fn performance_now() -> float;
+
+// 加载脚本函数
+fn load(filename: string) -> object;
+
+// 定时器相关函数
+fn setTimeout(cb: callback(success: bool), delay: int) -> int;
+fn clearTimeout(timerId: int);
+
+// 控制台对象
+singleton console {
+    fn log(message: string);
+    fn error(message: string);
+    readonly property enabled: bool;
+}
+

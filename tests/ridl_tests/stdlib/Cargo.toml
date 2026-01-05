@@ -1,0 +1,11 @@
+[package]
+name = "stdlib"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+crate-type = ["rlib", "staticlib"]
+
+[dependencies]
+mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
+libc = "0.2"

@@ -8,9 +8,6 @@ pub mod parser;
 pub mod generator;
 pub mod validator;
 
-pub use parser::parse_idl;
-pub use generator::generate_code;
-
 use crate::parser::ast;
 
 /// 解析RIDL内容为AST

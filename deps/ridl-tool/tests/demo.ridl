@@ -1,0 +1,6 @@
+module system.demo;
+
+interface IDemo {
+    fn sayHello() -> string;
+    fn sayGoodbye();
+}
