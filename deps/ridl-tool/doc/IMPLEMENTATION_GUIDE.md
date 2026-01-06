@@ -79,48 +79,36 @@ pub trait Console {
     fn error(&self, message: String) -> Result<(), String>;
 }
 
-// 生成的 C 绑定函数
-extern "C" fn console_log_js_binding(
-    ctx: *mut mquickjs_ffi::JSContext,
-    _this: mquickjs_ffi::JSValue,
-    argc: mquickjs_ffi::c_int,
-    argv: *mut mquickjs_ffi::JSValue
-) -> mquickjs_ffi::JSValue {
+// 生成的 Rust 胶水代码
+pub fn console_log_glue(
+    ctx: &Context,
+    _this: JSValue,
+    args: &[JSValue]
+) -> Result<JSValue, String> {
     // 参数解析胶水代码
-    let message = unsafe {
-        // 从 JSValue 提取字符串
-        extract_string_from_js_value(ctx, *argv.add(0))
-    };
+    let message = ctx.js_value_to_string(args[0].clone())?;
     
     // 调用用户实现
     let console_impl = get_console_implementation();
     match console_impl.log(message) {
-        Ok(_) => unsafe { mquickjs_ffi::JS_UNDEFINED },
-        Err(e) => unsafe { 
-            mquickjs_ffi::JS_Throw(ctx, create_js_error(ctx, &e))
-        },
+        Ok(_) => ctx.undefined_value(),
+        Err(e) => ctx.throw_error(&e),
     }
 }
 
-extern "C" fn console_error_js_binding(
-    ctx: *mut mquickjs_ffi::JSContext,
-    _this: mquickjs_ffi::JSValue,
-    argc: mquickjs_ffi::c_int,
-    argv: *mut mquickjs_ffi::JSValue
-) -> mquickjs_ffi::JSValue {
+pub fn console_error_glue(
+    ctx: &Context,
+    _this: JSValue,
+    args: &[JSValue]
+) -> Result<JSValue, String> {
     // 参数解析胶水代码
-    let message = unsafe {
-        // 从 JSValue 提取字符串
-        extract_string_from_js_value(ctx, *argv.add(0))
-    };
+    let message = ctx.js_value_to_string(args[0].clone())?;
     
     // 调用用户实现
     let console_impl = get_console_implementation();
     match console_impl.error(message) {
-        Ok(_) => unsafe { mquickjs_ffi::JS_UNDEFINED },
-        Err(e) => unsafe { 
-            mquickjs_ffi::JS_Throw(ctx, create_js_error(ctx, &e))
-        },
+        Ok(_) => ctx.undefined_value(),
+        Err(e) => ctx.throw_error(&e),
     }
 }
 ```
@@ -206,15 +194,14 @@ impl Person {
     }
 }
 
-// 生成的 C 绑定函数
-extern "C" fn person_constructor(
-    ctx: *mut mquickjs_ffi::JSContext,
-    _new_target: mquickjs_ffi::JSValue,
-    argc: mquickjs_ffi::c_int,
-    argv: *mut mquickjs_ffi::JSValue
-) -> mquickjs_ffi::JSValue {
-    let name = unsafe { extract_string_from_js_value(ctx, *argv.add(0)) };
-    let age = unsafe { extract_int32_from_js_value(ctx, *argv.add(1)) };
+// 生成的 Rust 胶水代码
+pub fn person_constructor_glue(
+    ctx: &Context,
+    _new_target: JSValue,
+    args: &[JSValue]
+) -> Result<JSValue, String> {
+    let name = ctx.js_value_to_string(args[0].clone())?;
+    let age = ctx.js_value_to_i32(args[1].clone())?;
     
     let person = Person::new(name, age);
     // 将 person 实例存储到 JS 对象中
@@ -222,17 +209,16 @@ extern "C" fn person_constructor(
     todo!()
 }
 
-extern "C" fn person_get_name(
-    ctx: *mut mquickjs_ffi::JSContext,
-    this_val: mquickjs_ffi::JSValue,
-    argc: mquickjs_ffi::c_int,
-    argv: *mut mquickjs_ffi::JSValue
-) -> mquickjs_ffi::JSValue {
+pub fn person_get_name_glue(
+    ctx: &Context,
+    this_val: JSValue,
+    args: &[JSValue]
+) -> Result<JSValue, String> {
     // 从 this_val 获取 Person 实例
-    let person = get_person_from_js_value(this_val);
+    let person = get_person_from_js_value(this_val)?;
     let name = person.get_name();
     // 转换为 JSValue
-    create_js_string(ctx, &name)
+    ctx.string_to_js_value(&name)
 }
 ```
 
@@ -293,15 +279,14 @@ pub trait AsyncProcessor {
 }
 
 // 异步处理胶水代码
-extern "C" fn async_processor_process_async(
-    ctx: *mut mquickjs_ffi::JSContext,
-    _this: mquickjs_ffi::JSValue,
-    argc: mquickjs_ffi::c_int,
-    argv: *mut mquickjs_ffi::JSValue
-) -> mquickjs_ffi::JSValue {
+pub fn async_processor_process_async_glue(
+    ctx: &Context,
+    _this: JSValue,
+    args: &[JSValue]
+) -> Result<JSValue, String> {
     // 提取参数
-    let data = unsafe { extract_string_from_js_value(ctx, *argv.add(0)) };
-    let callback_js_value = unsafe { *argv.add(1) };
+    let data = ctx.js_value_to_string(args[0].clone())?;
+    let callback_js_value = args[1].clone();
     
     // 包装 JS 回调为 Rust 类型
     let callback = AsyncCallback::new(ctx, callback_js_value);
@@ -309,10 +294,8 @@ extern "C" fn async_processor_process_async(
     // 调用用户实现
     let processor_impl = get_async_processor_implementation();
     match processor_impl.process_async(data, callback) {
-        Ok(_) => unsafe { mquickjs_ffi::JS_UNDEFINED },
-        Err(e) => unsafe { 
-            mquickjs_ffi::JS_Throw(ctx, create_js_error(ctx, &e))
-        },
+        Ok(_) => ctx.undefined_value(),
+        Err(e) => ctx.throw_error(&e),
     }
 }
 ```
@@ -926,3 +909,10 @@ fn main() {
 - [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
 - [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
 - [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划
+
+## 十二、标准库初始化机制（更新说明）
+- **重要更正**：实际实现中并不存在`JS_InitModuleSTDLib`函数
+- 标准库功能通过`JS_NewContext`函数的第三个参数`const JSSTDLibraryDef *stdlib_def`传入
+- 在`Context::new`函数中，使用静态变量`js_stdlib`作为标准库定义
+- 通过`JS_NewContext(mem_start, mem_size, &js_stdlib)`调用完成标准库初始化
+- `js_stdlib`静态变量定义在生成的头文件中（如`mqjs_ridl_stdlib.h`）

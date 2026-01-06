@@ -2,12 +2,13 @@
 name = "mquickjs-rs"
 version = "0.1.0"
 edition = "2021"
-build = "build.rs"
+
+[features]
+default = []
+ridl-extensions = []
 
 [dependencies]
+libc = "0.2"
 
 [build-dependencies]
-bindgen = "0.63.0"
-
-[lib]
-crate-type = ["lib"]
+bindgen = "0.63"

@@ -1,0 +1,14 @@
+[package]
+name = "mquickjs-demo"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mquickjs-rs = { path = "./deps/mquickjs-rs", features = ["ridl-extensions"] }
+libc = "0.2"
+
+# [workspace]
+resolver = "2"
+# members = [
+    "ridl_modules/*",
+]

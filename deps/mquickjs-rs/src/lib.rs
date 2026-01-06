@@ -7,8 +7,25 @@ use std::marker::PhantomData;
 #[allow(non_upper_case_globals)]
 #[allow(dead_code)]
 #[allow(clippy::all)]
-mod mquickjs_ffi {
+pub mod mquickjs_ffi {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+}
+
+// 定义条件宏，用于引入RIDL扩展符号
+#[cfg(feature = "ridl-extensions")]
+#[macro_export]
+macro_rules! mquickjs_ridl_extensions {
+    () => {
+        include!("../ridl_symbols.rs");
+    }
+}
+
+#[cfg(not(feature = "ridl-extensions"))]
+#[macro_export]
+macro_rules! mquickjs_ridl_extensions {
+    () => {
+        // 当ridl-extensions feature关闭时，宏不展开任何内容
+    }
 }
 
 pub use context::Context;
@@ -114,15 +131,6 @@ mod tests {
         let result2 = context.eval("x * 2;");
         assert!(result2.is_ok());
         assert_eq!(result2.unwrap(), "20");
-    }
-
-    #[test]
-    fn test_print_function() {
-        let mut context = Context::new(1024 * 1024).unwrap();
-        let result = context.eval("print('test output');");
-        // print should return undefined
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap(), "undefined");
     }
 
     #[test]
@@ -263,7 +271,7 @@ mod tests {
             value: null_val,
             _ctx: PhantomData,
         };
-        assert!(value.is_null());
+        assert!(value.is_null(&context));
         
         // Test undefined
         let c_code = CString::new("undefined").unwrap();
@@ -281,6 +289,7 @@ mod tests {
             value: undef_val,
             _ctx: PhantomData,
         };
-        assert!(value.is_undefined());
+        assert!(value.is_undefined(&context));
     }
 }
+

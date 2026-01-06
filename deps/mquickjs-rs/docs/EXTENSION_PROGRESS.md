@@ -1,99 +1,174 @@
-# mquickjs 标准库扩展开发进度记录
+# RIDL与mquickjs标准库集成与构建规范
 
-## 日期: 2026-01-06
+## 一、核心原则与注册机制
+- RIDL用于扩展而非替换mquickjs标准库，保留原有功能，仅移除示例代码和平台相关功能
+- 所有标准库功能必须通过编译时静态注册，禁止运行时动态注册
+- 标准库功能需在编译mquickjs时确定，并集成到mqjs_stdlib.c中
+- 使用`JSValue func(JSContext *ctx, JSValue this_val, int argc, JSValue *argv)`定义JS函数
+- 使用`JSPropDef`数组定义对象属性和方法，以`JS_PROP_END`结尾
+- 使用`JSClassDef`定义类结构，并通过`JS_PROP_CLASS_DEF`或`JS_CFUNC_DEF`注册到全局
+- 通过build_atoms在编译时生成字节码
 
-## 当前状态概述
+## 二、RIDL模块化架构设计
+- 支持两种注册方式：
+1. 全局注册（无module声明）：函数直接注册到global对象，适用于平台标准库（如console）
+2. 模块化注册（有module声明）：语法为`module system.network@1.0`，通过`require("module.name")`获取实例
+- module声明作用于整个文件，必须位于文件开头，一个文件仅允许一个module声明
+- 版本号格式为`主版本号.次版本号`或`主版本号`，不允许超过两部分
 
-我们已经成功将 `say_hello` 函数添加到 mquickjs 标准库中，验证了扩展工具的有效性。为了简化开发和演示流程，我们创建了一个专门的 demo 模块来处理 `say_hello` 函数。以下是详细的开发进度记录：
+## 三、require机制与模块映射
+- 注入全局`require(name: string) -> object`函数实现模块化（工厂模式）
+- 模块在mquickjs中注册为class，但不提供构造函数
+- 必须通过`require`函数获取模块实例，确保单一入口
+- 使用线程安全的静态映射表（如LazyLock<Mutex<HashMap>>）存储模块名到ClassID的映射
+- 在编译时为每个模块生成唯一ClassID并预注册到映射表
+- require函数根据模块名查询ClassID并创建对应对象实例
+- 映射表生命周期与mquickjs实例绑定，实例销毁时同步清理资源
 
-## 已完成的工作
+## 四、静态代码生成架构
+- 所有RIDL定义的功能必须通过jidl-tool在编译时生成Rust和C代码
+- 生成代码集成到mqjs_stdlib静态库中
+- 禁止依赖运行时动态注册方案
+- RIDL文件必须一次性完成代码生成，不支持运行时动态添加
+- 支持分阶段处理流程：
+1. 收集阶段：逐步解析并存储RIDL定义
+2. 合并阶段：将所有定义合并到全局上下文
+3. 生成阶段：一次性生成C/Rust绑定代码
+- 模块映射表和require函数依赖静态代码生成，无法实现流式编译
 
-### 1. RIDL 定义文件
-- **文件**: [../../tests/ridl_tests/stdlib.ridl](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib.ridl)
-- **内容**: 添加了 `say_hello` 函数的定义
-- **函数签名**: `js_say_hello()` -> `rust_say_hello()`
+## 五、模块注册表生成规范
+- 模块映射表必须生成为独立Rust模块文件（如module_registry.rs）
+- 文件需在mquickjs-rs编译时被引入，包含：
+1. 模块名到ClassID的映射表
+2. ClassID静态变量定义
+3. 模块类初始化函数
+4. require函数实现
+5. require函数注册接口
+- 确保职责分离和编译时集成能力
 
-### 2. RIDL 解析器修复
-- **文件**: [../../deps/ridl-tool/src/parser/mod.rs](file:///home/peng/workspace/mquickjs-demo/deps/ridl-tool/src/parser/mod.rs)
-- **修改**: 修复了RIDL解析器的bug，使其能正确解析函数定义
+## 六、API与项目结构规范
+- 必须使用mquickjs的FFI接口进行代码生成，禁止直接使用QuickJS的C API
+- 在Rust层面通过FFI与C代码交互，确保与mquickjs架构一致
+- 支持将每个RIDL功能模块作为独立cargo子工程，统一纳入mquickjs-rs workspace管理
+- jidl-tool需支持跨子工程扫描并收集所有RIDL files
+- 代码生成阶段对所有模块的RIDL定义进行统一处理和生成
 
-### 3. 扩展注册文件
-- **文件**: [../../deps/mquickjs/mquickjs_ridl_register.h](file:///home/peng/workspace/mquickjs-demo/deps/mquickjs/mquickjs_ridl_register.h)
-- **内容**: 添加了 `say_hello` 函数的注册信息
+## 七、目录结构与集成机制
+```
+tests/ridl_tests/
+├── stdlib/           # 每个RIDL模块独立目录
+│   ├── *.ridl        # RIDL接口定义
+│   ├── *.rs          # Rust胶水代码和实现
+│   └── *.h           # C头文件定义
+└── mquickjs-rs/      # 生成文件存放处
+├── mqjs_stdlib_template.c
+└── mquickjs_ridl_register.h
+```
+- 使用`mqjs_stdlib_template.c`作为基础模板
+- 通过`mquickjs_ridl_register.h`头文件包含RIDL生成的注册代码
+- 使用`JS_RIDL_EXTENSIONS`宏将RIDL扩展注入全局对象数组
+- 所有模块的注册信息统一合并到`mquickjs_ridl_register.h`
+- 通过构建系统自动收集并集成所有模块
 
-### 4. C胶水代码
-- **文件**: [../../tests/ridl_tests/stdlib/stdlib_glue.c](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/stdlib_glue.c)
-- **内容**: 生成的C胶水代码，包含 `js_say_hello` 函数实现
+## 八、类型匹配要求
+- 使用`JSPropDef`而非`JSCFunctionListEntry`
+- 确保RIDL生成的函数定义与mquickjs API类型兼容
+- 正确使用`JS_CFUNC_DEF`、`JS_PROP_DOUBLE_DEF`等宏
 
-### 5. Rust实现
-- **文件**: [../../tests/ridl_tests/stdlib/stdlib_impl.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/stdlib_impl.rs)
-- **内容**: 添加了 `rust_say_hello` 函数的Rust实现
+## 九、测试文件集成要求
+- 测试文件不能作为独立文件直接使用rustc编译运行
+- 必须集成到项目测试模块中，通过`cargo test`命令执行
+- 确保正确链接所有依赖模块和解析路径
 
-### 6. 工具验证
-- **工具**: [../../deps/mquickjs/mqjs_ridl_stdlib](file:///home/peng/workspace/mquickjs-demo/deps/mquickjs/mqjs_ridl_stdlib)
-- **验证结果**: 工具可以成功生成包含 `say_hello` 函数的标准库头文件
-- **生成文件**: [../../deps/mquickjs/mqjs_stdlib.h](file:///home/peng/workspace/mquickjs-demo/deps/mquickjs/mqjs_stdlib.h)
-- **确认**: 生成的头文件中包含 `say_hello` 函数定义
+## 十、标准库接口注册目标
+- 将mquickjs标准库中平台相关的功能接口（通过mqjs_stdlib_impl.c实现）使用RIDL注册到全局
 
-## 新增: 简化版 stdlib_demo 模块
+## 十一、完整集成流程
+1. **RIDL定义阶段**
+- 通过`.ridl`文件定义接口（如`stdlib.ridl`）
+- 支持全局注册与模块化注册（`module system.network@1.0`）
 
-为了简化开发和演示流程，我们创建了一个新的 demo 模块，专门用于演示 `say_hello` 函数。
+2. **代码生成阶段**
+- jidl-tool解析RIDL生成C函数实现
+- 生成JSPropDef数组与JSClassDef类定义
+- 生成模块映射表及require函数
 
-### 1. RIDL 定义文件
-- **文件**: [../../tests/ridl_tests/stdlib_demo.ridl](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib_demo.ridl)
-- **内容**: 简化的 `say_hello` 函数定义
-- **模块**: `module stdlib_demo@1.0`
+3. **标准库集成阶段**
+- 利用`build_atoms`将定义编译为字节码
+- 生成`mqjs_stdlib.h`头文件包含所有静态定义
+- `mqjs_stdlib_impl.c`仅保留头文件包含
 
-### 2. Rust 实现文件
-- **文件**: [../../tests/ridl_tests/stdlib_demo/stdlib_demo_impl.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib_demo/stdlib_demo_impl.rs)
-- **内容**: `rust_say_hello` 函数的简化实现
+4. **Rust绑定阶段**
+- 通过mquickjs-rs提供Rust交互接口
+- 实现模块注册表与require函数的Rust封装
 
-### 3. C 胶水代码文件
-- **文件**: [../../tests/ridl_tests/stdlib_demo/stdlib_demo_glue.c](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib_demo/stdlib_demo_glue.c)
-- **内容**: `js_say_hello` 函数的 C 胶水代码
+## 十二、标准库初始化机制（更新说明）
+- **重要更正**：实际实现中并不存在`JS_InitModuleSTDLib`函数
+- 标准库功能通过`JS_NewContext`函数的第三个参数`const JSSTDLibraryDef *stdlib_def`传入
+- 在`Context::new`函数中，使用静态变量`js_stdlib`作为标准库定义
+- 通过`JS_NewContext(mem_start, mem_size, &js_stdlib)`调用完成标准库初始化
+- `js_stdlib`静态变量定义在生成的头文件中（如`mqjs_ridl_stdlib.h`）
 
-### 4. C 头文件
-- **文件**: [../../tests/ridl_tests/stdlib_demo/stdlib_demo_glue.h](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib_demo/stdlib_demo_glue.h)
-- **内容**: `js_say_hello` 函数的声明
+# mquickjs-rs RIDL扩展开发进度
 
-### 5. 构建配置
-- **文件**: [../../build.rs](file:///home/peng/workspace/mquickjs-demo/build.rs)
-- **修改**: 更新构建脚本以包含 stdlib_demo 模块的 C 胶水代码
+## RIDL扩展符号管理方案
 
-## 实现细节
+### 问题描述
+- mquickjs.a 静态库引用了 RIDL 接口函数（如 js_say_hello）
+- 这些函数在相应的 rlib 模块中实现（如 stdlib_demo）
+- 链接时找不到符号，需要显式引用以防止被优化掉
+- 显式引用存在问题：
+  1. 关闭 ridl-extensions feature 时符号不存在，导致编译错误
+  2. 存在大量 RIDL 接口时，逐个引用过于复杂
 
-### say_hello 函数
-- **JavaScript 接口**: `say_hello()` 
-- **功能**: 返回 "Hello, World!" 字符串
-- **实现语言**: Rust
-- **Rust 函数**: `rust_say_hello`
+### 解决方案
+采用条件宏 + 自动生成文件的方案：
 
-### 构建流程
-1. RIDL定义文件被解析
-2. 生成C胶水代码
-3. Rust实现函数被链接
-4. 最终生成包含扩展的标准库头文件
+1. **ridl-tool 生成符号文件**：
+   - 分析所有 RIDL 文件
+   - 生成 `ridl_symbols.rs` 文件，包含所有扩展函数的引用
 
-## 验证结果
+2. **条件宏实现**：
+   ```rust
+   #[cfg(feature = "ridl-extensions")]
+   macro_rules! mquickjs_ridl_extensions {
+       () => {
+           include!("ridl_symbols.rs");
+       };
+   }
 
-我们成功验证了:
+   #[cfg(not(feature = "ridl-extensions"))]
+   macro_rules! mquickjs_ridl_extensions {
+       () => {
+           // 空实现
+       };
+   }
+   ```
 
-1. **工具可用性**: [../../deps/mquickjs/mqjs_ridl_stdlib](file:///home/peng/workspace/mquickjs-demo/deps/mquickjs/mqjs_ridl_stdlib) 工具能够正常工作
-2. **函数集成**: [say_hello](file:///home/peng/workspace/mquickjs-demo/src/main.rs#L24-L26) 函数已成功集成到标准库中
-3. **标准库生成**: [../../deps/mquickjs/mqjs_stdlib.h](file:///home/peng/workspace/mquickjs-demo/deps/mquickjs/mqjs_stdlib.h) 文件包含我们的扩展函数
-4. **端到端流程**: 从RIDL定义到最终标准库的完整流程已验证
-5. **stdlib_demo 模块**: 新的简化模块可以成功编译，不再有头文件包含错误
+3. **集成方式**：
+   - 在 mquickjs-rs 中将宏定义为公共宏（#[macro_export]）
+   - 在使用 RIDL 扩展的项目中调用 `mquickjs_ridl_extensions!()` 宏
+   - 启用 ridl-extensions feature 时展开符号引用
+   - 禁用时为空展开，不影响测试
 
-## 注意事项
+### 实施计划
+1. **第一阶段**：手写 ridl_symbols.rs 文件，验证机制
+2. **第二阶段**：实现 mquickjs_ridl_extensions!() 宏
+3. **第三阶段**：完善 ridl-tool 自动生成符号文件
 
-- 直接运行 [../../deps/mquickjs/mqjs_ridl_stdlib](file:///home/peng/workspace/mquickjs-demo/deps/mquickjs/mqjs_ridl_stdlib) 工具时，可能不会包含手动添加的扩展，需要通过构建流程来确保扩展被包含
-- [../../tests/ridl_tests/stdlib/stdlib_glue.c](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/stdlib_glue.c) 文件是在 [../../tests/ridl_tests/stdlib](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib) 目录中生成的，然后在构建过程中被复制到适当位置
-- stdlib_demo 模块使用了正确的头文件包含方式，解决了编译错误
+### 实施结果
+✓ **第一阶段完成**：已创建手写的 [ridl_symbols.rs](file:///home/peng/workspace/mquickjs-rs-demo/deps/mquickjs-rs/ridl_symbols.rs) 文件
+✓ **第二阶段完成**：已在 mquickjs-rs 中实现条件宏，并将其导出为公共接口
+✓ **位置调整**：宏调用从 mquickjs-rs 内部移到使用它的项目中（如 main.rs）
+✓ **验证通过**：
+  - 启用 ridl-extensions feature 时，符号正确引用
+  - 禁用 ridl-extensions feature 时，宏为空展开，不影响测试
+  - mquickjs-rs 库测试可通过（--no-default-features）
+  - 主项目在启用 feature 时可正常构建
 
-## 下一步
-
-- 可以继续添加更多标准库扩展
-- 优化构建流程以确保扩展函数能更顺畅地集成
-- 测试扩展函数在JavaScript环境中的实际运行效果
-- 完善 stdlib_demo 模块，使其更易于理解和使用
-- 解决 mquickjs-rs 库中的编译错误
+### 优势
+- ✓ 解决了测试时符号不存在的编译错误
+- ✓ 提供了可扩展的符号管理机制
+- ✓ 与现有 feature 控制机制无缝集成
+- ✓ 为未来的自动化生成奠定基础
+- ✓ 遵循了关注点分离原则，宏调用位于需要它的项目中

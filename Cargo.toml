@@ -3,8 +3,13 @@ name = "mquickjs-demo"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "mquickjs-demo"
+path = "src/main.rs"
+
 [dependencies]
-mquickjs-rs = { path = "./deps/mquickjs-rs" }
+mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-extensions"] }
+stdlib_demo = { path = "ridl_modules/stdlib_demo" }
 
 [build-dependencies]
 cc = "1.0"

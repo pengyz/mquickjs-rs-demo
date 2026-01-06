@@ -1,3 +1,0 @@
-module stdlib_demo@1.0 {
-    say_hello(): string;
-}

@@ -33,6 +33,20 @@ impl<'ctx> Value<'ctx> {
     pub fn is_function(&self, ctx: &'ctx Context) -> bool {
         unsafe { mquickjs_ffi::JS_IsFunction(ctx.ctx, self.value) != 0 }
     }
+    
+    // 添加 is_null 方法
+    pub fn is_null(&self, _ctx: &'ctx Context) -> bool {
+        // 检查值的标签是否为NULL (JS_TAG_NULL)
+        let tag = (self.value as u32) & ((1 << mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1);
+        tag == mquickjs_ffi::JS_TAG_NULL as u32
+    }
+    
+    // 添加 is_undefined 方法
+    pub fn is_undefined(&self, _ctx: &'ctx Context) -> bool {
+        // 检查值的标签是否为undefined (JS_TAG_UNDEFINED)
+        let tag = (self.value as u32) & ((1 << mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1);
+        tag == mquickjs_ffi::JS_TAG_UNDEFINED as u32
+    }
 }
 
 impl<'ctx> Value<'ctx> {
