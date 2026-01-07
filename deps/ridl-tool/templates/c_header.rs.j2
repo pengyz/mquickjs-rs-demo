@@ -1,0 +1,48 @@
+// Auto-generated C header for RIDL interfaces
+#ifndef MJS_RIDL_REGISTER_H
+#define MJS_RIDL_REGISTER_H
+
+#include "mquickjs.h"
+
+// Function declarations for all RIDL-defined functions
+{%- for function in functions -%}
+JSValue js_{{ function.name|lower }}(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+{%- endfor -%}
+
+{%- for interface in interfaces -%}
+{%- for method in interface.methods -%}
+JSValue js_{{ interface.name|lower }}_{{ method.name }}(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+{%- endfor -%}
+{%- endfor %}
+
+// Property definition arrays
+{%- for interface in interfaces -%}
+extern const JSCFunctionListEntry js_{{ interface.name|lower }}_defs[];
+{%- endfor %}
+
+// Class definition
+{%- for interface in interfaces -%}
+extern const JSClassDef js_{{ interface.name|lower }}_class_def;
+{%- endfor %}
+
+// Module initialization functions
+{%- for interface in interfaces -%}
+int js_{{ interface.name|lower }}_init(JSContext *ctx, JSModuleDef *m);
+{%- endfor %}
+
+// Extension definitions
+#define JS_STDLIB_EXTENSIONS_{{ module_name|upper }} \
+{%- for function in functions %}
+    JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}), \
+{%- endfor %}
+{%- for interface in interfaces -%}
+{%- for method in interface.methods %}
+    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ interface.name|lower }}_{{ method.name }}), \
+{%- endfor -%}
+{%- endfor %}
+
+// Global extension properties
+#define JS_RIDL_EXTENSIONS \
+    JS_STDLIB_EXTENSIONS_{{ module_name|upper }}
+
+#endif // MJS_RIDL_REGISTER_H

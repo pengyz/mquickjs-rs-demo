@@ -44,6 +44,11 @@ pub fn parse_idl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Erro
     Ok(items)
 }
 
+/// 解析RIDL内容（与parse_idl相同，用于API一致性）
+pub fn parse_ridl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Error>> {
+    parse_idl(content)
+}
+
 fn parse_module_decl(pair: pest::iterators::Pair<Rule>) -> Result<ModuleDeclaration, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
     

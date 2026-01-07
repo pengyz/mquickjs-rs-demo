@@ -8,3 +8,8 @@ pest = "2.0"
 pest_derive = "2.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+askama = { version = "0.12", features = ["config"] }
+
+[lib]
+name = "jidl_tool"
+path = "src/lib.rs"

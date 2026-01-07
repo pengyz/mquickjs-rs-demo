@@ -1,0 +1,38 @@
+use mquickjs_rs::{Context, Value};
+
+// Implementation for {{ module_name }}
+
+{%- for interface in interfaces %}
+// Implementation for {{ interface.name }} interface
+mod {{ interface.name|lower }}_impl {
+    use super::*;
+
+    pub fn {{ interface.name|lower }}_new() -> crate::{{ interface.name }} {
+        // Return a new instance of the interface implementation
+        todo!("Implement {{ interface.name }} creation");
+    }
+
+    {%- for method in interface.methods %}
+    pub fn {{ method.name }}(
+        {%- for param in method.params %}
+        {{ param.name }}: {{ param.param_type }},
+        {%- endfor %}
+    ) -> {{ method.return_type|default("()") }} {
+        // Implementation goes here
+        todo!("Implement {{ interface.name }}::{{ method.name }}");
+    }
+    {%- endfor %}
+}
+{%- endfor %}
+
+{%- for function in functions %}
+// Implementation for {{ function.name }} function
+pub fn {{ function.name|lower }}(
+    {%- for param in function.params %}
+    {{ param.name }}: {{ param.param_type }},
+    {%- endfor %}
+) -> {{ function.return_type|default("()") }} {
+    // Implementation goes here
+    todo!("Implement {{ function.name }}");
+}
+{%- endfor %}

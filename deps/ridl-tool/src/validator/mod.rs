@@ -60,16 +60,16 @@ impl SemanticValidator {
         // 检查重复定义
         self.validate_duplicate_definitions(&defined_identifiers);
         
-        // 验证所有类型引用
+        // 验证类型引用
         self.validate_type_references(idl);
         
-        // 验证标识符是否使用了关键字
+        // 验证标识符命名
         self.validate_identifiers(idl);
         
         if self.errors.is_empty() {
             Ok(())
         } else {
-            Err(self.errors.clone())
+            Err(std::mem::replace(&mut self.errors, Vec::new()))
         }
     }
 
@@ -167,14 +167,6 @@ impl SemanticValidator {
         for function in &idl.functions {
             self.validate_type(&function.return_type);
             for param in &function.params {
-                self.validate_type(&param.param_type);
-            }
-        }
-
-        // 验证回调类型
-        for callback in &idl.callbacks {
-            self.validate_type(&callback.return_type);
-            for param in &callback.params {
                 self.validate_type(&param.param_type);
             }
         }
@@ -328,6 +320,49 @@ impl SemanticValidator {
                 self.file_path.clone(),
                 RIDLErrorType::SemanticError,
             ));
+        }
+    }
+}
+
+/// 验证IDL项目列表
+pub fn validate(items: &[IDLItem]) -> Result<(), Box<dyn std::error::Error>> {
+    // 创建一个临时的IDL结构体来包装items
+    let mut idl = IDL {
+        module: None,
+        interfaces: vec![],
+        classes: vec![],
+        enums: vec![],
+        structs: vec![],
+        functions: vec![],
+        using: vec![],
+        imports: vec![],
+        singletons: vec![],
+        callbacks: vec![],
+    };
+    
+    // 从items中提取各种定义到idl中
+    for item in items {
+        match item {
+            IDLItem::Interface(interface) => idl.interfaces.push(interface.clone()),
+            IDLItem::Class(class) => idl.classes.push(class.clone()),
+            IDLItem::Enum(enum_def) => idl.enums.push(enum_def.clone()),
+            IDLItem::Struct(struct_def) => idl.structs.push(struct_def.clone()),
+            IDLItem::Function(function) => idl.functions.push(function.clone()),
+            IDLItem::Using(using) => idl.using.push(using.clone()),
+            IDLItem::Import(import) => idl.imports.push(import.clone()),
+            IDLItem::Singleton(singleton) => idl.singletons.push(singleton.clone()),
+        }
+    }
+    
+    // 创建验证器并验证
+    let mut validator = SemanticValidator::new("unknown.ridl".to_string());
+    match validator.validate(&idl) {
+        Ok(()) => Ok(()),
+        Err(errors) => {
+            let error_messages: Vec<String> = errors.iter()
+                .map(|e| format!("{} (line {}, col {})", e.message, e.line, e.column))
+                .collect();
+            Err(format!("Validation errors: {}", error_messages.join("; ")).into())
         }
     }
 }

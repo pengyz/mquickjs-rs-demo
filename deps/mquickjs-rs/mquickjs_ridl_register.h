@@ -9,21 +9,15 @@
 #ifndef MQUICKJS_RIDL_REGISTER_H
 #define MQUICKJS_RIDL_REGISTER_H
 
-JSValue js_say_hello(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+#include "mquickjs.h"
 
-/* Define RIDL extensions for different modules */
-#define JS_STDLIB_EXTENSIONS \
-    JS_CFUNC_DEF("say_hello", 0, js_say_hello),
+// Function declarations for all RIDL-defined functionsJSValue js_gc(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);JSValue js_performance_now(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);JSValue js_load(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);JSValue js_settimeout(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);JSValue js_cleartimeout(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);JSValue js_sayhello(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+// Define RIDL extensions for module stdlib
+#define JS_STDLIB_EXTENSIONS_STDLIB \JS_CFUNC_DEF("gc", 0, js_gc), \JS_CFUNC_DEF("performance_now", 0, js_performance_now), \JS_CFUNC_DEF("load", 1, js_load), \JS_CFUNC_DEF("setTimeout", 2, js_settimeout), \JS_CFUNC_DEF("clearTimeout", 1, js_cleartimeout), \
+// Define RIDL extensions for module stdlib_demo
+#define JS_STDLIB_EXTENSIONS_STDLIB_DEMO \JS_CFUNC_DEF("sayHello", 0, js_sayhello), \
 
-/* For now, just use the stdlib extensions, but in the future this could be 
- * extended to support multiple modules:
- * 
- * #define JS_RIDL_EXTENSIONS \
- *     JS_STDLIB_EXTENSIONS \
- *     JS_NETWORK_EXTENSIONS \
- *     JS_FILE_EXTENSIONS \
- */
-
-#define JS_RIDL_EXTENSIONS JS_STDLIB_EXTENSIONS
+#define JS_RIDL_EXTENSIONS \
+    JS_STDLIB_EXTENSIONS \JS_STDLIB_EXTENSIONS_STDLIB \JS_STDLIB_EXTENSIONS_STDLIB_DEMO \
 
 #endif /* MQUICKJS_RIDL_REGISTER_H */

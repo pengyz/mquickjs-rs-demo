@@ -1,334 +1,292 @@
-use std::fs;
+use askama::Template;
 use std::path::Path;
-use crate::parser::ast::{IDLItem, Interface, Class, Enum, Function, Type, Field, Property, Method, StructDef, SerializationFormat};
+use crate::parser::ast::{IDLItem, Interface, Method, Param, Function, IDL, Type};
+use std::collections::HashMap;
 
-/// 生成代码
-pub fn generate_code(items: &[IDLItem], output_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
-    let output_path = Path::new(output_dir);
-    
-    // 创建输出目录
-    fs::create_dir_all(output_path)?;
-    
-    // 生成 Rust 胶水代码
-    generate_rust_glue(items, output_path)?;
-    
-    // 生成 C 绑定代码
-    generate_c_bindings(items, output_path)?;
-    
-    // 生成标准库描述
-    generate_stdlib_descriptions(items, output_path)?;
-    
-    Ok(())
+mod filters;
+
+#[derive(Template)]
+#[template(path = "c_header.rs.j2")]
+struct CHeaderTemplate {
+    module_name: String,
+    interfaces: Vec<TemplateInterface>,
+    functions: Vec<TemplateFunction>,
 }
 
-/// 生成 Rust 胶水代码
-fn generate_rust_glue(items: &[IDLItem], output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let mut rust_code = String::new();
-    rust_code.push_str("// Auto-generated Rust glue code\n\n");
+#[derive(Template)]
+#[template(path = "rust_glue.rs.j2")]
+struct RustGlueTemplate {
+    module_name: String,
+    interfaces: Vec<TemplateInterface>,
+    functions: Vec<TemplateFunction>,
+}
 
+#[derive(Template)]
+#[template(path = "rust_impl.rs.j2")]
+struct RustImplTemplate {
+    module_name: String,
+    interfaces: Vec<TemplateInterface>,
+    functions: Vec<TemplateFunction>,
+}
+
+#[derive(Template)]
+#[template(path = "symbols.rs.j2")]
+struct SymbolsTemplate {
+    module_name: String,
+    interfaces: Vec<TemplateInterface>,
+    functions: Vec<TemplateFunction>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateInterface {
+    name: String,
+    methods: Vec<TemplateMethod>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateMethod {
+    name: String,
+    params: Vec<TemplateParam>,
+    return_type: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateParam {
+    name: String,
+    param_type: String,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateFunction {
+    name: String,
+    params: Vec<TemplateParam>,
+    return_type: Option<String>,
+}
+
+impl From<Interface> for TemplateInterface {
+    fn from(interface: Interface) -> Self {
+        Self {
+            name: interface.name,
+            methods: interface.methods.into_iter().map(|m| m.into()).collect(),
+        }
+    }
+}
+
+impl From<Method> for TemplateMethod {
+    fn from(method: Method) -> Self {
+        Self {
+            name: method.name,
+            params: method.params.into_iter().map(|p| p.into()).collect(),
+            return_type: if matches!(method.return_type, Type::Void) {
+                None
+            } else {
+                Some(method.return_type.to_string())
+            },
+        }
+    }
+}
+
+impl From<Param> for TemplateParam {
+    fn from(param: Param) -> Self {
+        Self {
+            name: param.name,
+            param_type: param.param_type.to_string(),
+        }
+    }
+}
+
+impl From<Function> for TemplateFunction {
+    fn from(function: Function) -> Self {
+        Self {
+            name: function.name,
+            params: function.params.into_iter().map(|p| p.into()).collect(),
+            return_type: if matches!(function.return_type, Type::Void) {
+                None
+            } else {
+                Some(function.return_type.to_string())
+            },
+        }
+    }
+}
+
+pub fn collect_definitions(ridl_files: &[String]) -> Result<Vec<IDL>, Box<dyn std::error::Error>> {
+    let mut all_definitions = Vec::new();
+    
+    for ridl_file in ridl_files {
+        let content = std::fs::read_to_string(ridl_file)?;
+        let items = crate::parser::parse_ridl(&content)?;
+        
+        // 将解析出的Vec<IDLItem>转换为单个IDL结构
+        let mut functions = Vec::new();
+        let mut interfaces = Vec::new();
+        let mut classes = Vec::new();
+        let mut enums = Vec::new();
+        let mut structs = Vec::new();
+        let callbacks: Vec<Function> = vec![]; // 回调作为函数处理
+        let mut using = Vec::new();
+        let mut imports = Vec::new();
+        let mut singletons = Vec::new();
+        let mut module = None;
+        
+        for item in items {
+            match item {
+                crate::parser::ast::IDLItem::Function(f) => functions.push(f),
+                crate::parser::ast::IDLItem::Interface(i) => interfaces.push(i),
+                crate::parser::ast::IDLItem::Class(c) => classes.push(c),
+                crate::parser::ast::IDLItem::Enum(e) => enums.push(e),
+                crate::parser::ast::IDLItem::Struct(s) => structs.push(s),
+                crate::parser::ast::IDLItem::Using(u) => using.push(u),
+                crate::parser::ast::IDLItem::Import(im) => imports.push(im),
+                crate::parser::ast::IDLItem::Singleton(s) => singletons.push(s),
+            }
+        }
+        
+        let idl = IDL {
+            functions,
+            interfaces,
+            classes,
+            enums,
+            structs,
+            callbacks: vec![], // 回调作为函数处理
+            using,
+            imports,
+            singletons,
+            module,
+        };
+        
+        all_definitions.push(idl);
+    }
+    
+    Ok(all_definitions)
+}
+
+pub fn generate_module_files(items: &[IDLItem], output_path: &Path, module_name: &str) -> Result<(), Box<dyn std::error::Error>> {
+    let mut functions = Vec::new();
+    let mut interfaces = Vec::new();
+    
     for item in items {
         match item {
-            IDLItem::Interface(interface) => {
-                rust_code.push_str(&generate_rust_interface_glue(interface));
-            }
-            IDLItem::Class(class) => {
-                rust_code.push_str(&generate_rust_class_glue(class));
-            }
-            IDLItem::Enum(enum_def) => {
-                rust_code.push_str(&generate_rust_enum_glue(enum_def));
-            }
-            IDLItem::Struct(struct_def) => {
-                rust_code.push_str(&generate_rust_struct_glue(struct_def));
-            }
-            IDLItem::Function(function) => {
-                rust_code.push_str(&generate_rust_function_glue(function));
-            }
-            _ => {
-                // 其他类型暂时不处理
-            }
-        }
-    }
-
-    // 将生成的代码写入文件
-    fs::write(output_path.join("rust_glue.rs"), rust_code)?;
-
-    Ok(())
-}
-
-/// 生成 C 绑定代码
-pub fn generate_c_bindings(items: &[IDLItem], output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    // 生成 C 绑定代码
-    let mut c_code = String::new();
-    c_code.push_str("// Auto-generated C bindings\n\n");
-    c_code.push_str("#include \"mquickjs.h\"\n\n");
-
-    for item in items {
-        match item {
-            IDLItem::Interface(interface) => {
-                c_code.push_str(&generate_c_interface_glue(interface));
-            }
-            IDLItem::Class(class) => {
-                c_code.push_str(&generate_c_class_glue(class));
-            }
-            IDLItem::Enum(enum_def) => {
-                c_code.push_str(&generate_c_enum_glue(enum_def));
-            }
-            IDLItem::Struct(struct_def) => {
-                c_code.push_str(&generate_c_struct_glue(struct_def));
-            }
-            IDLItem::Function(function) => {
-                c_code.push_str(&generate_c_function_glue(function));
-            }
-            _ => {
-                // 其他类型暂时不处理
-            }
-        }
-    }
-
-    // 将生成的代码写入文件
-    fs::write(output_path.join("c_bindings.c"), c_code)?;
-
-    Ok(())
-}
-
-/// 生成标准库描述
-fn generate_stdlib_descriptions(items: &[IDLItem], output_path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    let stdlib_path = output_path.join("stdlib_descriptions.txt");
-    let mut content = String::new();
-    
-    content.push_str("// Auto-generated standard library descriptions\n\n");
-
-    for item in items {
-        match item {
-            IDLItem::Interface(interface) => {
-                content.push_str(&format!("// Interface: {}\n", interface.name));
-                for method in &interface.methods {
-                    content.push_str(&format!("// Method: {}::{}\n", interface.name, method.name));
-                }
-            }
-            IDLItem::Class(class) => {
-                content.push_str(&format!("// Class: {}\n", class.name));
-                if let Some(ref constructor) = class.constructor {
-                    content.push_str(&format!("// Constructor: {}::new\n", class.name));
-                }
-                for method in &class.methods {
-                    content.push_str(&format!("// Method: {}::{}\n", class.name, method.name));
-                }
-            }
-            IDLItem::Function(function) => {
-                content.push_str(&format!("// Function: {}\n", function.name));
-            }
-            _ => {}
+            crate::parser::ast::IDLItem::Function(f) => functions.push(TemplateFunction::from(f.clone())),
+            crate::parser::ast::IDLItem::Interface(i) => interfaces.push(TemplateInterface::from(i.clone())),
+            // 其他类型暂不处理，可根据需要添加
+            _ => {},
         }
     }
     
-    fs::write(stdlib_path, content)?;
-    Ok(())
-}
-
-// 生成Rust接口胶水代码
-fn generate_rust_interface_glue(interface: &Interface) -> String {
-    let mut code = format!("// Interface: {}\n", interface.name);
-    code.push_str(&format!("pub struct {} {{\n", interface.name));
-    code.push_str("    // Interface implementation\n");
-    code.push_str("}\n\n");
-    
-    for method in &interface.methods {
-        code.push_str(&generate_rust_method_glue(&interface.name, method));
-    }
-    
-    code
-}
-
-// 生成Rust类胶水代码
-fn generate_rust_class_glue(class: &Class) -> String {
-    let mut code = format!("// Class: {}\n", class.name);
-    code.push_str(&format!("pub struct {} {{\n", class.name));
-    code.push_str("    // Class implementation\n");
-    code.push_str("}\n\n");
-    
-    if let Some(ref constructor) = class.constructor {
-        code.push_str(&generate_rust_constructor_glue(&class.name, constructor));
-    }
-    
-    for method in &class.methods {
-        code.push_str(&generate_rust_method_glue(&class.name, method));
-    }
-    
-    code
-}
-
-// 生成Rust枚举胶水代码
-fn generate_rust_enum_glue(enum_def: &Enum) -> String {
-    let mut code = format!("// Enum: {}\n", enum_def.name);
-    code.push_str(&format!("pub enum {} {{\n", enum_def.name));
-    
-    for value in &enum_def.values {
-        if let Some(val) = value.value {
-            code.push_str(&format!("    {} = {},\n", value.name, val));
-        } else {
-            code.push_str(&format!("    {},\n", value.name));
-        }
-    }
-    
-    code.push_str("}\n\n");
-    code
-}
-
-// 生成Rust结构体胶水代码
-fn generate_rust_struct_glue(struct_def: &StructDef) -> String {
-    let mut code = format!("// Struct: {}\n", struct_def.name);
-    
-    // 添加序列化相关导入
-    match struct_def.serialization_format {
-        SerializationFormat::Json => {
-            code.push_str("#[derive(serde::Serialize, serde::Deserialize)]\n");
-        }
-        SerializationFormat::MessagePack => {
-            code.push_str("#[derive(serde::Serialize, serde::Deserialize)]\n");
-        }
-        SerializationFormat::Protobuf => {
-            code.push_str("#[derive(protobuf::Message)]\n");
-        }
-    }
-    
-    code.push_str(&format!("pub struct {} {{\n", struct_def.name));
-    
-    for field in &struct_def.fields {
-        code.push_str(&format!("    pub {}: {},\n", field.name, rust_type_name(&field.field_type)));
-    }
-    
-    code.push_str("}\n\n");
-    code
-}
-
-// 生成Rust函数胶水代码
-fn generate_rust_function_glue(function: &Function) -> String {
-    let params = function
-        .params
-        .iter()
-        .map(|p| format!("{}: {}", p.name, rust_type_name(&p.param_type)))
-        .collect::<Vec<_>>()
-        .join(", ");
-    
-    format!(
-        "pub fn {}({}) -> {} {{\n    todo!(\"Function implementation\");\n}}\n\n",
-        function.name,
-        params,
-        rust_type_name(&function.return_type)
-    )
-}
-
-// 生成Rust方法胶水代码
-fn generate_rust_method_glue(class_name: &str, method: &Method) -> String {
-    format!(
-        "JSValue {}_{}_method(JSContext *ctx, JSValue this_val, int argc, JSValue *argv) {{\n    // TODO: Implement method\n    return JS_UNDEFINED;\n}}\n\n",
-        class_name,
-        method.name
-    )
-}
-
-// 生成Rust构造函数胶水代码
-fn generate_rust_constructor_glue(class_name: &str, constructor: &Function) -> String {
-    format!(
-        "JSValue {}_constructor(JSContext *ctx, JSValue new_target, int argc, JSValue *argv) {{\n    // TODO: Implement constructor\n    return JS_UNDEFINED;\n}}\n\n",
-        class_name
-    )
-}
-
-// 生成C接口绑定代码
-fn generate_c_interface_glue(interface: &Interface) -> String {
-    let mut code = format!("// C bindings for interface: {}\n", interface.name);
-    
-    for method in &interface.methods {
-        code.push_str(&format!(
-            "// Method: {}::{}\nJSValue {}_{}_method(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);\n\n",
-            interface.name,
-            method.name,
-            interface.name,
-            method.name
-        ));
-    }
-    
-    code
-}
-
-// 生成C类绑定代码
-fn generate_c_class_glue(class: &Class) -> String {
-    let mut code = format!("// C bindings for class: {}\n", class.name);
-    
-    // Constructor
-    if let Some(ref _constructor) = class.constructor {
-        code.push_str(&format!(
-            "// Constructor: {}\nJSValue {}_constructor(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);\n\n",
-            class.name,
-            class.name
-        ));
-    }
-    
-    // Methods
-    for method in &class.methods {
-        code.push_str(&format!(
-            "// Method: {}::{}\nJSValue {}_{}_method(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);\n\n",
-            class.name,
-            method.name,
-            class.name,
-            method.name
-        ));
-    }
-    
-    code
-}
-
-// 生成C枚举绑定代码
-fn generate_c_enum_glue(enum_def: &Enum) -> String {
-    format!("// C bindings for enum: {}\n// Values: {:?}\n\n", enum_def.name, enum_def.values)
-}
-
-// 生成C结构体绑定代码
-fn generate_c_struct_glue(struct_def: &StructDef) -> String {
-    let format_str = match struct_def.serialization_format {
-        SerializationFormat::Json => "JSON",
-        SerializationFormat::MessagePack => "MessagePack",
-        SerializationFormat::Protobuf => "Protobuf",
+    // 生成Rust胶水代码
+    let rust_glue_template = RustGlueTemplate {
+        module_name: module_name.to_string(),
+        interfaces: interfaces.clone(),
+        functions: functions.clone(),
     };
+    let rust_glue_code = rust_glue_template.render()?;
+    std::fs::write(output_path.join(format!("{}_glue.rs", module_name)), rust_glue_code)?;
+
+    // 生成Rust实现骨架
+    let rust_impl_template = RustImplTemplate {
+        module_name: module_name.to_string(),
+        interfaces: interfaces.clone(),
+        functions: functions.clone(),
+    };
+    let rust_impl_code = rust_impl_template.render()?;
+    std::fs::write(output_path.join(format!("{}_impl.rs", module_name)), rust_impl_code)?;
+
+    // 注意：模块命令只生成Rust胶水代码和实现骨架，其他文件在aggregate命令中生成
+
+    Ok(())
+}
+
+pub fn generate_shared_files(ridl_files: &[String], output_dir: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // 为了聚合符号，我们需要读取每个模块的名称并生成一个聚合的符号文件
+    let mut all_module_symbols = Vec::new();
     
-    format!(
-        "// C bindings for struct: {} (serialized with {})\n// Fields: {}\n\n",
-        struct_def.name,
-        format_str,
-        struct_def.fields.len()
-    )
-}
-
-// 生成C函数绑定代码
-fn generate_c_function_glue(function: &Function) -> String {
-    format!(
-        "// Global function: {}\nJSValue {}_function(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);\n\n",
-        function.name,
-        function.name
-    )
-}
-
-// 辅助函数：将IDL类型转换为Rust类型名
-fn rust_type_name(idl_type: &Type) -> String {
-    match idl_type {
-        Type::Bool => "bool".to_string(),
-        Type::Int => "i32".to_string(),
-        Type::Float => "f32".to_string(),
-        Type::Double => "f64".to_string(),
-        Type::String => "String".to_string(),
-        Type::Void => "()".to_string(),
-        Type::Object => "Object".to_string(),
-        Type::Callback => "Callback".to_string(),
-        Type::CallbackWithParams(_) => "Callback".to_string(), // 回调类型表示为Callback
-        Type::Null => "Option<()>".to_string(),
-        Type::Any => "serde_json::Value".to_string(),
-        Type::Array(inner) => format!("Vec<{}>", rust_type_name(inner)),
-        Type::Map(key, value) => format!("std::collections::HashMap<{}, {}>", rust_type_name(key), rust_type_name(value)),
-        Type::Union(_) => "serde_json::Value".to_string(),
-        Type::Optional(inner) => format!("Option<{}>", rust_type_name(inner)),
-        Type::Custom(name) => name.clone(),
-        Type::Group(inner) => rust_type_name(inner),
+    for ridl_file in ridl_files {
+        // 从文件路径提取模块名
+        let module_name = std::path::Path::new(ridl_file)
+            .file_stem()
+            .ok_or("Invalid ridl file path")?
+            .to_str()
+            .ok_or("Invalid UTF-8 in file name")?
+            .to_string();
+        
+        // 读取并解析RIDL文件
+        let content = std::fs::read_to_string(ridl_file)?;
+        let items = crate::parser::parse_ridl(&content)?;
+        
+        // 提取函数和接口
+        let mut functions = Vec::new();
+        let mut interfaces = Vec::new();
+        
+        for item in items {
+            match item {
+                crate::parser::ast::IDLItem::Function(f) => functions.push(TemplateFunction::from(f)),
+                crate::parser::ast::IDLItem::Interface(i) => interfaces.push(TemplateInterface::from(i)),
+                // 其他类型暂不处理
+                _ => {},
+            }
+        }
+        
+        all_module_symbols.push((module_name, functions, interfaces));
     }
+    
+    // 生成聚合的C头文件
+    let mut all_interfaces = Vec::new();
+    let mut all_functions = Vec::new();
+    
+    for (_, functions, interfaces) in &all_module_symbols {
+        all_functions.extend(functions.clone());
+        all_interfaces.extend(interfaces.clone());
+    }
+    
+    let c_template = CHeaderTemplate {
+        module_name: "mquickjs_ridl".to_string(),
+        interfaces: all_interfaces,
+        functions: all_functions,
+    };
+    let c_code = c_template.render()?;
+    std::fs::write(std::path::Path::new(output_dir).join("mquickjs_ridl_register.h"), c_code)?;
+
+    // 生成总的聚合符号文件
+    let mut agg_symbols_content = "// Generated symbol references for RIDL extensions\n".to_string();
+    for (module_name, functions, interfaces) in &all_module_symbols {
+        for function in functions {
+            // 使用与模板中相同的转换：转换为小写
+            let func_name_lower = function.name.to_lowercase();
+            agg_symbols_content.push_str(&format!("use crate::{}_glue::js_{};\n", module_name, func_name_lower));
+        }
+        for interface in interfaces {
+            for method in &interface.methods {
+                // 对于接口方法，也使用小写转换
+                let interface_name_lower = interface.name.to_lowercase();
+                let method_name_lower = method.name.to_lowercase();
+                agg_symbols_content.push_str(&format!("use crate::{}_glue::js_{}_{};\n", 
+                    interface_name_lower, interface_name_lower, method_name_lower));
+            }
+        }
+    }
+    
+    agg_symbols_content.push_str("\n// Use all glue functions to ensure they're linked\n");
+    agg_symbols_content.push_str("pub fn ensure_symbols() {\n");
+    for (module_name, functions, interfaces) in &all_module_symbols {
+        for function in functions {
+            let func_name_lower = function.name.to_lowercase();
+            agg_symbols_content.push_str(&format!("    let _ = js_{};\n", func_name_lower));
+        }
+        for interface in interfaces {
+            for method in &interface.methods {
+                let interface_name_lower = interface.name.to_lowercase();
+                let method_name_lower = method.name.to_lowercase();
+                agg_symbols_content.push_str(&format!("    let _ = js_{}_{};\n", 
+                    interface_name_lower, method_name_lower));
+            }
+        }
+    }
+    agg_symbols_content.push_str("}\n");
+    
+    std::fs::write(
+        std::path::Path::new(output_dir).join("ridl_symbols.rs"), 
+        agg_symbols_content
+    )?;
+
+    Ok(())
 }

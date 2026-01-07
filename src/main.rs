@@ -3,6 +3,9 @@ use std::fs;
 
 use mquickjs_rs::Context;
 
+// 引入生成的模块
+include!(concat!(env!("CARGO_MANIFEST_DIR"), "/generated_modules.rs"));
+
 // 使用宏引入RIDL扩展符号，防止链接时被优化掉
 mquickjs_rs::mquickjs_ridl_extensions!();
 

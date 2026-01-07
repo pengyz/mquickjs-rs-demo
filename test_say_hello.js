@@ -1,1 +1,0 @@
-globalThis.say_hello();

@@ -1,0 +1,21 @@
+// Generated symbol references for RIDL extensions
+{%- for function in functions %}
+use crate::{{ module_name }}_glue::js_{{ function.name|lower }};
+{%- endfor %}
+{%- for interface in interfaces %}
+{%- for method in interface.methods %}
+use crate::{{ module_name }}_glue::js_{{ interface.name|lower }}_{{ method.name }};
+{%- endfor %}
+{%- endfor %}
+
+// Use all glue functions to ensure they're linked
+pub fn ensure_symbols() {
+{%- for function in functions %}
+    let _ = js_{{ function.name|lower }};
+{%- endfor %}
+{%- for interface in interfaces %}
+{%- for method in interface.methods %}
+    let _ = js_{{ interface.name|lower }}_{{ method.name }};
+{%- endfor %}
+{%- endfor %}
+}
