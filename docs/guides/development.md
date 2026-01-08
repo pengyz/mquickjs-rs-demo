@@ -35,35 +35,46 @@ mquickjs-demo/
 
 ## RIDL 模块开发
 
-### 创建/接入新模块（当前流程示例）
+### 创建/接入新模块（当前流程）
 
-> 现有构建链在 `build.rs` 中列出了固定的 RIDL 文件（stdlib、stdlib_demo）。如果新增模块，需要同步修改 `build.rs` 的收集列表、模板生成逻辑以及符号聚合，确保生成产物被复制到根目录与 `generated/` 中。
+> 现在新增 RIDL module 时不需要修改 mquickjs-rs 的 `build.rs` 或 registry 的 Rust 代码；只需要在 `ridl-modules/registry/Cargo.toml` 添加一个 path 依赖即可纳入聚合。
 
-1. 在 `ridl_modules/<your_module>/` 下创建模块目录，并提供：
-```
-ridl_modules/<your_module>/
-├── Cargo.toml           # 模块的 Cargo 配置（依赖 mquickjs-rs）
-├── <your_module>.ridl   # RIDL 定义
-├── <your_module>_glue.rs   # 生成的 Rust 胶水代码（由 ridl-tool 生成）
-├── <your_module>_impl.rs   # 生成的 Rust 实现骨架（由 ridl-tool 生成）
+#### 1) 创建模块 crate
+
+示例结构：
+
+```text
+ridl-modules/<your_module>/
+├── Cargo.toml
 └── src/
-    └── lib.rs           # 可选，按需要导出模块
+    ├── lib.rs
+    └── <your_module>.ridl
 ```
-2. 在 `Cargo.toml`（模块内）声明依赖：
+
+判定规则：只有当 `ridl-modules/<your_module>/src/` 下至少存在 1 个 `*.ridl` 文件时，该 crate 才会被视为 RIDL module 并参与聚合。
+
+#### 2) 在 registry 做“单一注册”
+
+编辑：`ridl-modules/registry/Cargo.toml`
+
 ```toml
 [dependencies]
-mquickjs-rs = { path = "../../deps/mquickjs-rs" }
+your_module = { path = "../your_module" }
 ```
-3. 在 `<your_module>.ridl` 中定义接口：
-```ridl
-js_my_function(value: string);
-js_another_function(number: int);
-```
-4. 运行 `cargo build`（会触发 `build.rs` 调用 ridl-tool）生成 `*_glue.rs` / `*_impl.rs`，并复制到项目根与 `generated/`。
-5. 在生成的 `<your_module>_impl.rs` 中补全具体实现。
-6. 若新增模块，确保在聚合阶段被包含（`ridl_symbols.rs`、`mquickjs_ridl_register.h`）。
 
-> 注意：当前示例模块为 `stdlib_demo`（位于 `ridl_modules/stdlib_demo/`），可参考其 `Cargo.toml` 与生成产物布局。
+#### 3) 构建生成
+
+```bash
+cargo build
+```
+
+构建时：
+- `ridl-modules/registry/build.rs` 生成 `$OUT_DIR/ridl_manifest.json` 并导出 `RIDL_REGISTRY_MANIFEST=$OUT_DIR/ridl_manifest.json`
+- `deps/mquickjs-rs/build.rs` 读取 `RIDL_REGISTRY_MANIFEST`，调用 `ridl-tool` 生成/聚合并更新：
+  - `deps/mquickjs-rs/generated/mquickjs_ridl_register.h`
+  - `deps/mquickjs-rs/generated/ridl_symbols.rs`
+
+> 注意：当前示例模块为 `stdlib_demo`（位于 `ridl-modules/stdlib_demo/`），可参考其 `Cargo.toml` 与目录结构。
 
 ```rust
 use mquickjs_rs::{JSContext, JSValue};

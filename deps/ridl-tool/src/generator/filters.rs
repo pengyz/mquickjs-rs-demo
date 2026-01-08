@@ -11,9 +11,11 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         Type::Void => "()".to_string(),
         Type::Object => "serde_json::Value".to_string(),
         Type::Array(inner) => format!("Vec<{}>", rust_type_from_idl(inner)?),
-        Type::Map(key_type, value_type) => format!("std::collections::HashMap<{}, {}>", 
-                                                   rust_type_from_idl(key_type)?, 
-                                                   rust_type_from_idl(value_type)?),
+        Type::Map(key_type, value_type) => format!(
+            "std::collections::HashMap<{}, {}>",
+            rust_type_from_idl(key_type)?,
+            rust_type_from_idl(value_type)?
+        ),
         Type::Union(_) => "serde_json::Value".to_string(),
         Type::Optional(inner) => format!("Option<{}>", rust_type_from_idl(inner)?),
         Type::Custom(name) => name.clone(),
@@ -58,7 +60,7 @@ pub fn default(s: &Option<String>, default: &str) -> ::askama::Result<String> {
 pub fn camelcase(s: &str) -> ::askama::Result<String> {
     let mut result = String::new();
     let mut capitalize_next = false;
-    
+
     for c in s.chars() {
         if c.is_alphanumeric() {
             if capitalize_next || result.is_empty() {
@@ -71,7 +73,7 @@ pub fn camelcase(s: &str) -> ::askama::Result<String> {
             capitalize_next = true;
         }
     }
-    
+
     Ok(result)
 }
 
@@ -95,11 +97,12 @@ pub fn js_conversion_type(idl_type: &Type) -> Result<String, askama::Error> {
     let conversion_method = match idl_type {
         Type::Bool => "to_bool",
         Type::Int => "to_i32",
-        Type::Float => "to_f32", 
+        Type::Float => "to_f32",
         Type::Double => "to_f64",
         Type::String => "to_string",
         _ => "to_js_value", // fallback for complex types
-    }.to_string();
-    
+    }
+    .to_string();
+
     Ok(conversion_method)
 }

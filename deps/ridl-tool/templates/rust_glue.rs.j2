@@ -1,138 +1,28 @@
 // Auto-generated Rust glue code for RIDL interfaces
-use mquickjs::{Context, JSValue};
-use std::os::raw::{c_int, c_char};
-use std::ffi::{CString, CStr};
+use mquickjs_sys::{JSContext, JSValue, JS_NewString};
+use std::ffi::CString;
+use std::os::raw::c_int;
 
-// Glue code for {{ module_name }}
-pub struct {{ module_name|camelcase }}Glue {
-    ctx: Context,
-}
+// Call into crate-local implementations.
+// The module crate is expected to provide `crate::impls::*`.
+use crate::impls::*;
 
-impl {{ module_name|camelcase }}Glue {
-    pub fn new(ctx: Context) -> Self {
-        Self { ctx }
-    }
-}
-
-// Trait definitions for interfaces
-{%- for interface in interfaces %}
-pub trait {{ interface.name|camelcase }} {
-{%- for method in interface.methods %}
-    fn {{ method.name }}(&self{% for param in method.params %}, {{ param.name }}: {{ param.param_type }}{% endfor %}) -> {{ method.return_type|default("()") }};
-{%- endfor %}
-}
-{%- endfor %}
-
-// Glue implementations for functions
+// Glue implementations for functions (only zero-arg supported)
 {%- for function in functions %}
-pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
-    use std::ptr;
-    use std::slice;
-    use mquickjs::{Context, Value, JS};
-    
-    // Convert raw pointers to safe references
-    let js = JS::from_raw(ctx);
-    let context = Context::from_raw(ctx);
-    
-    // Convert JSValue array to slice
-    let args = if argc > 0 && !argv.is_null() {
-        slice::from_raw_parts(argv, argc as usize)
-    } else {
-        &[]
-    };
-    
-    // Parse parameters based on function definition
-    {% if function.params|length == 0 %}
-    // No parameters
-    let result = {{ function.name|lower }}_impl::{{ function.name }}();
-    {% else if function.params|length == 1 %}
-    // One parameter
-    let arg0 = args.get(0).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg0 = Value::from_raw(ctx, *arg0).to_rust_type::<{{ function.params[0].param_type }}>().unwrap_or_default();
-    let result = {{ function.name|lower }}_impl::{{ function.name }}(rust_arg0);
-    {% else if function.params|length == 2 %}
-    // Two parameters
-    let arg0 = args.get(0).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg0 = Value::from_raw(ctx, *arg0).to_rust_type::<{{ function.params[0].param_type }}>().unwrap_or_default();
-    let arg1 = args.get(1).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg1 = Value::from_raw(ctx, *arg1).to_rust_type::<{{ function.params[1].param_type }}>().unwrap_or_default();
-    let result = {{ function.name|lower }}_impl::{{ function.name }}(rust_arg0, rust_arg1);
-    {% else if function.params|length == 3 %}
-    // Three parameters
-    let arg0 = args.get(0).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg0 = Value::from_raw(ctx, *arg0).to_rust_type::<{{ function.params[0].param_type }}>().unwrap_or_default();
-    let arg1 = args.get(1).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg1 = Value::from_raw(ctx, *arg1).to_rust_type::<{{ function.params[1].param_type }}>().unwrap_or_default();
-    let arg2 = args.get(2).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg2 = Value::from_raw(ctx, *arg2).to_rust_type::<{{ function.params[2].param_type }}>().unwrap_or_default();
-    let result = {{ function.name|lower }}_impl::{{ function.name }}(rust_arg0, rust_arg1, rust_arg2);
-    {% else %}
-    // Too many parameters - not yet supported
-    return JSValue::UNDEFINED;
-    {% endif %}
-    
-    // Convert result back to JSValue
-    match context.value_from_rust(result) {
-        Ok(js_value) => js_value.into_raw(),
-        Err(_) => JSValue::UNDEFINED
-    }
+#[no_mangle]
+pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, _this_val: JSValue, _argc: c_int, _argv: *mut JSValue) -> JSValue {
+    let result = {{ function.name|lower }}();
+    let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
+    JS_NewString(ctx, cstr.as_ptr())
 }
 {%- endfor %}
 
-// Interface implementations
+// Interface implementations (stub)
 {%- for interface in interfaces %}
 {%- for method in interface.methods %}
-pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
-    use std::ptr;
-    use std::slice;
-    use mquickjs::{Context, Value, JS};
-    
-    // Convert raw pointers to safe references
-    let js = JS::from_raw(ctx);
-    let context = Context::from_raw(ctx);
-    
-    // Convert JSValue array to slice
-    let args = if argc > 0 && !argv.is_null() {
-        slice::from_raw_parts(argv, argc as usize)
-    } else {
-        &[]
-    };
-    
-    // Parse parameters based on method definition
-    {% if method.params|length == 0 %}
-    // No parameters
-    let result = {{ interface.name|lower }}_impl::{{ method.name }}();
-    {% else if method.params|length == 1 %}
-    // One parameter
-    let arg0 = args.get(0).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg0 = Value::from_raw(ctx, *arg0).to_rust_type::<{{ method.params[0].param_type }}>().unwrap_or_default();
-    let result = {{ interface.name|lower }}_impl::{{ method.name }}(rust_arg0);
-    {% else if method.params|length == 2 %}
-    // Two parameters
-    let arg0 = args.get(0).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg0 = Value::from_raw(ctx, *arg0).to_rust_type::<{{ method.params[0].param_type }}>().unwrap_or_default();
-    let arg1 = args.get(1).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg1 = Value::from_raw(ctx, *arg1).to_rust_type::<{{ method.params[1].param_type }}>().unwrap_or_default();
-    let result = {{ interface.name|lower }}_impl::{{ method.name }}(rust_arg0, rust_arg1);
-    {% else if method.params|length == 3 %}
-    // Three parameters
-    let arg0 = args.get(0).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg0 = Value::from_raw(ctx, *arg0).to_rust_type::<{{ method.params[0].param_type }}>().unwrap_or_default();
-    let arg1 = args.get(1).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg1 = Value::from_raw(ctx, *arg1).to_rust_type::<{{ method.params[1].param_type }}>().unwrap_or_default();
-    let arg2 = args.get(2).unwrap_or(&JSValue::UNDEFINED);
-    let rust_arg2 = Value::from_raw(ctx, *arg2).to_rust_type::<{{ method.params[2].param_type }}>().unwrap_or_default();
-    let result = {{ interface.name|lower }}_impl::{{ method.name }}(rust_arg0, rust_arg1, rust_arg2);
-    {% else %}
-    // Too many parameters - not yet supported
-    return JSValue::UNDEFINED;
-    {% endif %}
-    
-    // Convert result back to JSValue
-    match context.value_from_rust(result) {
-        Ok(js_value) => js_value.into_raw(),
-        Err(_) => JSValue::UNDEFINED
-    }
+pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name }}(_ctx: *mut JSContext, _this_val: JSValue, _argc: c_int, _argv: *mut JSValue) -> JSValue {
+    // Not implemented
+    JSValue { u: Default::default(), tag: 0 }
 }
 {%- endfor %}
 {%- endfor %}

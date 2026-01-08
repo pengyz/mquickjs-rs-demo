@@ -24,6 +24,19 @@ mquickjs 通过 C 语言的结构体数组定义标准库函数和对象。其�
 - `ridl-tool` 生成 `mquickjs_ridl_register.h` 头文件
 - 该文件定义了 `JS_RIDL_EXTENSIONS` 宏，包含所有 RIDL 定义的接口
 
+#### 聚合输入来源（registry 驱动）
+
+`mquickjs_ridl_register.h` 属于“聚合头文件”，其输入是一组 RIDL 文件列表。
+当前实现中：
+
+- **RIDL 清单由 `ridl-modules/registry` 提供**：registry 的 `build.rs` 会解析 `Cargo.toml` 中的 `path` 依赖，筛选出 `src/` 下存在 `*.ridl` 的 crate 作为 RIDL module，然后把这些 `*.ridl` 的绝对路径写入 `$OUT_DIR/ridl_manifest.json`。
+- registry 同时通过环境变量导出清单路径：`RIDL_REGISTRY_MANIFEST=$OUT_DIR/ridl_manifest.json`。
+- **mquickjs 标准库生成由 `deps/mquickjs-rs` 负责**：`deps/mquickjs-rs/build.rs` 会读取 `RIDL_REGISTRY_MANIFEST`，并调用 `ridl-tool aggregate` 生成：
+  - `deps/mquickjs-rs/generated/mquickjs_ridl_register.h`
+  - `deps/mquickjs-rs/generated/ridl_symbols.rs`
+
+这样新增模块时只需要在 registry 的 `Cargo.toml` 添加 path 依赖即可被纳入聚合。
+
 ## 标准库模块化机制
 
 为了解决全局命名冲突问题，mquickjs提供了基于`require`函数的标准库模块化机制。该机制符合ES5标准，允许用户通过模块名获取功能对象，避免了全局命名空间污染。

@@ -1,6 +1,6 @@
-use pest_derive::Parser;
+use crate::parser::ast::{Import, Singleton, Using};
 use pest::Parser;
-use crate::parser::ast::{Using, Import, Singleton};
+use pest_derive::Parser;
 
 #[derive(Parser)]
 #[grammar = "parser/grammar.pest"]
@@ -8,18 +8,21 @@ pub struct IDLParser;
 
 pub mod ast;
 
-use ast::{IDLItem, Interface, Class, Enum, Function, Type, Field, Property, Method, StructDef, PropertyModifier, EnumValue, Param, SerializationFormat, ModuleDeclaration};
+use ast::{
+    Class, Enum, EnumValue, Field, Function, IDLItem, Interface, Method, ModuleDeclaration, Param,
+    Property, PropertyModifier, SerializationFormat, StructDef, Type,
+};
 
 /// 解析IDL内容
 pub fn parse_idl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Error>> {
-    let mut pairs = IDLParser::parse(Rule::idl, content)
-        .map_err(|e| format!("Parse error: {}", e))?;
+    let mut pairs =
+        IDLParser::parse(Rule::idl, content).map_err(|e| format!("Parse error: {}", e))?;
 
     // 获取idl规则内部的定义
     let idl_pair = pairs.next().unwrap();
     let mut items = Vec::new();
     let mut module: Option<ModuleDeclaration> = None;
-    
+
     // 遍历idl内部的元素
     for pair in idl_pair.into_inner() {
         match pair.as_rule() {
@@ -49,59 +52,66 @@ pub fn parse_ridl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Err
     parse_idl(content)
 }
 
-fn parse_module_decl(pair: pest::iterators::Pair<Rule>) -> Result<ModuleDeclaration, Box<dyn std::error::Error>> {
+fn parse_module_decl(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<ModuleDeclaration, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // module_path
     let module_path_pair = inner_pairs.next().ok_or("Module declaration has no path")?;
     let module_path = parse_module_path(module_path_pair)?;
-    
+
     // version (optional)
     let mut version = None;
     if let Some(version_pair) = inner_pairs.next() {
         version = Some(version_pair.as_str().to_string());
     }
-    
+
     Ok(ModuleDeclaration {
         module_path,
         version,
     })
 }
 
-fn parse_module_path(pair: pest::iterators::Pair<Rule>) -> Result<String, Box<dyn std::error::Error>> {
+fn parse_module_path(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<String, Box<dyn std::error::Error>> {
     let mut path_parts = Vec::new();
-    
+
     for inner_pair in pair.into_inner() {
         if inner_pair.as_rule() == Rule::identifier {
             path_parts.push(inner_pair.as_str().to_string());
         }
     }
-    
+
     Ok(path_parts.join("."))
 }
 
-fn parse_definition_content(pair: pest::iterators::Pair<Rule>, module: Option<ModuleDeclaration>) -> Result<IDLItem, Box<dyn std::error::Error>> {
+fn parse_definition_content(
+    pair: pest::iterators::Pair<Rule>,
+    module: Option<ModuleDeclaration>,
+) -> Result<IDLItem, Box<dyn std::error::Error>> {
     match pair.as_rule() {
         Rule::interface_def => {
             let mut interface = parse_interface(pair)?;
             interface.module = module;
             Ok(IDLItem::Interface(interface))
-        },
+        }
         Rule::class_def => {
             let mut class = parse_class(pair)?;
             class.module = module;
             Ok(IDLItem::Class(class))
-        },
+        }
         Rule::enum_def => {
             let mut enum_def = parse_enum(pair)?;
             enum_def.module = module;
             Ok(IDLItem::Enum(enum_def))
-        },
+        }
         Rule::struct_def => {
             let mut struct_def = parse_struct_def(pair)?;
             struct_def.module = module;
             Ok(IDLItem::Struct(struct_def))
-        },
+        }
         Rule::global_function => {
             let mut function = parse_global_function(pair)?;
             match &mut function {
@@ -109,78 +119,83 @@ fn parse_definition_content(pair: pest::iterators::Pair<Rule>, module: Option<Mo
                 _ => {}
             }
             Ok(function)
-        },
+        }
         Rule::callback_def => parse_callback(pair),
         Rule::using_def => {
             let mut using = parse_using(pair)?;
             using.module = module;
             Ok(IDLItem::Using(using))
-        },
+        }
         Rule::import_stmt => {
             let mut import = parse_import(pair)?;
             import.module = module;
             Ok(IDLItem::Import(import))
-        },
+        }
         Rule::singleton_def => {
             let mut singleton = parse_singleton(pair)?;
             singleton.module = module;
             Ok(IDLItem::Singleton(singleton))
-        },
-        _ => {
-            Err(format!("Unexpected definition content: {:?}", pair.as_rule()).into())
         }
+        _ => Err(format!("Unexpected definition content: {:?}", pair.as_rule()).into()),
     }
 }
 
-fn parse_interface(pair: pest::iterators::Pair<Rule>) -> Result<Interface, Box<dyn std::error::Error>> {
+fn parse_interface(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Interface, Box<dyn std::error::Error>> {
     let mut interface_pairs = pair.into_inner();
-    
+
     // 获取接口名
     let interface_name = interface_pairs.next().unwrap();
     if interface_name.as_rule() != Rule::identifier {
         return Err("Expected interface name".into());
     }
     let name = interface_name.as_str().to_string();
-    
+
     // 解析接口体
     let mut methods = Vec::new();
     let properties = Vec::new();
-    
+
     for pair in interface_pairs {
         match pair.as_rule() {
             Rule::method_def => {
                 methods.push(parse_method(pair)?);
             }
             Rule::WS => {} // 跳过空白
-            _ => {} // 其他规则
+            _ => {}        // 其他规则
         }
     }
-    
-    Ok(Interface { name, methods, properties, module: None })
+
+    Ok(Interface {
+        name,
+        methods,
+        properties,
+        module: None,
+    })
 }
 
 fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::error::Error>> {
     let class_pairs = pair.into_inner();
-    
+
     // 获取类名
     let class_name = class_pairs.clone().next().unwrap();
     if class_name.as_rule() != Rule::identifier {
         return Err("Expected class name".into());
     }
     let name = class_name.as_str().to_string();
-    
+
     // 解析类体
     let mut methods = Vec::new();
     let mut properties = Vec::new();
     let mut constructor = None;
-    
+
     for pair in class_pairs {
         match pair.as_rule() {
             Rule::class_member => {
                 // 解析类成员，内部包含具体的成员定义
                 let mut inner_pairs = pair.into_inner();
                 let member_pair = inner_pairs.next().unwrap();
-                
+
                 match member_pair.as_rule() {
                     Rule::readwrite_prop => {
                         let prop = parse_readwrite_property(member_pair)?;
@@ -195,7 +210,7 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                         properties.push(prop);
                     }
                     Rule::const_member => {
-                        let prop = parse_const_property(member_pair)?;  // 修复函数名
+                        let prop = parse_const_property(member_pair)?; // 修复函数名
                         properties.push(prop);
                     }
                     Rule::method_def => {
@@ -209,40 +224,56 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                 }
             }
             Rule::WS => {} // 跳过空白
-            _ => {} // 其他规则
+            _ => {}        // 其他规则
         }
     }
-    
-    Ok(Class { name, constructor, methods, properties, module: None })
+
+    Ok(Class {
+        name,
+        constructor,
+        methods,
+        properties,
+        module: None,
+    })
 }
 
-fn parse_const_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, Box<dyn std::error::Error>> {
+fn parse_const_property(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Property, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     // 过滤掉WS规则，只保留有意义的元素
     let elements: Vec<_> = inner_pairs.filter(|p| p.as_rule() != Rule::WS).collect();
-    
+
     if elements.len() < 3 {
-        return Err(format!("Expected at least 3 elements for const property, got {}", elements.len()).into());
+        return Err(format!(
+            "Expected at least 3 elements for const property, got {}",
+            elements.len()
+        )
+        .into());
     }
-    
+
     let mut iter = elements.into_iter();
-    
+
     // 第一个非WS元素应该是标识符（属性名）
-    let identifier_pair = iter.next().ok_or("Expected identifier for const property")?;
+    let identifier_pair = iter
+        .next()
+        .ok_or("Expected identifier for const property")?;
     if identifier_pair.as_rule() != Rule::identifier {
         return Err(format!("Expected identifier, got {:?}", identifier_pair.as_rule()).into());
     }
     let name = identifier_pair.as_str().to_string();
-    
+
     // 第二个非WS元素应该是类型
     let type_pair = iter.next().ok_or("Expected type for const property")?;
     let property_type = parse_type(type_pair)?;
-    
+
     // 第三个非WS元素应该是字面量值
-    let literal_pair = iter.next().ok_or("Expected literal value for const property")?;
+    let literal_pair = iter
+        .next()
+        .ok_or("Expected literal value for const property")?;
     let default_value = parse_literal(literal_pair)?;
-    
+
     Ok(Property {
         modifiers: vec![PropertyModifier::Const],
         name,
@@ -251,29 +282,37 @@ fn parse_const_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, B
     })
 }
 
-fn parse_readonly_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, Box<dyn std::error::Error>> {
+fn parse_readonly_property(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Property, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     // 过滤掉WS规则，只保留有意义的元素
     let elements: Vec<_> = inner_pairs.filter(|p| p.as_rule() != Rule::WS).collect();
-    
+
     if elements.len() < 2 {
-        return Err(format!("Expected at least 2 elements for readonly property, got {}", elements.len()).into());
+        return Err(format!(
+            "Expected at least 2 elements for readonly property, got {}",
+            elements.len()
+        )
+        .into());
     }
-    
+
     let mut iter = elements.into_iter();
-    
+
     // 第一个非WS元素应该是标识符（属性名）
-    let identifier_pair = iter.next().ok_or("Expected identifier for readonly property")?;
+    let identifier_pair = iter
+        .next()
+        .ok_or("Expected identifier for readonly property")?;
     if identifier_pair.as_rule() != Rule::identifier {
         return Err(format!("Expected identifier, got {:?}", identifier_pair.as_rule()).into());
     }
     let name = identifier_pair.as_str().to_string();
-    
+
     // 第二个非WS元素应该是类型
     let type_pair = iter.next().ok_or("Expected type for readonly property")?;
     let property_type = parse_type(type_pair)?;
-    
+
     Ok(Property {
         modifiers: vec![PropertyModifier::ReadOnly],
         name,
@@ -282,31 +321,39 @@ fn parse_readonly_property(pair: pest::iterators::Pair<Rule>) -> Result<Property
     })
 }
 
-fn parse_readwrite_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, Box<dyn std::error::Error>> {
+fn parse_readwrite_property(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Property, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     // 过滤掉WS规则，只保留有意义的元素
     let elements: Vec<_> = inner_pairs.filter(|p| p.as_rule() != Rule::WS).collect();
-    
+
     if elements.len() < 2 {
-        return Err(format!("Expected at least 2 elements for readwrite property, got {}", elements.len()).into());
+        return Err(format!(
+            "Expected at least 2 elements for readwrite property, got {}",
+            elements.len()
+        )
+        .into());
     }
-    
+
     let mut iter = elements.into_iter();
-    
+
     // 第一个非WS元素应该是标识符（属性名）
-    let identifier_pair = iter.next().ok_or("Expected identifier for readwrite property")?;
+    let identifier_pair = iter
+        .next()
+        .ok_or("Expected identifier for readwrite property")?;
     if identifier_pair.as_rule() != Rule::identifier {
         return Err(format!("Expected identifier, got {:?}", identifier_pair.as_rule()).into());
     }
     let name = identifier_pair.as_str().to_string();
-    
+
     // 第二个非WS元素应该是类型规则
     let type_pair = iter.next().ok_or("Expected type for readwrite property")?;
-    
+
     // 解析类型
     let property_type = parse_type(type_pair)?;
-    
+
     Ok(Property {
         modifiers: vec![PropertyModifier::ReadWrite],
         name,
@@ -315,19 +362,23 @@ fn parse_readwrite_property(pair: pest::iterators::Pair<Rule>) -> Result<Propert
     })
 }
 
-fn parse_normal_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, Box<dyn std::error::Error>> {
+fn parse_normal_property(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Property, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     // 不过滤WS，直接遍历所有元素
     let mut pair_iter = inner_pairs.peekable();
-    
+
     // 获取identifier
-    let identifier_pair = pair_iter.next().ok_or("Expected identifier for normal property")?;
+    let identifier_pair = pair_iter
+        .next()
+        .ok_or("Expected identifier for normal property")?;
     if identifier_pair.as_rule() != Rule::identifier {
         return Err(format!("Expected identifier, got {:?}", identifier_pair.as_rule()).into());
     }
     let name = identifier_pair.as_str().to_string();
-    
+
     // 跳过WS和冒号
     while let Some(p) = pair_iter.peek() {
         if p.as_rule() == Rule::WS || p.as_str() == ":" {
@@ -336,11 +387,13 @@ fn parse_normal_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, 
             break;
         }
     }
-    
+
     // 获取type
-    let type_pair = pair_iter.next().ok_or("Expected type for normal property")?;
+    let type_pair = pair_iter
+        .next()
+        .ok_or("Expected type for normal property")?;
     let property_type = parse_type(type_pair)?;
-    
+
     // 使用ReadWrite修饰符作为普通属性的默认值
     Ok(Property {
         modifiers: vec![PropertyModifier::ReadWrite], // 普通属性默认可读写
@@ -350,7 +403,9 @@ fn parse_normal_property(pair: pest::iterators::Pair<Rule>) -> Result<Property, 
     })
 }
 
-fn parse_constructor(pair: pest::iterators::Pair<Rule>) -> Result<Function, Box<dyn std::error::Error>> {
+fn parse_constructor(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Function, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
     let mut pair_iter = inner_pairs.filter(|p| p.as_rule() != Rule::WS);
 
@@ -367,9 +422,9 @@ fn parse_constructor(pair: pest::iterators::Pair<Rule>) -> Result<Function, Box<
     }
 
     // 构造函数没有返回类型，所以使用Void
-    Ok(Function { 
-        name, 
-        params, 
+    Ok(Function {
+        name,
+        params,
         return_type: Type::Void,
         is_async: false,
         module: None,
@@ -378,11 +433,11 @@ fn parse_constructor(pair: pest::iterators::Pair<Rule>) -> Result<Function, Box<
 
 fn parse_method(pair: pest::iterators::Pair<Rule>) -> Result<Method, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     let mut name = String::new();
     let mut params = Vec::new();
     let mut return_type = Type::Void;
-    
+
     for p in inner_pairs {
         match p.as_rule() {
             Rule::identifier => {
@@ -406,11 +461,11 @@ fn parse_method(pair: pest::iterators::Pair<Rule>) -> Result<Method, Box<dyn std
             }
         }
     }
-    
+
     if name.is_empty() {
         return Err("Method name not found".into());
     }
-    
+
     Ok(Method {
         name,
         params,
@@ -419,12 +474,16 @@ fn parse_method(pair: pest::iterators::Pair<Rule>) -> Result<Method, Box<dyn std
     })
 }
 
-fn parse_global_function(pair: pest::iterators::Pair<Rule>) -> Result<IDLItem, Box<dyn std::error::Error>> {
+fn parse_global_function(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<IDLItem, Box<dyn std::error::Error>> {
     let function = parse_function(pair)?;
     Ok(IDLItem::Function(function))
 }
 
-fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<Function, Box<dyn std::error::Error>> {
+fn parse_function(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Function, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
 
     // First element is the function name
@@ -460,42 +519,37 @@ fn parse_function(pair: pest::iterators::Pair<Rule>) -> Result<Function, Box<dyn
     })
 }
 
-// 为Function类型添加一个辅助方法来提取函数
-impl Function {
-    fn unwrap_function(self) -> Function {
-        self
-    }
-}
-
-fn parse_param_list(pair: pest::iterators::Pair<Rule>) -> Result<Vec<Param>, Box<dyn std::error::Error>> {
+fn parse_param_list(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Vec<Param>, Box<dyn std::error::Error>> {
     let mut params = Vec::new();
     let mut inner_pairs = pair.into_inner();
-    
+
     // 第一个参数
     if let Some(first_param) = inner_pairs.next() {
         params.push(parse_param(first_param)?);
     }
-    
+
     // 其余参数
     for pair in inner_pairs {
         if pair.as_rule() == Rule::param {
             params.push(parse_param(pair)?);
         }
     }
-    
+
     Ok(params)
 }
 
 fn parse_param(pair: pest::iterators::Pair<Rule>) -> Result<Param, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     // 按照语法定义：param = { identifier ~ WS ~ ":" ~ WS ~ type }
     // 但是解析器会将所有子规则展开，所以需要找到标识符和类型
     let mut name: Option<String> = None;
     let mut param_type: Option<Type> = None;
-    
+
     let mut pair_iter = inner_pairs.peekable();
-    
+
     // 遍历所有子规则，识别标识符和类型
     while let Some(p) = pair_iter.next() {
         match p.as_rule() {
@@ -522,10 +576,10 @@ fn parse_param(pair: pest::iterators::Pair<Rule>) -> Result<Param, Box<dyn std::
             }
         }
     }
-    
+
     let name = name.ok_or("Parameter name not found in definition")?;
     let param_type = param_type.ok_or("Parameter type not found in definition")?;
-    
+
     Ok(Param {
         name,
         param_type,
@@ -535,11 +589,11 @@ fn parse_param(pair: pest::iterators::Pair<Rule>) -> Result<Param, Box<dyn std::
 
 fn parse_enum(pair: pest::iterators::Pair<Rule>) -> Result<Enum, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // enum name
     let name_pair = inner_pairs.next().unwrap();
     let name = name_pair.as_str().to_string();
-    
+
     // enum values
     let mut values = Vec::new();
     for pair in inner_pairs {
@@ -548,20 +602,26 @@ fn parse_enum(pair: pest::iterators::Pair<Rule>) -> Result<Enum, Box<dyn std::er
                 values.push(parse_enum_value(pair)?);
             }
             Rule::WS => {} // 跳过空白
-            _ => {} // 其他规则
+            _ => {}        // 其他规则
         }
     }
-    
-    Ok(Enum { name, values, module: None })
+
+    Ok(Enum {
+        name,
+        values,
+        module: None,
+    })
 }
 
-fn parse_enum_value(pair: pest::iterators::Pair<Rule>) -> Result<EnumValue, Box<dyn std::error::Error>> {
+fn parse_enum_value(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<EnumValue, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // identifier
     let name_pair = inner_pairs.next().unwrap();
     let name = name_pair.as_str().to_string();
-    
+
     // optional value
     let mut value = None;
     if let Some(value_pair) = inner_pairs.next() {
@@ -569,17 +629,19 @@ fn parse_enum_value(pair: pest::iterators::Pair<Rule>) -> Result<EnumValue, Box<
             value = Some(value_pair.as_str().parse().unwrap());
         }
     }
-    
+
     Ok(EnumValue { name, value })
 }
 
-fn parse_struct_def(pair: pest::iterators::Pair<Rule>) -> Result<StructDef, Box<dyn std::error::Error>> {
+fn parse_struct_def(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<StructDef, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    
+
     // Check if this is a format-specified struct (json, msgpack, protobuf)
     let mut serialization_format = SerializationFormat::Json; // 默认为JSON
     let mut pairs_iter = inner_pairs.peekable();
-    
+
     // 查找格式化前缀，如果存在
     if let Some(first_pair) = pairs_iter.peek() {
         if first_pair.as_str().contains("json") {
@@ -593,10 +655,10 @@ fn parse_struct_def(pair: pest::iterators::Pair<Rule>) -> Result<StructDef, Box<
             pairs_iter.next(); // 消费掉格式前缀
         }
     }
-    
+
     let mut name = String::new();
     let mut fields = Vec::new();
-    
+
     // 遍历剩余的pairs，寻找标识符和字段定义
     for pair in pairs_iter {
         match pair.as_rule() {
@@ -611,7 +673,7 @@ fn parse_struct_def(pair: pest::iterators::Pair<Rule>) -> Result<StructDef, Box<
             _ => { /* 忽略其他规则，包括"struct"关键字 */ }
         }
     }
-    
+
     Ok(StructDef {
         name,
         fields,
@@ -622,29 +684,35 @@ fn parse_struct_def(pair: pest::iterators::Pair<Rule>) -> Result<StructDef, Box<
 
 fn parse_field(pair: pest::iterators::Pair<Rule>) -> Result<Field, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // identifier
     let name_pair = inner_pairs.next().unwrap();
     let name = name_pair.as_str().to_string();
-    
+
     // 跳过冒号和可能的空白
     let mut type_pair = None;
     for p in inner_pairs {
-        if p.as_rule() == Rule::r#type || p.as_rule() == Rule::primary_type || 
-           p.as_rule() == Rule::basic_type || p.as_rule() == Rule::custom_type ||
-           p.as_rule() == Rule::array_type || p.as_rule() == Rule::map_type ||
-           p.as_rule() == Rule::callback_type || p.as_rule() == Rule::group_type ||
-           p.as_rule() == Rule::nullable_type || p.as_rule() == Rule::union_type {
+        if p.as_rule() == Rule::r#type
+            || p.as_rule() == Rule::primary_type
+            || p.as_rule() == Rule::basic_type
+            || p.as_rule() == Rule::custom_type
+            || p.as_rule() == Rule::array_type
+            || p.as_rule() == Rule::map_type
+            || p.as_rule() == Rule::callback_type
+            || p.as_rule() == Rule::group_type
+            || p.as_rule() == Rule::nullable_type
+            || p.as_rule() == Rule::union_type
+        {
             type_pair = Some(p);
             break;
         }
     }
-    
+
     let field_type = match type_pair {
         Some(tp) => parse_type(tp)?,
         None => return Err("Field has no type".into()),
     };
-    
+
     Ok(Field {
         name,
         field_type,
@@ -657,12 +725,12 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
     if pair.as_rule() == Rule::nullable_type {
         return parse_nullable_type(pair);
     }
-    
+
     // 检查是否是union类型
     if pair.as_rule() == Rule::union_type {
         return parse_union_type(pair);
     }
-    
+
     // 检查是否有子规则，优先处理子规则
     for inner_pair in pair.clone().into_inner() {
         match inner_pair.as_rule() {
@@ -692,17 +760,24 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
             }
             Rule::map_type => {
                 let mut types = Vec::new();
-                
+
                 for p in inner_pair.into_inner() {
-                    if p.as_rule() != Rule::WS && p.as_str() != "<" && p.as_str() != ">" && p.as_str() != "," {
+                    if p.as_rule() != Rule::WS
+                        && p.as_str() != "<"
+                        && p.as_str() != ">"
+                        && p.as_str() != ","
+                    {
                         // 这应该是key或value类型
                         let inner_type = parse_type(p)?;
                         types.push(inner_type);
                     }
                 }
-                
+
                 if types.len() >= 2 {
-                    return Ok(Type::Map(Box::new(types[0].clone()), Box::new(types[1].clone())));
+                    return Ok(Type::Map(
+                        Box::new(types[0].clone()),
+                        Box::new(types[1].clone()),
+                    ));
                 } else {
                     return Err("Map has insufficient type parameters".into());
                 }
@@ -719,7 +794,7 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
             }
             Rule::callback_type => {
                 let mut params = Vec::new();
-                
+
                 for p in inner_pair.into_inner() {
                     match p.as_rule() {
                         Rule::param_list => {
@@ -729,7 +804,7 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                         _ => { /* 忽略其他规则 */ }
                     }
                 }
-                
+
                 return Ok(Type::CallbackWithParams(params));
             }
             Rule::group_type => {
@@ -748,7 +823,7 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
             _ => continue, // 对于其他内部规则，继续处理
         }
     }
-    
+
     // 如果没有内部规则，则检查当前规则
     match pair.as_rule() {
         Rule::basic_type => {
@@ -766,9 +841,7 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                 _ => Ok(Type::Custom(type_str.to_string())),
             }
         }
-        Rule::custom_type => {
-            Ok(Type::Custom(pair.as_str().to_string()))
-        }
+        Rule::custom_type => Ok(Type::Custom(pair.as_str().to_string())),
         _ => {
             // 如果无法识别，返回自定义类型
             Ok(Type::Custom(pair.as_str().to_string()))
@@ -778,7 +851,7 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
 
 fn parse_union_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::error::Error>> {
     let mut types = Vec::new();
-    
+
     for inner_pair in pair.into_inner() {
         match inner_pair.as_rule() {
             Rule::WS => { /* 跳过空白 */ }
@@ -788,27 +861,29 @@ fn parse_union_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn s
             }
         }
     }
-    
+
     if types.is_empty() {
         return Err("Union type has no types".into());
     }
-    
+
     Ok(Type::Union(types))
 }
 
-fn parse_nullable_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::error::Error>> {
+fn parse_nullable_type(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Type, Box<dyn std::error::Error>> {
     // nullable_type由一个基础类型和?组成
-    let mut inner_pairs = pair.into_inner();
-    
+    let inner_pairs = pair.into_inner();
+
     // 找到基础类型
     for inner_pair in inner_pairs {
         match inner_pair.as_rule() {
-            Rule::basic_type | 
-            Rule::array_type | 
-            Rule::map_type | 
-            Rule::custom_type | 
-            Rule::callback_type | 
-            Rule::group_type => {
+            Rule::basic_type
+            | Rule::array_type
+            | Rule::map_type
+            | Rule::custom_type
+            | Rule::callback_type
+            | Rule::group_type => {
                 let base_type = parse_type(inner_pair)?;
                 return Ok(Type::Optional(Box::new(base_type)));
             }
@@ -816,7 +891,7 @@ fn parse_nullable_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dy
             _ => { /* 其他规则，继续寻找类型 */ }
         }
     }
-    
+
     Err("Nullable type has no base type".into())
 }
 
@@ -826,36 +901,46 @@ fn parse_literal(pair: pest::iterators::Pair<Rule>) -> Result<String, Box<dyn st
 
 fn parse_using(pair: pest::iterators::Pair<Rule>) -> Result<Using, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // identifier
     let name_pair = inner_pairs.next().unwrap();
     let name = name_pair.as_str().to_string();
-    
+
     // type
     let type_pair = inner_pairs.next().unwrap();
     let alias_type = parse_type(type_pair)?;
-    
-    Ok(Using { name, alias_type, module: None })
+
+    Ok(Using {
+        name,
+        alias_type,
+        module: None,
+    })
 }
 
 fn parse_import(pair: pest::iterators::Pair<Rule>) -> Result<Import, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // import_list
     let import_list_pair = inner_pairs.next().unwrap();
     let imports = parse_import_list(import_list_pair)?;
-    
+
     // string_literal
     let path_pair = inner_pairs.next().unwrap();
     let path = path_pair.as_str().trim_matches('"').to_string();
-    
-    Ok(Import { imports, path, module: None })
+
+    Ok(Import {
+        imports,
+        path,
+        module: None,
+    })
 }
 
-fn parse_import_list(pair: pest::iterators::Pair<Rule>) -> Result<Vec<ast::ImportItem>, Box<dyn std::error::Error>> {
+fn parse_import_list(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Vec<ast::ImportItem>, Box<dyn std::error::Error>> {
     let mut imports = Vec::new();
     let inner_pairs = pair.into_inner();
-    
+
     for p in inner_pairs {
         match p.as_rule() {
             Rule::identifier => {
@@ -866,27 +951,27 @@ fn parse_import_list(pair: pest::iterators::Pair<Rule>) -> Result<Vec<ast::Impor
             }
             Rule::import_list => {
                 let mut item_pairs = p.into_inner();
-                
+
                 while item_pairs.peek().is_some() {
                     let name_pair = item_pairs.next().unwrap();
                     let name = name_pair.as_str().to_string();
-                    
+
                     let alias_pair = item_pairs.next();
                     let alias = if let Some(alias_pair) = alias_pair {
                         Some(alias_pair.as_str().to_string())
                     } else {
                         None
                     };
-                    
+
                     imports.push(ast::ImportItem { name, alias });
                 }
             }
             Rule::import_stmt => {
                 let mut item_pairs = p.into_inner();
-                
+
                 let alias_pair = item_pairs.next().unwrap();
                 let alias = alias_pair.as_str().to_string();
-                
+
                 imports.push(ast::ImportItem {
                     name: "*".to_string(),
                     alias: Some(alias),
@@ -895,27 +980,29 @@ fn parse_import_list(pair: pest::iterators::Pair<Rule>) -> Result<Vec<ast::Impor
             _ => {}
         }
     }
-    
+
     Ok(imports)
 }
 
-fn parse_singleton(pair: pest::iterators::Pair<Rule>) -> Result<Singleton, Box<dyn std::error::Error>> {
+fn parse_singleton(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Singleton, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
-    
+
     // identifier
     let name_pair = inner_pairs.next().unwrap();
     let name = name_pair.as_str().to_string();
-    
+
     // singleton body
     let mut methods = Vec::new();
     let mut properties = Vec::new();
-    
+
     for p in inner_pairs {
         match p.as_rule() {
             Rule::singleton_member => {
                 let mut member_pairs = p.into_inner();
                 let member_pair = member_pairs.next().unwrap();
-                
+
                 match member_pair.as_rule() {
                     Rule::method_def => {
                         let method = parse_method(member_pair)?;
@@ -940,19 +1027,26 @@ fn parse_singleton(pair: pest::iterators::Pair<Rule>) -> Result<Singleton, Box<d
             _ => {}
         }
     }
-    
-    Ok(Singleton { name, methods, properties, module: None })
+
+    Ok(Singleton {
+        name,
+        methods,
+        properties,
+        module: None,
+    })
 }
 
-fn parse_callback(pair: pest::iterators::Pair<Rule>) -> Result<IDLItem, Box<dyn std::error::Error>> {
+fn parse_callback(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<IDLItem, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-    let mut pairs_iter = inner_pairs.peekable();
+    let pairs_iter = inner_pairs.peekable();
 
     // 跳过"callback"关键字，获取回调名（可选）
     let mut name = String::from("anonymous_callback"); // 默认名称
     let mut has_processed_first = false;
     let mut params = Vec::new();
-    
+
     for p in pairs_iter {
         match p.as_rule() {
             Rule::identifier => {
@@ -984,9 +1078,9 @@ fn parse_callback(pair: pest::iterators::Pair<Rule>) -> Result<IDLItem, Box<dyn 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use pest::Parser;
     use crate::parser::IDLParser;
     use crate::parser::Rule;
+    use pest::Parser;
 
     #[test]
     fn test_parse_simple_interface() {
@@ -996,23 +1090,23 @@ mod tests {
             fn error(message: string) -> void;
         }
         "#;
-        
+
         match parse_idl(ridl) {
             Ok(items) => {
                 assert_eq!(items.len(), 1);
-                
+
                 match &items[0] {
                     IDLItem::Interface(interface) => {
                         assert_eq!(interface.name, "Console");
                         assert_eq!(interface.methods.len(), 2);
-                        
+
                         let method1 = &interface.methods[0];
                         assert_eq!(method1.name, "log");
                         assert_eq!(method1.params.len(), 1);
                         assert_eq!(method1.params[0].name, "message");
                         assert_eq!(method1.params[0].param_type, Type::String);
                         assert_eq!(method1.return_type, Type::Void);
-                        
+
                         let method2 = &interface.methods[1];
                         assert_eq!(method2.name, "error");
                         assert_eq!(method2.params.len(), 1);
@@ -1041,30 +1135,30 @@ mod tests {
             fn setAge(age: int) -> void;
         }
         "#;
-        
+
         match parse_idl(ridl) {
             Ok(items) => {
                 assert_eq!(items.len(), 1);
-                
+
                 match &items[0] {
                     IDLItem::Class(class) => {
                         assert_eq!(class.name, "Person");
                         assert_eq!(class.properties.len(), 2);
                         assert!(class.constructor.is_some());
                         assert_eq!(class.methods.len(), 3);
-                        
+
                         let prop1 = &class.properties[0];
                         assert_eq!(prop1.name, "name");
                         assert_eq!(prop1.property_type, Type::String);
-                        
+
                         let prop2 = &class.properties[1];
                         assert_eq!(prop2.name, "age");
                         assert_eq!(prop2.property_type, Type::Int);
-                        
+
                         let constructor = class.constructor.as_ref().unwrap();
                         assert_eq!(constructor.name, "Person");
                         assert_eq!(constructor.params.len(), 2);
-                        
+
                         let method1 = &class.methods[0];
                         assert_eq!(method1.name, "getName");
                         assert_eq!(method1.return_type, Type::String);
@@ -1077,7 +1171,7 @@ mod tests {
             }
         }
     }
-    
+
     #[test]
     fn test_parse_complex_types() {
         let ridl = r#"
@@ -1091,12 +1185,16 @@ mod tests {
             fn setCallback(cb: callback(success: bool)) -> void;  // 修复：使用cb而不是callback作为方法名
         }
         "#;
-        
+
         match parse_idl(ridl) {
             Ok(items) => {
                 if let IDLItem::Interface(interface) = &items[0] {
                     // 检查testFn方法
-                    let test_fn = &interface.methods.iter().find(|m| m.name == "testFn").unwrap();
+                    let test_fn = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "testFn")
+                        .unwrap();
                     if let Type::CallbackWithParams(params) = &test_fn.params[0].param_type {
                         assert_eq!(params.len(), 2);
                         assert_eq!(params[0].name, "success");
@@ -1106,56 +1204,95 @@ mod tests {
                     } else {
                         panic!("Expected callback type with params");
                     }
-                    
+
                     // 检查handleNullable方法 - 返回类型是void，不是Optional(void)
-                    let handle_nullable = &interface.methods.iter().find(|m| m.name == "handleNullable").unwrap();
+                    let handle_nullable = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "handleNullable")
+                        .unwrap();
                     if let Type::Optional(inner_type) = &handle_nullable.params[0].param_type {
                         assert_eq!(**inner_type, Type::String);
                     } else {
-                        panic!("Expected optional parameter type, got {:?}", handle_nullable.params[0].param_type);
+                        panic!(
+                            "Expected optional parameter type, got {:?}",
+                            handle_nullable.params[0].param_type
+                        );
                     }
-                    
+
                     // 检查handleUnion方法 - 参数是联合类型，不是返回类型
-                    let handle_union = &interface.methods.iter().find(|m| m.name == "handleUnion").unwrap();
+                    let handle_union = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "handleUnion")
+                        .unwrap();
                     let param_type = match &handle_union.params[0].param_type {
                         Type::Group(inner) => &**inner, // 如果是分组的，解包
-                        other => other, // 否则直接使用
+                        other => other,                 // 否则直接使用
                     };
                     if let Type::Union(types) = param_type {
                         assert_eq!(types.len(), 2);
                         assert!(types.iter().any(|t| matches!(t, Type::Bool)));
                         assert!(types.iter().any(|t| matches!(t, Type::Object)));
                     } else {
-                        panic!("Expected union parameter type, got {:?}", handle_union.params[0].param_type);
+                        panic!(
+                            "Expected union parameter type, got {:?}",
+                            handle_union.params[0].param_type
+                        );
                     }
-                    
+
                     // 检查handleMap方法
-                    let handle_map = &interface.methods.iter().find(|m| m.name == "handleMap").unwrap();
+                    let handle_map = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "handleMap")
+                        .unwrap();
                     if let Type::Map(key_type, value_type) = &handle_map.params[0].param_type {
                         assert_eq!(**key_type, Type::String);
                         assert_eq!(**value_type, Type::Int);
                     } else {
-                        panic!("Expected map parameter type, got {:?}", handle_map.params[0].param_type);
+                        panic!(
+                            "Expected map parameter type, got {:?}",
+                            handle_map.params[0].param_type
+                        );
                     }
-                    
+
                     // 检查handleArray方法
-                    let handle_array = &interface.methods.iter().find(|m| m.name == "handleArray").unwrap();
+                    let handle_array = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "handleArray")
+                        .unwrap();
                     if let Type::Array(inner_type) = &handle_array.params[0].param_type {
                         assert_eq!(**inner_type, Type::String);
                     } else {
-                        panic!("Expected array parameter type, got {:?}", handle_array.params[0].param_type);
+                        panic!(
+                            "Expected array parameter type, got {:?}",
+                            handle_array.params[0].param_type
+                        );
                     }
-                    
+
                     // 检查handleOptionalParam方法
-                    let handle_optional = &interface.methods.iter().find(|m| m.name == "handleOptionalParam").unwrap();
+                    let handle_optional = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "handleOptionalParam")
+                        .unwrap();
                     if let Type::Optional(inner_type) = &handle_optional.params[0].param_type {
                         assert_eq!(**inner_type, Type::String);
                     } else {
-                        panic!("Expected optional parameter type, got {:?}", handle_optional.params[0].param_type);
+                        panic!(
+                            "Expected optional parameter type, got {:?}",
+                            handle_optional.params[0].param_type
+                        );
                     }
-                    
+
                     // 检查setCallback方法
-                    let set_callback = &interface.methods.iter().find(|m| m.name == "setCallback").unwrap();
+                    let set_callback = &interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "setCallback")
+                        .unwrap();
                     if let Type::CallbackWithParams(params) = &set_callback.params[0].param_type {
                         assert_eq!(params.len(), 1);
                         assert_eq!(params[0].name, "success");
@@ -1168,7 +1305,7 @@ mod tests {
             Err(e) => panic!("Complex types parsing failed: {}", e),
         }
     }
-    
+
     #[test]
     fn test_parse_module_declaration() {
         let ridl = r#"
@@ -1177,16 +1314,16 @@ mod tests {
             fn getStatus() -> string;
         }
         "#;
-        
+
         match parse_idl(ridl) {
             Ok(items) => {
                 assert_eq!(items.len(), 1);
-                
+
                 match &items[0] {
                     IDLItem::Interface(interface) => {
                         assert_eq!(interface.name, "Network");
                         assert!(interface.module.is_some());
-                        
+
                         let module = interface.module.as_ref().unwrap();
                         assert_eq!(module.module_path, "system.network");
                         assert_eq!(module.version, Some("1.0".to_string()));
@@ -1199,7 +1336,7 @@ mod tests {
             }
         }
     }
-    
+
     #[test]
     fn test_comprehensive_ridl_syntax() {
         let ridl = r#"
@@ -1290,10 +1427,18 @@ mod tests {
                     assert_eq!(struct_def.fields.len(), 6);
 
                     // 检查各字段类型
-                    let level_field = struct_def.fields.iter().find(|f| f.name == "level").unwrap();
+                    let level_field = struct_def
+                        .fields
+                        .iter()
+                        .find(|f| f.name == "level")
+                        .unwrap();
                     assert_eq!(level_field.field_type, Type::Custom("LogLevel".to_string()));
 
-                    let metadata_field = struct_def.fields.iter().find(|f| f.name == "metadata").unwrap();
+                    let metadata_field = struct_def
+                        .fields
+                        .iter()
+                        .find(|f| f.name == "metadata")
+                        .unwrap();
                     if let Type::Map(key_type, value_type) = &metadata_field.field_type {
                         assert_eq!(**key_type, Type::String);
                         assert_eq!(**value_type, Type::String);
@@ -1308,7 +1453,11 @@ mod tests {
                         panic!("Expected array type for tags field");
                     }
 
-                    let callback_field = struct_def.fields.iter().find(|f| f.name == "callback_func").unwrap();
+                    let callback_field = struct_def
+                        .fields
+                        .iter()
+                        .find(|f| f.name == "callback_func")
+                        .unwrap();
                     if let Type::CallbackWithParams(params) = &callback_field.field_type {
                         assert_eq!(params.len(), 2);
                         assert_eq!(params[0].name, "success");
@@ -1343,7 +1492,11 @@ mod tests {
                     assert_eq!(log_method.return_type, Type::Void);
 
                     // 检查error方法（可空类型参数）
-                    let error_method = interface.methods.iter().find(|m| m.name == "error").unwrap();
+                    let error_method = interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "error")
+                        .unwrap();
                     if let Type::Optional(inner_type) = &error_method.params[0].param_type {
                         assert_eq!(**inner_type, Type::String);
                     } else {
@@ -1351,17 +1504,24 @@ mod tests {
                     }
 
                     // 检查processMultiple方法（联合类型返回值）
-                    let process_method = interface.methods.iter().find(|m| m.name == "processMultiple").unwrap();
+                    let process_method = interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "processMultiple")
+                        .unwrap();
                     let return_type = match &process_method.return_type {
                         Type::Group(inner) => &**inner, // 如果是分组的，解包
-                        other => other, // 否则直接使用
+                        other => other,                 // 否则直接使用
                     };
                     if let Type::Union(types) = return_type {
                         assert_eq!(types.len(), 2);
                         assert!(types.iter().any(|t| matches!(t, Type::Bool)));
                         assert!(types.iter().any(|t| matches!(t, Type::Int)));
                     } else {
-                        panic!("Expected union return type for processMultiple method, got {:?}", process_method.return_type);
+                        panic!(
+                            "Expected union return type for processMultiple method, got {:?}",
+                            process_method.return_type
+                        );
                     }
                 } else {
                     panic!("Expected interface definition");
@@ -1376,10 +1536,17 @@ mod tests {
 
                     // 检查属性
                     let level_prop = class.properties.iter().find(|p| p.name == "level").unwrap();
-                    assert_eq!(level_prop.property_type, Type::Custom("LogLevel".to_string()));
+                    assert_eq!(
+                        level_prop.property_type,
+                        Type::Custom("LogLevel".to_string())
+                    );
                     assert!(level_prop.modifiers.contains(&PropertyModifier::ReadWrite));
 
-                    let init_prop = class.properties.iter().find(|p| p.name == "initialized").unwrap();
+                    let init_prop = class
+                        .properties
+                        .iter()
+                        .find(|p| p.name == "initialized")
+                        .unwrap();
                     assert_eq!(init_prop.property_type, Type::Bool);
                     assert!(init_prop.modifiers.contains(&PropertyModifier::ReadOnly));
                 } else {
@@ -1392,7 +1559,10 @@ mod tests {
                     assert_eq!(global_fn.params.len(), 1);
                     assert_eq!(global_fn.params[0].name, "name");
                     assert_eq!(global_fn.params[0].param_type, Type::String);
-                    assert_eq!(global_fn.return_type, Type::Custom("ConsoleLogger".to_string()));
+                    assert_eq!(
+                        global_fn.return_type,
+                        Type::Custom("ConsoleLogger".to_string())
+                    );
                 } else {
                     panic!("Expected function definition");
                 }
@@ -1409,7 +1579,10 @@ mod tests {
                     } else {
                         panic!("Expected optional LogEntry for options parameter");
                     }
-                    assert_eq!(global_fn.return_type, Type::Custom("ConsoleLogger".to_string()));
+                    assert_eq!(
+                        global_fn.return_type,
+                        Type::Custom("ConsoleLogger".to_string())
+                    );
                 } else {
                     panic!("Expected second function definition");
                 }
@@ -1421,83 +1594,56 @@ mod tests {
     // 基础语法测试
     #[test]
     fn test_identifier() {
-        let result = IDLParser::parse(
-            Rule::identifier,
-            "validIdentifier123"
-        );
+        let result = IDLParser::parse(Rule::identifier, "validIdentifier123");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_string_literal() {
-        let result = IDLParser::parse(
-            Rule::string_literal,
-            "\"hello world\""
-        );
+        let result = IDLParser::parse(Rule::string_literal, "\"hello world\"");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_integer_literal() {
-        let result = IDLParser::parse(
-            Rule::integer_literal,
-            "12345"
-        );
+        let result = IDLParser::parse(Rule::integer_literal, "12345");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_float_literal() {
-        let result = IDLParser::parse(
-            Rule::float_literal,
-            "12.34"
-        );
+        let result = IDLParser::parse(Rule::float_literal, "12.34");
         assert!(result.is_ok());
     }
 
     // 复杂类型测试
     #[test]
     fn test_nullable_type() {
-        let result = IDLParser::parse(
-            Rule::r#type,
-            "string?"
-        );
+        let result = IDLParser::parse(Rule::r#type, "string?");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_union_type() {
-        let result = IDLParser::parse(
-            Rule::r#type,
-            "string | int | bool"
-        );
+        let result = IDLParser::parse(Rule::r#type, "string | int | bool");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_array_type() {
-        let result = IDLParser::parse(
-            Rule::r#type,
-            "array<string>"
-        );
+        let result = IDLParser::parse(Rule::r#type, "array<string>");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_map_type() {
-        let result = IDLParser::parse(
-            Rule::r#type,
-            "map<string, int>"
-        );
+        let result = IDLParser::parse(Rule::r#type, "map<string, int>");
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_group_type() {
-        let result = IDLParser::parse(
-            Rule::r#type,
-            "(Person | LogEntry | string)"
-        );
+        let result = IDLParser::parse(Rule::r#type, "(Person | LogEntry | string)");
         assert!(result.is_ok());
     }
 
@@ -1511,11 +1657,8 @@ mod tests {
             fn optionalParam(name: string?);
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::interface_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::interface_def, input);
         assert!(result.is_ok());
     }
 
@@ -1533,11 +1676,8 @@ mod tests {
             fn setAge(age: int) -> void;
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::class_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::class_def, input);
         assert!(result.is_ok());
     }
 
@@ -1551,11 +1691,8 @@ mod tests {
             VALUE3 = 2
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::enum_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::enum_def, input);
         assert!(result.is_ok());
     }
 
@@ -1569,11 +1706,8 @@ mod tests {
             field3: array<string>;
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::struct_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::struct_def, input);
         assert!(result.is_ok());
     }
 
@@ -1586,11 +1720,8 @@ mod tests {
             field2: int;
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::struct_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::struct_def, input);
         assert!(result.is_ok());
     }
 
@@ -1600,11 +1731,8 @@ mod tests {
         let input = r#"
         callback ProcessCallback(result: string | object, success: bool);
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::callback_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::callback_def, input);
         assert!(result.is_ok());
     }
 
@@ -1614,11 +1742,8 @@ mod tests {
         let input = r#"
         fn add(a: int, b: int) -> int;
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::global_function,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::global_function, input);
         assert!(result.is_ok());
     }
 
@@ -1628,11 +1753,8 @@ mod tests {
         let input = r#"
         using UserId = int;
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::using_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::using_def, input);
         assert!(result.is_ok());
     }
 
@@ -1642,11 +1764,8 @@ mod tests {
         let input = r#"
         import NetworkPacket from "Packet.proto";
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::import_stmt,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::import_stmt, input);
         assert!(result.is_ok());
     }
 
@@ -1685,11 +1804,8 @@ mod tests {
         
         fn setTimeout(cb: callback(success: bool), delay: int);
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::idl,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::idl, input);
         assert!(result.is_ok());
     }
 
@@ -1702,11 +1818,8 @@ mod tests {
             fn getStatus() -> string;
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::idl,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::idl, input);
         assert!(result.is_ok());
     }
 
@@ -1720,11 +1833,8 @@ mod tests {
             readonly property enabled: bool;
         }
         "#;
-        
-        let result = IDLParser::parse(
-            Rule::singleton_def,
-            input
-        );
+
+        let result = IDLParser::parse(Rule::singleton_def, input);
         assert!(result.is_ok());
     }
 
@@ -1733,7 +1843,7 @@ mod tests {
     fn test_complex_union_type() {
         let result = IDLParser::parse(
             Rule::r#type,
-            "string | int | array<string> | map<string, int> | Person"
+            "string | int | array<string> | map<string, int> | Person",
         );
         assert!(result.is_ok());
     }
@@ -1741,87 +1851,84 @@ mod tests {
     // 复杂可空类型测试
     #[test]
     fn test_complex_nullable_type() {
-        let result = IDLParser::parse(
-            Rule::r#type,
-            "(string | int)?"
-        );
+        let result = IDLParser::parse(Rule::r#type, "(string | int)?");
         assert!(result.is_ok());
     }
 
     // 错误用例测试
     #[test]
     fn test_invalid_interface_missing_brace() {
-        let input = r#"interface TestInterface { fn getValue() -> int; "#;  // 缺少闭合大括号
+        let input = r#"interface TestInterface { fn getValue() -> int; "#; // 缺少闭合大括号
         let result = IDLParser::parse(Rule::interface_def, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_type_definition_array() {
-        let input = r#"array<"#;  // 不完整的数组类型定义
+        let input = r#"array<"#; // 不完整的数组类型定义
         let result = IDLParser::parse(Rule::r#type, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_type_definition_map() {
-        let input = r#"map<string"#;  // 不完整的映射类型定义
+        let input = r#"map<string"#; // 不完整的映射类型定义
         let result = IDLParser::parse(Rule::r#type, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_enum_definition() {
-        let input = r#"enum TestEnum { VALUE1 = 0, "#;  // 缺少闭合大括号
+        let input = r#"enum TestEnum { VALUE1 = 0, "#; // 缺少闭合大括号
         let result = IDLParser::parse(Rule::enum_def, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_struct_definition() {
-        let input = r#"struct TestStruct { field1: string; "#;  // 缺少闭合大括号
+        let input = r#"struct TestStruct { field1: string; "#; // 缺少闭合大括号
         let result = IDLParser::parse(Rule::struct_def, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_function_definition() {
-        let input = r#"fn add(a: int, "#;  // 不完整的函数定义
+        let input = r#"fn add(a: int, "#; // 不完整的函数定义
         let result = IDLParser::parse(Rule::global_function, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_callback_definition() {
-        let input = r#"callback ProcessCallback("#;  // 不完整的回调定义
+        let input = r#"callback ProcessCallback("#; // 不完整的回调定义
         let result = IDLParser::parse(Rule::callback_def, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_using_definition() {
-        let input = r#"using UserId "#;  // 不完整的using定义
+        let input = r#"using UserId "#; // 不完整的using定义
         let result = IDLParser::parse(Rule::using_def, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_import_definition() {
-        let input = r#"import NetworkPacket from "#;  // 不完整的import定义
+        let input = r#"import NetworkPacket from "#; // 不完整的import定义
         let result = IDLParser::parse(Rule::import_stmt, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_class_definition() {
-        let input = r#"class TestClass { name: string "#;  // 缺少分号
+        let input = r#"class TestClass { name: string "#; // 缺少分号
         let result = IDLParser::parse(Rule::class_def, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_singleton_definition() {
-        let input = r#"singleton console { fn log(message: string) "#;  // 缺少分号
+        let input = r#"singleton console { fn log(message: string) "#; // 缺少分号
         let result = IDLParser::parse(Rule::singleton_def, input);
         assert!(result.is_err());
     }
@@ -1835,21 +1942,21 @@ mod tests {
             fn getValue() ->;  // 错误：缺少返回类型
         }
         "#;
-        
+
         let result = IDLParser::parse(Rule::idl, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_string_literal() {
-        let input = r#""hello world"#;  // 缺少闭合引号
+        let input = r#""hello world"#; // 缺少闭合引号
         let result = IDLParser::parse(Rule::string_literal, input);
         assert!(result.is_err());
     }
 
     #[test]
     fn test_invalid_identifier_with_keyword() {
-        let input = r#"interface"#;  // 关键字不能作为标识符
+        let input = r#"interface"#; // 关键字不能作为标识符
         let result = IDLParser::parse(Rule::identifier, input);
         assert!(result.is_err());
     }
@@ -1909,7 +2016,7 @@ mod tests {
     fn test_invalid_module_with_invalid_version_format() {
         // 测试包含多余版本号的module声明，使用idl规则确保整个输入被解析
         let input = r#"module test@1.0.2.5
-interface Test {}"#;  // 版本格式错误，包含过多的版本号部分
+interface Test {}"#; // 版本格式错误，包含过多的版本号部分
         let result = IDLParser::parse(Rule::idl, input);
         assert!(result.is_err());
     }
@@ -1949,5 +2056,3 @@ interface Test {}"#;
         assert!(result.is_ok());
     }
 }
-
-

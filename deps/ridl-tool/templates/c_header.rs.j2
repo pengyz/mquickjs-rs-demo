@@ -5,9 +5,9 @@
 #include "mquickjs.h"
 
 // Function declarations for all RIDL-defined functions
-{%- for function in functions -%}
+{% for function in functions %}
 JSValue js_{{ function.name|lower }}(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
-{%- endfor -%}
+{% endfor %}
 
 {%- for interface in interfaces -%}
 {%- for method in interface.methods -%}

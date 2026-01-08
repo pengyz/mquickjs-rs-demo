@@ -11,7 +11,12 @@ impl<'ctx> Object<'ctx> {
         self.value.get_property(ctx, name)
     }
 
-    pub fn set_property(&self, ctx: &'ctx Context, name: &str, value: Value<'ctx>) -> Result<(), String> {
+    pub fn set_property(
+        &self,
+        ctx: &'ctx Context,
+        name: &str,
+        value: Value<'ctx>,
+    ) -> Result<(), String> {
         self.value.set_property(ctx, name, value)
     }
 }

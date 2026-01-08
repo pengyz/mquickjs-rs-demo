@@ -29,7 +29,7 @@
 #include "mquickjs.h"
 #include "mquickjs_build.h"
 
-/* Include RIDL-generated standard library extensions */
+/* Include RIDL-generated standard library extensions (from build.rs copied into mquickjs/) */
 #include "mquickjs_ridl_register.h"
 
 /* defined in mqjs_example.c */

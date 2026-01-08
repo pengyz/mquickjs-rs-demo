@@ -2,9 +2,9 @@ use jidl_tool;
 
 fn main() {
     // 测试语法错误报告
-    let invalid_ridl = r#"interface Test { fn method(int x) -> string; "# ; // 缺少右括号
+    let invalid_ridl = r#"interface Test { fn method(int x) -> string; "#; // 缺少右括号
     let result = jidl_tool::parse_ridl_content(invalid_ridl, "test.ridl");
-    
+
     match result {
         Ok(_) => println!("解析成功，没有检测到错误"),
         Err(errors) => {

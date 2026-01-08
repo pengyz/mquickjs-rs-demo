@@ -1,7 +1,3 @@
-use std::os::raw::{c_void};
-use std::ffi::{CString, CStr};
-use std::marker::PhantomData;
-
 // 导入生成的绑定
 #[allow(non_camel_case_types)]
 #[allow(non_upper_case_globals)]
@@ -11,37 +7,32 @@ pub mod mquickjs_ffi {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
-// 定义条件宏，用于引入RIDL扩展符号
+pub use context::Context;
+pub use function::Function;
+pub use object::Object;
+pub use value::Value;
+
+pub mod context;
+pub mod function;
+pub mod object;
+pub mod value;
+
 #[cfg(feature = "ridl-extensions")]
-#[macro_export]
-macro_rules! mquickjs_ridl_extensions {
-    () => {
-        include!("../ridl_symbols.rs");
-    }
+pub use ridl_registry as ridl;
+
+#[cfg(feature = "ridl-extensions")]
+pub fn register_all_ridl_modules() {
+    ridl_registry::register_all();
 }
 
 #[cfg(not(feature = "ridl-extensions"))]
-#[macro_export]
-macro_rules! mquickjs_ridl_extensions {
-    () => {
-        // 当ridl-extensions feature关闭时，宏不展开任何内容
-    }
-}
-
-pub use context::Context;
-pub use value::Value;
-pub use object::Object;
-pub use function::Function;
-
-pub mod context;
-pub mod value;
-pub mod object;
-pub mod function;
+pub fn register_all_ridl_modules() {}
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::ffi::CString;
+    use std::marker::PhantomData;
 
     #[test]
     fn test_create_context() {
@@ -122,11 +113,11 @@ mod tests {
     #[test]
     fn test_multiple_evals() {
         let mut context = Context::new(1024 * 1024).unwrap();
-        
+
         // First evaluation
         let result1 = context.eval("var x = 10;");
         assert!(result1.is_ok());
-        
+
         // Second evaluation using previous variable
         let result2 = context.eval("x * 2;");
         assert!(result2.is_ok());
@@ -144,7 +135,7 @@ mod tests {
             ("2 ** 3", "8"),
             ("17 % 5", "2"),
         ];
-        
+
         for (expr, expected) in operations {
             let result = context.eval(expr).unwrap();
             assert_eq!(result, expected, "Failed for expression: {}", expr);
@@ -164,7 +155,7 @@ mod tests {
             ("5 == 5", "true"),
             ("5 != 3", "true"),
         ];
-        
+
         for (expr, expected) in operations {
             let result = context.eval(expr).unwrap();
             assert_eq!(result, expected, "Failed for expression: {}", expr);
@@ -180,19 +171,19 @@ mod tests {
             (r#""hello".charAt(1)"#, "e"),
             (r#""hello".substring(1, 4)"#, "ell"),
         ];
-        
+
         for (expr, expected) in operations {
             let result = context.eval(expr).unwrap();
             assert_eq!(result, expected, "Failed for expression: {}", expr);
         }
     }
-    
+
     #[test]
     fn test_string_creation() {
         let mut context = Context::new(1024 * 1024).unwrap();
         let value = context.create_string("Hello, World!").unwrap();
         assert!(value.is_string(&context));
-        
+
         let js_str = context.get_string(value).unwrap();
         assert_eq!(js_str, "Hello, World!");
     }
@@ -200,7 +191,7 @@ mod tests {
     #[test]
     fn test_value_type_checks() {
         let mut context = Context::new(1024 * 1024).unwrap();
-        
+
         // Test string
         let c_code = CString::new("'test string'").unwrap();
         let filename = CString::new("eval.js").unwrap();
@@ -218,7 +209,7 @@ mod tests {
             _ctx: PhantomData,
         };
         assert!(value.is_string(&context));
-        
+
         // Test number
         let c_code = CString::new("42").unwrap();
         let filename = CString::new("eval.js").unwrap();
@@ -236,7 +227,7 @@ mod tests {
             _ctx: PhantomData,
         };
         assert!(value.is_number(&context));
-        
+
         // Test boolean
         let c_code = CString::new("true").unwrap();
         let filename = CString::new("eval.js").unwrap();
@@ -254,7 +245,7 @@ mod tests {
             _ctx: PhantomData,
         };
         assert!(value.is_bool(&context));
-        
+
         // Test null
         let c_code = CString::new("null").unwrap();
         let filename = CString::new("eval.js").unwrap();
@@ -272,7 +263,7 @@ mod tests {
             _ctx: PhantomData,
         };
         assert!(value.is_null(&context));
-        
+
         // Test undefined
         let c_code = CString::new("undefined").unwrap();
         let filename = CString::new("eval.js").unwrap();
@@ -292,4 +283,3 @@ mod tests {
         assert!(value.is_undefined(&context));
     }
 }
-

@@ -5,10 +5,13 @@ edition = "2021"
 
 [features]
 default = []
-ridl-extensions = []
+ridl-extensions = ["dep:ridl_registry"]
 
 [dependencies]
 libc = "0.2"
+mquickjs-sys = { path = "../mquickjs-sys" }
+ridl_registry = { path = "../../ridl-modules/registry", optional = true }
 
 [build-dependencies]
 bindgen = "0.63"
+cc = "1.0"

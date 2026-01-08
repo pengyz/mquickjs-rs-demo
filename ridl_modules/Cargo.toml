@@ -1,5 +1,0 @@
-[workspace]
-members = [
-    "stdlib",
-    "stdlib_demo",
-]

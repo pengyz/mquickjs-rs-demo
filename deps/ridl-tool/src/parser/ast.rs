@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use std::fmt;
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ModuleDeclaration {
@@ -188,16 +188,17 @@ impl fmt::Display for Type {
             Type::Union(types) => {
                 let type_strs: Vec<String> = types.iter().map(|t| t.to_string()).collect();
                 write!(f, "{}", type_strs.join(" | "))
-            },
+            }
             Type::Optional(t) => write!(f, "{}?", t),
             Type::Custom(name) => write!(f, "{}", name),
             Type::Callback => write!(f, "callback"),
             Type::CallbackWithParams(params) => {
-                let param_strs: Vec<String> = params.iter()
+                let param_strs: Vec<String> = params
+                    .iter()
                     .map(|p| format!("{}: {}", p.name, p.param_type))
                     .collect();
                 write!(f, "callback({})", param_strs.join(", "))
-            },
+            }
             Type::Group(t) => write!(f, "({})", t),
             Type::Null => write!(f, "null"),
             Type::Any => write!(f, "any"),

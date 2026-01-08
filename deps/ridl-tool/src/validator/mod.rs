@@ -23,7 +23,13 @@ pub struct RIDLError {
 }
 
 impl RIDLError {
-    pub fn new(message: String, line: usize, column: usize, file: String, error_type: RIDLErrorType) -> Self {
+    pub fn new(
+        message: String,
+        line: usize,
+        column: usize,
+        file: String,
+        error_type: RIDLErrorType,
+    ) -> Self {
         RIDLError {
             message,
             line,
@@ -52,20 +58,20 @@ impl SemanticValidator {
     pub fn validate(&mut self, idl: &IDL) -> Result<(), Vec<RIDLError>> {
         // 检查module声明是否在文件开头
         self.validate_module_position(idl);
-        
+
         // 收集所有定义的标识符，用于重复定义检查
         let mut defined_identifiers = HashMap::new();
         self.collect_defined_identifiers(idl, &mut defined_identifiers);
-        
+
         // 检查重复定义
         self.validate_duplicate_definitions(&defined_identifiers);
-        
+
         // 验证类型引用
         self.validate_type_references(idl);
-        
+
         // 验证标识符命名
         self.validate_identifiers(idl);
-        
+
         if self.errors.is_empty() {
             Ok(())
         } else {
@@ -76,14 +82,18 @@ impl SemanticValidator {
     /// 检查module声明是否在文件开头
     fn validate_module_position(&mut self, idl: &IDL) {
         // 如果存在module声明，它应该在定义列表的最前面
-        if let Some(ref module_decl) = idl.module {
+        if let Some(ref _module_decl) = idl.module {
             // module声明应该在其他定义之前，所以它应该是第一个定义
             // 这个检查在语法层面已经由pest处理了，这里主要是为了完整性
         }
     }
 
     /// 收集所有定义的标识符
-    fn collect_defined_identifiers(&mut self, idl: &IDL, identifiers: &mut HashMap<String, (usize, usize)>) {
+    fn collect_defined_identifiers(
+        &mut self,
+        idl: &IDL,
+        identifiers: &mut HashMap<String, (usize, usize)>,
+    ) {
         // 检查接口定义
         for interface in &idl.interfaces {
             identifiers.insert(interface.name.clone(), (0, 0)); // TODO: 添加位置信息
@@ -175,33 +185,41 @@ impl SemanticValidator {
     /// 验证单个类型
     fn validate_type(&mut self, idl_type: &Type) {
         match idl_type {
-            Type::Custom(name) => {
+            Type::Custom(_name) => {
                 // 检查自定义类型是否已定义
                 // 这里需要更复杂的逻辑来检查类型是否已定义
                 // 暂时跳过，因为我们需要访问全局定义上下文
-            },
+            }
             Type::Optional(boxed_type) => {
                 self.validate_type(boxed_type);
-            },
+            }
             Type::Array(element_type) => {
                 self.validate_type(element_type);
-            },
+            }
             Type::Map(key_type, value_type) => {
                 self.validate_type(key_type);
                 self.validate_type(value_type);
-            },
+            }
             Type::Union(types) => {
                 for t in types {
                     self.validate_type(t);
                 }
-            },
+            }
             Type::Group(inner_type) => {
                 self.validate_type(inner_type);
-            },
+            }
             // 基础类型不需要验证
-            Type::Bool | Type::Int | Type::Float | Type::Double | Type::String | 
-            Type::Void | Type::Object | Type::Callback | Type::CallbackWithParams(_) | 
-            Type::Null | Type::Any => {}
+            Type::Bool
+            | Type::Int
+            | Type::Float
+            | Type::Double
+            | Type::String
+            | Type::Void
+            | Type::Object
+            | Type::Callback
+            | Type::CallbackWithParams(_)
+            | Type::Null
+            | Type::Any => {}
         }
     }
 
@@ -306,15 +324,33 @@ impl SemanticValidator {
     fn check_for_keyword_usage(&mut self, identifier: &str, context: &str) {
         // RIDL关键字列表
         let keywords = [
-            "interface", "class", "enum", "struct", "const", "readonly", "property",
-            "callback", "array", "map", "true", "false", "fn", "import", "as",
-            "from", "using", "module", "singleton"
+            "interface",
+            "class",
+            "enum",
+            "struct",
+            "const",
+            "readonly",
+            "property",
+            "callback",
+            "array",
+            "map",
+            "true",
+            "false",
+            "fn",
+            "import",
+            "as",
+            "from",
+            "using",
+            "module",
+            "singleton",
         ];
 
         if keywords.contains(&identifier) {
             self.errors.push(RIDLError::new(
-                format!("Invalid identifier '{}', '{}' is a reserved keyword and cannot be used as {}", 
-                    identifier, identifier, context),
+                format!(
+                    "Invalid identifier '{}', '{}' is a reserved keyword and cannot be used as {}",
+                    identifier, identifier, context
+                ),
                 0, // TODO: 添加实际位置信息
                 0, // TODO: 添加实际位置信息
                 self.file_path.clone(),
@@ -339,7 +375,7 @@ pub fn validate(items: &[IDLItem]) -> Result<(), Box<dyn std::error::Error>> {
         singletons: vec![],
         callbacks: vec![],
     };
-    
+
     // 从items中提取各种定义到idl中
     for item in items {
         match item {
@@ -353,13 +389,14 @@ pub fn validate(items: &[IDLItem]) -> Result<(), Box<dyn std::error::Error>> {
             IDLItem::Singleton(singleton) => idl.singletons.push(singleton.clone()),
         }
     }
-    
+
     // 创建验证器并验证
     let mut validator = SemanticValidator::new("unknown.ridl".to_string());
     match validator.validate(&idl) {
         Ok(()) => Ok(()),
         Err(errors) => {
-            let error_messages: Vec<String> = errors.iter()
+            let error_messages: Vec<String> = errors
+                .iter()
                 .map(|e| format!("{} (line {}, col {})", e.message, e.line, e.column))
                 .collect();
             Err(format!("Validation errors: {}", error_messages.join("; ")).into())

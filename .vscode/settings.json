@@ -3,5 +3,7 @@
         "activityBar.background": "#0A3145",
         "titleBar.activeBackground": "#0D4461",
         "titleBar.activeForeground": "#F4FAFD"
-    }
+    },
+    "rust-analyzer.checkOnSave": false,
+    "rust-analyzer.cargo.autoreload": false
 }
