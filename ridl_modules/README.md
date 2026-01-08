@@ -4,11 +4,15 @@
 
 ## 目录结构
 
-- `stdlib/` - mquickjs标准库平台相关功能的RIDL定义和实现
-  - `stdlib.ridl` - RIDL定义文件
-  - `stdlib_impl.rs` - Rust实现代码
-  - `stdlib_glue.rs` - Rust胶水代码实现
-  - `stdlib_glue.h` - C头文件定义
+- `stdlib/` - mquickjs 标准库平台相关功能的 RIDL 定义和实现
+  - `stdlib.ridl` - RIDL 定义文件
+  - `stdlib_impl.rs` - 生成的 Rust 实现骨架（构建生成）
+  - `stdlib_glue.rs` - 生成的 Rust 胶水代码（构建生成）
+- `stdlib_demo/` - 示例模块，演示 JS↔Rust 绑定生成流程
+  - `stdlib_demo.ridl`
+  - `stdlib_demo_impl.rs` / `stdlib_demo_glue.rs`
+
+生成产物同时会复制到项目根目录与 `generated/`，请勿手工修改生成文件。
 
 ## 设计说明
 
@@ -40,17 +44,12 @@
 
 ### 实现方式
 
-按照"复杂代码生成工具开发策略"，我们先手动实现生成代码，跑通整个流程，具体包括：
-
-1. Rust胶水代码（stdlib_glue.rs）- 处理类型转换、函数绑定等底层细节
-2. Rust实现（stdlib_impl.rs）- 与mquickjs-rs集成
-3. 项目配置（Cargo.toml）- Rust项目依赖管理
+当前通过 ridl-tool 生成 glue/impl，并由 `build.rs` 在构建时刷新并复制到项目根与 `generated/`。业务逻辑在生成的 `*_impl.rs` 中补充。
 
 ## 构建系统集成
 
-这个模块已经集成到项目的构建系统中：
-
-1. `Cargo.toml` - 添加了构建依赖
+- 顶层 `build.rs` 列出需要处理的 RIDL 文件（stdlib、stdlib_demo），调用 ridl-tool 生成并复制产物。
+- 生成的 `ridl_symbols.rs`、`mquickjs_ridl_register.h` 参与链接与头文件同步。
 
 ## 使用方法
 

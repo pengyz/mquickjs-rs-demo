@@ -7,23 +7,31 @@
 ## 文档目录
 
 ### 架构相关
-
 - [架构概述](architecture/overview.md) - 项目整体架构说明
 - [模块设计](ridl/module-design.md) - RIDL 模块的设计和实现细节
 
 ### RIDL 语言相关
-
 - [RIDL 语法与扩展](ridl/syntax-and-extension.md) - RIDL 语言的语法定义和规范
 - [标准库扩展机制](ridl/stdlib-extension-mechanism.md) - 标准库扩展的实现机制和流程
 - [Rust胶水代码演进](ridl/rust-glue-evolution.md) - 从C胶水代码到Rust胶水代码的演进过程
 
 ### 模块化构建相关
-
 - [模块化构建计划](build/modular-build-plan.md) - 模块化构建的实施计划和架构规范
 
 ### 开发指南
-
 - [开发指南](guides/development.md) - 开发者指南，包括 RIDL 模块开发、构建流程和最佳实践
+
+### RIDL 工具链（ridl-tool）设计/实现
+- [技术选型](../deps/ridl-tool/doc/TECH_SELECTION.md)
+- [语法规范](../deps/ridl-tool/doc/RIDL_GRAMMAR_SPEC.md)
+- [功能开发指南](../deps/ridl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md)
+- [实现对应关系指南](../deps/ridl-tool/doc/IMPLEMENTATION_GUIDE.md)
+- [多文件聚合设计](../deps/ridl-tool/doc/MULTIFILE_AGGREGATION_DESIGN.md)
+- [设计方案](../deps/ridl-tool/doc/RIDL_TOOL_DESIGN_PLAN.md)
+
+### 上游引擎参考（只读）
+- [MicroQuickJS README](../deps/mquickjs/README.md)
+- [MicroQuickJS README-CN](../deps/mquickjs/README-CN.md)
 
 ## 主要特性
 

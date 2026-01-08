@@ -39,14 +39,16 @@ mquickjs-rs 采用模块化设计，每个功能模块都作为独立的 Rust cr
 - **重用性**: 模块可以在不同项目间重用
 - **独立开发**: 不同模块可以独立开发和测试
 
-### 模块结构
+### 模块结构（当前仓库）
 
-每个 RIDL 模块包含以下组件：
+每个 RIDL 模块位于 `ridl_modules/<module>/`，包含：
 
-1. **RIDL 定义文件** (`.ridl`): 定义 JavaScript 可调用的接口
-2. **Rust 胶水代码**: 生成的 Rust 代码，实现 JS 与 Rust 间的桥接
-3. **Rust 实现**: 接口的具体 Rust 实现
-4. **构建配置**: 模块的 Cargo.toml 配置
+1. **RIDL 定义文件** (`<module>.ridl`): 定义 JavaScript 可调用的接口
+2. **Rust 胶水代码** (`<module>_glue.rs`): 由 ridl-tool 生成，桥接 JS 与 Rust
+3. **Rust 实现骨架** (`<module>_impl.rs`): 由 ridl-tool 生成，需填充业务实现
+4. **构建配置** (`Cargo.toml`): 模块的 Cargo 配置
+
+生成产物会同步复制到项目根目录与 `generated/` 下，供主工程引用。
 
 ### Rust胶水代码与实现代码职责分离
 

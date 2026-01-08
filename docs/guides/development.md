@@ -18,59 +18,52 @@
 ```
 mquickjs-demo/
 ├── Cargo.toml              # 项目配置文件
-├── build.rs                # 构建脚本
+├── build.rs                # 构建脚本（调用 ridl-tool 生成代码）
 ├── src/
 │   └── main.rs             # 主程序入口
+├── generated/              # 生成产物（*_glue.rs、*_impl.rs、ridl_symbols.rs 等）
+├── ridl_modules/           # RIDL 模块源码与生成物的源目录
+│   ├── stdlib/
+│   └── stdlib_demo/
 ├── deps/
 │   ├── mquickjs/           # QuickJS 源码
-│   └── mquickjs-rs/        # Rust 绑定库
-└── tests/
-    └── ridl_tests/         # RIDL 测试模块
+│   ├── mquickjs-rs/        # Rust 绑定库
+│   └── ridl-tool/          # RIDL 解析/校验/生成 CLI
+├── docs/                   # 项目文档
+└── doc/planning/           # 需求计划文档（每个需求一份计划）
 ```
 
 ## RIDL 模块开发
 
-### 创建新模块
+### 创建/接入新模块（当前流程示例）
 
-要创建一个新的 RIDL 模块，请遵循以下步骤：
+> 现有构建链在 `build.rs` 中列出了固定的 RIDL 文件（stdlib、stdlib_demo）。如果新增模块，需要同步修改 `build.rs` 的收集列表、模板生成逻辑以及符号聚合，确保生成产物被复制到根目录与 `generated/` 中。
 
-1. 在 [tests/ridl_tests](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests) 目录下创建新模块目录：
-
+1. 在 `ridl_modules/<your_module>/` 下创建模块目录，并提供：
 ```
-my_module/
-├── Cargo.toml           # 模块的 Cargo 配置文件
-├── my_module.ridl       # RIDL 定义文件
-├── my_module_glue.rs    # Rust 胶水代码（由 RIDL 工具生成）
-├── my_module_impl.rs    # Rust 实现文件
+ridl_modules/<your_module>/
+├── Cargo.toml           # 模块的 Cargo 配置（依赖 mquickjs-rs）
+├── <your_module>.ridl   # RIDL 定义
+├── <your_module>_glue.rs   # 生成的 Rust 胶水代码（由 ridl-tool 生成）
+├── <your_module>_impl.rs   # 生成的 Rust 实现骨架（由 ridl-tool 生成）
 └── src/
-    └── lib.rs           # 模块入口
+    └── lib.rs           # 可选，按需要导出模块
 ```
-
-2. 创建模块的 [Cargo.toml](file:///home/peng/workspace/mquickjs-demo/Cargo.toml) 文件：
-
+2. 在 `Cargo.toml`（模块内）声明依赖：
 ```toml
-[package]
-name = "my_module"
-version = "0.1.0"
-edition = "2021"
-
-[lib]
-crate-type = ["rlib", "staticlib"]
-
 [dependencies]
-mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
+mquickjs-rs = { path = "../../deps/mquickjs-rs" }
 ```
-
-3. 定义 RIDL 接口（[my_module.ridl](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib_demo/stdlib_demo.ridl)）：
-
+3. 在 `<your_module>.ridl` 中定义接口：
 ```ridl
 js_my_function(value: string);
 js_another_function(number: int);
 ```
+4. 运行 `cargo build`（会触发 `build.rs` 调用 ridl-tool）生成 `*_glue.rs` / `*_impl.rs`，并复制到项目根与 `generated/`。
+5. 在生成的 `<your_module>_impl.rs` 中补全具体实现。
+6. 若新增模块，确保在聚合阶段被包含（`ridl_symbols.rs`、`mquickjs_ridl_register.h`）。
 
-4. RIDL 工具会自动生成 [my_module_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs) 文件，包含从 JavaScript 到 Rust 的桥接函数
-
-5. 在 [my_module_impl.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/stdlib_impl.rs) 中实现具体的 Rust 函数：
+> 注意：当前示例模块为 `stdlib_demo`（位于 `ridl_modules/stdlib_demo/`），可参考其 `Cargo.toml` 与生成产物布局。
 
 ```rust
 use mquickjs_rs::{JSContext, JSValue};
