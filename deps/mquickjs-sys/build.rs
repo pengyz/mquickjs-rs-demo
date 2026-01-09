@@ -63,26 +63,40 @@ fn main() {
         );
     }
 
-    // 1) ridl-tool resolve
+    // When RIDL extensions are disabled (default), build a base QuickJS library.
+    // This keeps `cargo test -p mquickjs-rs` working without pulling any app-selected RIDL modules.
+    let ridl_extensions_enabled = env::var_os("CARGO_FEATURE_RIDL_EXTENSIONS").is_some();
+
+    // 1) ridl-tool resolve/generate (only when extensions enabled)
     let plan_path = ridl_out.join("ridl_plan.json");
-    let mut cmd = Command::new(&jidl_tool_bin);
-    cmd.arg("resolve")
-        .arg("--cargo-toml")
-        .arg(&app_manifest)
-        .arg("--out")
-        .arg(&plan_path);
-    run(cmd);
+    if ridl_extensions_enabled {
+        // IMPORTANT: resolve against the profile-selected app manifest.
+        // The sys crate itself must remain agnostic of RIDL modules (single-point module selection).
+        let mut cmd = Command::new(&jidl_tool_bin);
+        cmd.arg("resolve")
+            .arg("--cargo-toml")
+            .arg(&app_manifest)
+            .arg("--out")
+            .arg(&plan_path);
+        run(cmd);
 
-    // 2) ridl-tool generate
-    let mut cmd = Command::new(&jidl_tool_bin);
-    cmd.arg("generate")
-        .arg("--plan")
-        .arg(&plan_path)
-        .arg("--out")
-        .arg(&ridl_out);
-    run(cmd);
+        let mut cmd = Command::new(&jidl_tool_bin);
+        cmd.arg("generate")
+            .arg("--plan")
+            .arg(&plan_path)
+            .arg("--out")
+            .arg(&ridl_out);
+        run(cmd);
 
-    println!("cargo:rerun-if-changed={}", plan_path.display());
+        println!("cargo:rerun-if-changed={}", plan_path.display());
+    } else {
+        // Still emit a file at the expected path for stable inputs/debugging.
+        fs::write(
+            &plan_path,
+            "{\n  \"schema_version\": 1,\n  \"modules\": [],\n  \"generated\": {\n    \"out_dir\": \"\",\n    \"mquickjs_ridl_register_h\": \"\"\n  },\n  \"inputs\": []\n}\n",
+        )
+        .expect("write empty ridl_plan.json");
+    }
 
     // 3) mquickjs-build build
     let target_dir = workspace_root.join("target");
@@ -104,10 +118,12 @@ fn main() {
     cmd.arg("build")
         .arg("--mquickjs-dir")
         .arg(&mquickjs_dir)
-        .arg("--plan")
-        .arg(&plan_path)
         .arg("--out")
         .arg(&build_out_dir);
+
+    if ridl_extensions_enabled {
+        cmd.arg("--plan").arg(&plan_path);
+    }
 
     run(cmd);
 
@@ -125,29 +141,16 @@ fn main() {
         println!("cargo:rerun-if-changed={}", inp.display());
     }
 
-    // bindgen against the build output include dir
-    let bindings = bindgen::Builder::default()
-        .header(build_output.include_dir.join("mquickjs.h").to_string_lossy())
-        .clang_arg("-I")
-        .clang_arg(build_output.include_dir.to_string_lossy())
-        .clang_arg("-include")
-        .clang_arg("stddef.h")
-        .allowlist_recursively(true)
-        .rust_edition(bindgen::RustEdition::Edition2024)
-        .generate()
-        .expect("Unable to generate bindings");
+    // Expose include dir for downstream bindgen consumers.
+    // Bindgen is performed in higher-level crates (e.g. mquickjs-rs), to keep this sys crate
+    // focused on native build orchestration and linking.
+    println!("cargo:rustc-env=MQUICKJS_INCLUDE_DIR={}", build_output.include_dir.display());
 
-    bindings
-        .write_to_file(out_dir.join("bindings.rs"))
-        .expect("Couldn't write bindings!");
+    // Expose native artifact locations for downstream crates to decide how to link.
+    println!("cargo:rustc-env=MQUICKJS_LIB_DIR={}", build_output.lib_dir.display());
 
-    println!(
-        "cargo:rustc-link-search=native={}",
-        build_output.lib_dir.display()
-    );
-    for lib in build_output.libs {
-        println!("cargo:rustc-link-lib=static={lib}");
-    }
+    // Do not emit any link directives from this sys crate.
+    // mquickjs-rs is the canonical crate that owns native linking.
 }
 
 fn read_workspace_cfg(path: &Path) -> WorkspaceBuildConfig {

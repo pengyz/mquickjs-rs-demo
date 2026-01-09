@@ -11,4 +11,11 @@
     clippy::all
 )]
 
-include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+pub fn include_dir() -> &'static std::path::Path {
+    std::path::Path::new(env!("MQUICKJS_INCLUDE_DIR"))
+}
+
+pub fn header_path() -> std::path::PathBuf {
+    include_dir().join("mquickjs.h")
+}
+

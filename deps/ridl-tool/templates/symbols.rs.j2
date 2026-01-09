@@ -11,11 +11,11 @@ use crate::generated::glue::js_{{ interface.name|lower }}_{{ method.name|lower }
 // Use all glue functions to ensure they're linked
 pub fn ensure_symbols() {
 {%- for function in functions %}
-    let _ = js_{{ function.name|lower }} as unsafe extern "C" fn(*mut mquickjs_sys::JSContext, mquickjs_sys::JSValue, i32, *mut mquickjs_sys::JSValue) -> mquickjs_sys::JSValue;
+    let _ = js_{{ function.name|lower }} as unsafe extern "C" fn(*mut mquickjs_rs::mquickjs_ffi::JSContext, mquickjs_rs::mquickjs_ffi::JSValue, i32, *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
 {%- endfor %}
 {%- for interface in interfaces %}
 {%- for method in interface.methods %}
-    let _ = js_{{ interface.name|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut mquickjs_sys::JSContext, mquickjs_sys::JSValue, i32, *mut mquickjs_sys::JSValue) -> mquickjs_sys::JSValue;
+    let _ = js_{{ interface.name|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut mquickjs_rs::mquickjs_ffi::JSContext, mquickjs_rs::mquickjs_ffi::JSValue, i32, *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
 {%- endfor %}
 {%- endfor %}
 }

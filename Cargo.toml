@@ -4,7 +4,6 @@ members = [
     "deps/mquickjs-rs",
     "deps/ridl-tool",
     "ridl-modules/stdlib_demo",
-    "ridl-modules/registry",
     ".", "mquickjs-profile", "deps/mquickjs-build", "xtask",
 ]
 
@@ -18,7 +17,8 @@ name = "mquickjs-demo"
 path = "src/main.rs"
 
 [dependencies]
-mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-modules"] }
+mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-extensions"] }
+mquickjs-sys = { path = "deps/mquickjs-sys" }
 
-# RIDL modules selected for this app (registry source = this Cargo.toml)
+# RIDL modules selected for this app
 stdlib_demo = { path = "ridl-modules/stdlib_demo" }

@@ -8,8 +8,15 @@ build = "build.rs"
 [dependencies]
 libc = "0.2"
 
+
+[features]
+default = []
+
+# Enable RIDL stdlib extensions (JS_RIDL_EXTENSIONS) driven by ridl-tool plan generation.
+# This must be enabled by the application crate (single-point module selection).
+ridl-extensions = []
+
 [build-dependencies]
-bindgen = "0.72"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 toml = "0.8"

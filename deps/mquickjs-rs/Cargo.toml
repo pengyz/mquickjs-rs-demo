@@ -5,16 +5,15 @@ edition = "2021"
 
 [dependencies]
 libc = "0.2"
-mquickjs-sys = { path = "../mquickjs-sys" }
-
-# When present, modules can expose generated symbol refs via ensure_linked().
-# This keeps RIDL-provided JS CFunction symbols linked into the final binary.
-stdlib_demo = { path = "../../ridl-modules/stdlib_demo", optional = true }
+mquickjs-sys = { path = "../mquickjs-sys", default-features = false }
 
 [features]
 default = []
 
-# Enables force-link of RIDL module symbols for this profile.
-# In a full solution this list should be generated from the resolved RIDL plan.
-ridl-modules = ["stdlib_demo"]
+# Enable RIDL stdlib extensions. This must be enabled by the application crate.
+ridl-extensions = ["mquickjs-sys/ridl-extensions"]
+
+[build-dependencies]
+bindgen = "0.72"
+mquickjs-sys = { path = "../mquickjs-sys" }
 
