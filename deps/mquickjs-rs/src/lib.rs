@@ -1,10 +1,5 @@
-// 导入生成的绑定
-#[allow(non_camel_case_types)]
-#[allow(non_upper_case_globals)]
-#[allow(dead_code)]
-#[allow(clippy::all)]
 pub mod mquickjs_ffi {
-    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+    pub use mquickjs_sys::*;
 }
 
 pub use context::Context;
@@ -17,16 +12,20 @@ pub mod function;
 pub mod object;
 pub mod value;
 
-#[cfg(feature = "ridl-extensions")]
-pub use ridl_registry as ridl;
-
-#[cfg(feature = "ridl-extensions")]
-pub fn register_all_ridl_modules() {
-    ridl_registry::register_all();
+pub fn register_extensions() {
+    // This is a user-facing initialization step.
+    // Compile-time RIDL registration happens in the C stdlib tables.
+    // Here we ensure all RIDL module glue symbols are linked and available.
+    #[cfg(feature = "ridl-modules")]
+    {
+        stdlib_demo::ensure_linked();
+    }
 }
 
-#[cfg(not(feature = "ridl-extensions"))]
-pub fn register_all_ridl_modules() {}
+#[deprecated(note = "Use register_extensions() instead.")]
+pub fn register_all_ridl_modules() {
+    register_extensions();
+}
 
 #[cfg(test)]
 mod tests {

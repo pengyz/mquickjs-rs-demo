@@ -9,6 +9,6 @@
 // - <module>_glue.rs
 // - <module>_impl.rs
 //
-// The module list is driven by ridl-modules/registry (RIDL_REGISTRY_MANIFEST).
+// The module list is driven by the app manifest selected by mquickjs-sys (compile-time registry source).
 
 include!(concat!(env!("OUT_DIR"), "/ridl_modules.rs"));

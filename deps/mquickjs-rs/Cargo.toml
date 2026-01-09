@@ -3,15 +3,18 @@ name = "mquickjs-rs"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-default = []
-ridl-extensions = ["dep:ridl_registry"]
-
 [dependencies]
 libc = "0.2"
 mquickjs-sys = { path = "../mquickjs-sys" }
-ridl_registry = { path = "../../ridl-modules/registry", optional = true }
 
-[build-dependencies]
-bindgen = "0.72"
-cc = "1.0"
+# When present, modules can expose generated symbol refs via ensure_linked().
+# This keeps RIDL-provided JS CFunction symbols linked into the final binary.
+stdlib_demo = { path = "../../ridl-modules/stdlib_demo", optional = true }
+
+[features]
+default = []
+
+# Enables force-link of RIDL module symbols for this profile.
+# In a full solution this list should be generated from the resolved RIDL plan.
+ridl-modules = ["stdlib_demo"]
+

@@ -4,7 +4,7 @@ use std::fs;
 use mquickjs_rs::Context;
 
 fn main() {
-    mquickjs_rs::register_all_ridl_modules();
+    mquickjs_rs::register_extensions();
 
     let args: Vec<String> = env::args().collect();
 

@@ -82,6 +82,8 @@ fn main() {
         .arg(&ridl_out);
     run(cmd);
 
+    println!("cargo:rerun-if-changed={}", plan_path.display());
+
     // 3) mquickjs-build build
     let target_dir = workspace_root.join("target");
     let target_triple = env::var("TARGET").expect("TARGET not set");
@@ -106,6 +108,7 @@ fn main() {
         .arg(&plan_path)
         .arg("--out")
         .arg(&build_out_dir);
+
     run(cmd);
 
     let build_output_path = build_out_dir.join("mquickjs_build_output.json");

@@ -18,7 +18,7 @@ name = "mquickjs-demo"
 path = "src/main.rs"
 
 [dependencies]
-mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-extensions"] }
+mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-modules"] }
 
 # RIDL modules selected for this app (registry source = this Cargo.toml)
 stdlib_demo = { path = "ridl-modules/stdlib_demo" }
