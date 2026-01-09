@@ -4,6 +4,8 @@
 
 pub mod generator;
 pub mod parser;
+pub mod plan;
+pub mod resolve;
 pub mod validator;
 
 // 重新导出主要函数

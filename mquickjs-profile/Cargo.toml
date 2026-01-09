@@ -1,0 +1,13 @@
+[package]
+name = "mquickjs-profile"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# Project-level profiles. Add new profiles here without touching mquickjs-rs.
+framework = []
+tooling = []
+tests = []
+
+[lib]
+path = "src/lib.rs"

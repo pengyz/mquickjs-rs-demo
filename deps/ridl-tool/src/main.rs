@@ -1,6 +1,8 @@
-use std::env;
-use std::fs;
-use std::path::Path;
+use std::{
+    env,
+    fs,
+    path::{Path, PathBuf},
+};
 
 mod generator;
 mod parser;
@@ -14,6 +16,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Commands:");
         eprintln!("  module <ridl-files...> <output-dir> - Generate module-specific files");
         eprintln!("  aggregate <ridl-files...> <output-dir> - Generate shared aggregation files");
+        eprintln!("  resolve --cargo-toml <path> --out <plan.json> - Resolve RIDL modules from Cargo.toml deps");
+        eprintln!("  generate --plan <plan.json> --out <dir> - Generate glue + aggregate header from plan");
         std::process::exit(1);
     }
 
@@ -72,6 +76,100 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             // 生成共享聚合文件
             generator::generate_shared_files(&ridl_files, output_dir)?;
+        }
+        "resolve" => {
+            // ridl-tool resolve --cargo-toml <path> --out <plan.json>
+            let mut cargo_toml: Option<PathBuf> = None;
+            let mut out: Option<PathBuf> = None;
+            let mut it = remaining_args.into_iter();
+            while let Some(a) = it.next() {
+                match a.as_str() {
+                    "--cargo-toml" => cargo_toml = it.next().map(|s| PathBuf::from(s)),
+                    "--out" => out = it.next().map(|s| PathBuf::from(s)),
+                    _ => {
+                        eprintln!("Unknown arg: {}", a);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            let Some(cargo_toml) = cargo_toml else {
+                eprintln!("Missing --cargo-toml");
+                std::process::exit(1);
+            };
+            let Some(out_path) = out else {
+                eprintln!("Missing --out");
+                std::process::exit(1);
+            };
+
+            let out_dir = out_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."));
+            fs::create_dir_all(out_dir)?;
+            let plan = jidl_tool::resolve::resolve_from_cargo_toml(&cargo_toml, out_dir)
+                .map_err(|e| format!("resolve failed: {e}"))?;
+
+            let json = serde_json::to_string_pretty(&plan)?;
+            fs::write(&out_path, json)?;
+        }
+        "generate" => {
+            // ridl-tool generate --plan <plan.json> --out <dir>
+            let mut plan_path: Option<PathBuf> = None;
+            let mut out_dir: Option<PathBuf> = None;
+            let mut it = remaining_args.into_iter();
+            while let Some(a) = it.next() {
+                match a.as_str() {
+                    "--plan" => plan_path = it.next().map(|s| PathBuf::from(s)),
+                    "--out" => out_dir = it.next().map(|s| PathBuf::from(s)),
+                    _ => {
+                        eprintln!("Unknown arg: {}", a);
+                        std::process::exit(1);
+                    }
+                }
+            }
+
+            let Some(plan_path) = plan_path else {
+                eprintln!("Missing --plan");
+                std::process::exit(1);
+            };
+            let Some(out_dir) = out_dir else {
+                eprintln!("Missing --out");
+                std::process::exit(1);
+            };
+
+            fs::create_dir_all(&out_dir)?;
+
+            let plan_text = fs::read_to_string(&plan_path)?;
+            let plan: jidl_tool::plan::RidlPlan = serde_json::from_str(&plan_text)?;
+
+            let mut ridl_files: Vec<String> = Vec::new();
+            for m in &plan.modules {
+                for f in &m.ridl_files {
+                    ridl_files.push(f.display().to_string());
+                }
+            }
+
+            // per-module glue/impl
+            let module_out = out_dir.join("ridl");
+            fs::create_dir_all(&module_out)?;
+            for m in &plan.modules {
+                for f in &m.ridl_files {
+                    let ridl_file = f.display().to_string();
+                    let content = fs::read_to_string(&ridl_file)?;
+                    let items = parser::parse_ridl(&content)?;
+                    validator::validate(&items)?;
+                    let module_name = Path::new(&ridl_file)
+                        .file_stem()
+                        .ok_or("Invalid ridl file path")?
+                        .to_str()
+                        .ok_or("Invalid UTF-8 in file name")?
+                        .to_string();
+                    generator::generate_module_files(&items, &module_out, &module_name)?;
+                }
+            }
+
+            // aggregate header (must be placed at <out>/mquickjs_ridl_register.h for mquickjs-build)
+            generator::generate_shared_files(&ridl_files, out_dir.to_str().ok_or("Invalid out dir")?)?;
         }
         _ => {
             eprintln!("Unknown command: {}", command);

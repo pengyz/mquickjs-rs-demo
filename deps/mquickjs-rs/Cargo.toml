@@ -13,5 +13,5 @@ mquickjs-sys = { path = "../mquickjs-sys" }
 ridl_registry = { path = "../../ridl-modules/registry", optional = true }
 
 [build-dependencies]
-bindgen = "0.63"
+bindgen = "0.72"
 cc = "1.0"

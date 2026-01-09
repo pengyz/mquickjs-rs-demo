@@ -5,13 +5,13 @@ members = [
     "deps/ridl-tool",
     "ridl-modules/stdlib_demo",
     "ridl-modules/registry",
-    ".",
+    ".", "mquickjs-profile", "deps/mquickjs-build", "xtask",
 ]
 
 [package]
 name = "mquickjs-demo"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [[bin]]
 name = "mquickjs-demo"
@@ -19,3 +19,6 @@ path = "src/main.rs"
 
 [dependencies]
 mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-extensions"] }
+
+# RIDL modules selected for this app (registry source = this Cargo.toml)
+stdlib_demo = { path = "ridl-modules/stdlib_demo" }

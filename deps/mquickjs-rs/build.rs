@@ -6,35 +6,16 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn main() {
-    // 获取项目根目录路径
-    let crate_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
-    let mquickjs_path = format!("{}/../mquickjs", crate_dir);
+    // mquickjs-sys is the single source of truth for building C artifacts + RIDL aggregation.
+    // This crate only generates Rust bindings and links against the already-built lib.
 
-    // 自动发现 ridl-modules 下的所有 ridl 文件并生成聚合文件（强制拉入符号用）
-    generate_ridl_aggregations(&crate_dir);
-
-    // 生成标准库扩展
-    generate_stdlib_extensions(&mquickjs_path, &crate_dir);
-
-    // 编译mquickjs库组件
-    compile_mquickjs_components(&mquickjs_path, &crate_dir);
-
-    // stdlib_demo 现在作为 workspace member（Rust crate）统一编译；
-    // 这里不再以 staticlib/whole-archive 方式注入，避免重复 Rust runtime / QuickJS C 目标文件。
-
-    // 生成bindgen绑定
     generate_bindings();
 
-    // 链接到mquickjs库组件
-    println!("cargo:rustc-link-search=native={}/", mquickjs_path);
-
-    // 链接mquickjs静态库
-    println!("cargo:rustc-link-lib=static=mquickjs");
-
-    // 也链接系统库
+    // Link search path and lib are provided by mquickjs-sys; keep system libs here if needed.
     println!("cargo:rustc-link-lib=m");
 }
 
+#[allow(dead_code)]
 fn generate_ridl_aggregations(crate_dir: &str) {
     let ridl_tool_dir = Path::new(crate_dir).join("../ridl-tool");
     let ridl_tool_bin = env::var("RIDL_TOOL_BIN")
@@ -180,6 +161,7 @@ fn generate_ridl_aggregations(crate_dir: &str) {
     }
 }
 
+#[allow(dead_code)]
 fn discover_ridl_files(ridl_modules_dir: &Path) -> Vec<PathBuf> {
     let mut ridl_files = Vec::new();
 
@@ -215,6 +197,7 @@ fn discover_ridl_files(ridl_modules_dir: &Path) -> Vec<PathBuf> {
     ridl_files
 }
 
+#[allow(dead_code)]
 fn read_ridl_manifest(manifest_path: &Path) -> Vec<PathBuf> {
     let content = fs::read_to_string(manifest_path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", manifest_path.display()));
@@ -277,6 +260,7 @@ fn read_ridl_manifest(manifest_path: &Path) -> Vec<PathBuf> {
     ridl_files
 }
 
+#[allow(dead_code)]
 fn copy_if_exists(src: &Path, dst: &Path) {
     if !src.exists() {
         return;
@@ -287,6 +271,7 @@ fn copy_if_exists(src: &Path, dst: &Path) {
     println!("cargo:rerun-if-changed={}", dst.display());
 }
 
+#[allow(dead_code)]
 fn generate_stdlib_extensions(mquickjs_path: &str, _crate_dir: &str) {
     let generated_dir =
         std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR")).join("ridl");
@@ -380,6 +365,7 @@ fn generate_stdlib_extensions(mquickjs_path: &str, _crate_dir: &str) {
         .expect("Failed to write to mqjs_ridl_stdlib.h");
 }
 
+#[allow(dead_code)]
 fn compile_mquickjs_components(mquickjs_path: &str, _crate_dir: &str) {
     let generated_dir =
         std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR")).join("ridl");
@@ -465,14 +451,15 @@ fn generate_bindings() {
     // 获取头文件路径
     let header_path = format!("{}/mquickjs.h", mquickjs_path);
 
-    // 使用bindgen生成绑定
+    // 使用 bindgen 生成绑定（Rust 2024 需要生成 `unsafe extern "C" { ... }`）
     let bindings = bindgen::Builder::default()
         .header(&header_path)
         .clang_arg("-I")
         .clang_arg(&mquickjs_path)
         .clang_arg("-include")
         .clang_arg("stddef.h") // 包含stddef.h以定义size_t
-        .parse_callbacks(Box::new(bindgen::CargoCallbacks))
+        .rust_edition(bindgen::RustEdition::Edition2024)
+        .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .generate()
         .expect("Unable to generate bindings");
 
