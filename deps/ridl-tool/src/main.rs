@@ -106,7 +106,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .parent()
                 .unwrap_or_else(|| Path::new("."));
             fs::create_dir_all(out_dir)?;
-            let plan = jidl_tool::resolve::resolve_from_cargo_toml(&cargo_toml, out_dir)
+            let plan = ridl_tool::resolve::resolve_from_cargo_toml(&cargo_toml, out_dir)
                 .map_err(|e| format!("resolve failed: {e}"))?;
 
             let json = serde_json::to_string_pretty(&plan)?;
@@ -140,7 +140,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             fs::create_dir_all(&out_dir)?;
 
             let plan_text = fs::read_to_string(&plan_path)?;
-            let plan: jidl_tool::plan::RidlPlan = serde_json::from_str(&plan_text)?;
+            let plan: ridl_tool::plan::RidlPlan = serde_json::from_str(&plan_text)?;
 
             let mut ridl_files: Vec<String> = Vec::new();
             for m in &plan.modules {

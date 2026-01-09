@@ -396,7 +396,7 @@ var network_v1 = require("system.network@1.0");
 
 ## 相关文档
 
-- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
-- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
-- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
-- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划
+- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
+- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
+- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
+- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/TECH_SELECTION.md) - ridl-tool的技术选型和实现计划

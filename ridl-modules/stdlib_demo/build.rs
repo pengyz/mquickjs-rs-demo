@@ -12,19 +12,19 @@ fn main() {
     // Generate module-specific files into OUT_DIR.
     // Note: we call the generator library directly to avoid relying on a prebuilt binary.
     let content = std::fs::read_to_string(ridl_path).expect("read ridl");
-    let items = jidl_tool::parser::parse_ridl(&content).expect("parse ridl");
-    jidl_tool::validator::validate(&items).expect("validate ridl");
+    let items = ridl_tool::parser::parse_ridl(&content).expect("parse ridl");
+    ridl_tool::validator::validate(&items).expect("validate ridl");
 
-    jidl_tool::generator::generate_module_files(&items, out_dir, "stdlib_demo")
+    ridl_tool::generator::generate_module_files(&items, out_dir, "stdlib_demo")
         .expect("generate module files");
 
-    jidl_tool::generator::generate_module_api_file(out_dir)
+    ridl_tool::generator::generate_module_api_file(out_dir)
         .expect("generate module api");
 
     // Also generate module-local symbols file (we'll include it from OUT_DIR).
     // The current generator doesn't have a dedicated per-module symbols command, so we
     // reuse shared-file generation on a single ridl.
-    jidl_tool::generator::generate_shared_files(
+    ridl_tool::generator::generate_shared_files(
         &[ridl_path.to_string_lossy().to_string()],
         &out_dir.to_string_lossy(),
     )

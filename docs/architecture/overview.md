@@ -41,20 +41,19 @@ mquickjs-rs 采用模块化设计，每个功能模块都作为独立的 Rust cr
 
 ### 模块结构（当前仓库）
 
-每个 RIDL 模块位于 `ridl_modules/<module>/`，包含：
+每个 RIDL 模块位于 `ridl-modules/<module>/`，是一个独立 Rust crate，包含：
 
-1. **RIDL 定义文件** (`<module>.ridl`): 定义 JavaScript 可调用的接口
-2. **Rust 胶水代码** (`<module>_glue.rs`): 由 ridl-tool 生成，桥接 JS 与 Rust
-3. **Rust 实现骨架** (`<module>_impl.rs`): 由 ridl-tool 生成，需填充业务实现
-4. **构建配置** (`Cargo.toml`): 模块的 Cargo 配置
+1. **RIDL 定义文件**（`src/*.ridl`）：定义 JavaScript 可调用的接口
+2. **Rust 代码**（`src/lib.rs` / `src/impls.rs` 等）：提供 Rust 侧实现与初始化入口
+3. **构建配置**（`Cargo.toml`）：模块的 Cargo 配置
 
-生成产物会同步复制到项目根目录与 `generated/` 下，供主工程引用。
+生成产物不再落在仓库内固定目录；由 **App `build.rs`** 在构建时生成到 `$OUT_DIR/`（例如 `ridl_initialize.rs`、`mquickjs_ridl_register.h`），并由 `mquickjs-sys`/`mquickjs-rs` 在编译期引用。
 
 ### Rust胶水代码与实现代码职责分离
 
-#### Glue文件职责（如module_name_glue.rs）
+#### Glue文件职责（如 `<module>_glue.rs`）
 
-生成的胶水代码文件（[module_name_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs)）承担以下职责：
+生成的胶水代码文件（例如 `<module>_glue.rs`）承担以下职责：
 
 1. **接口桥接**：作为 JavaScript 与 Rust 之间的桥接层
 2. **引擎兼容函数**：包含使用 `#[no_mangle]` 和 `extern "C"` 标记的函数，这些函数直接暴露给JavaScript引擎（例如 `js_say_hello`）
@@ -89,7 +88,7 @@ mquickjs-rs 采用模块化设计，每个功能模块都作为独立的 Rust cr
 > mquickjs 仅支持编译期将扩展注册进 stdlib 表，因此 RIDL 扩展的选择与聚合发生在构建期。
 
 1. **选择 registry source（app manifest）**：由 profile 决定（见 `mquickjs.build.toml`）
-2. **RIDL 解析/聚合**：`jidl-tool resolve/generate` 生成 `mquickjs_ridl_register.h`（含 `JS_RIDL_EXTENSIONS`）
+2. **RIDL 解析/聚合**：`ridl-tool resolve/generate` 生成 `mquickjs_ridl_register.h`（含 `JS_RIDL_EXTENSIONS`）
 3. **编译 C 静态库**：`mquickjs-build` 将扩展编译进 `libmquickjs.a`
 4. **bindgen**：生成 Rust FFI bindings（Rust 2024 输出）
 

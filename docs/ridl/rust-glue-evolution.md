@@ -7,7 +7,7 @@
 ## 旧方案：C胶水代码
 
 ### 实现方式
-- RIDL 工具生成 C 语言胶水代码（如 [stdlib_glue.c](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib_demo/stdlib_glue.c)）
+- RIDL 工具生成 C 语言胶水代码（历史方案示例：`tests/ridl_tests/stdlib_demo/stdlib_glue.c`）
 - 需要 C 编译器参与构建过程
 - 类型转换在 C 代码中处理
 - 需要额外的头文件管理
@@ -22,7 +22,7 @@
 ## 新方案：Rust胶水代码
 
 ### 实现方式
-- RIDL 工具生成 Rust 语言胶水代码（如 [module_name_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs)）
+- RIDL 工具生成 Rust 语言胶水代码（例如 `<module>_glue.rs`）
 - 统一使用 Rust 工具链构建
 - 类型转换在 Rust 代码中处理
 - 利用 Rust 的所有权系统保证内存安全
@@ -38,7 +38,7 @@
 ## 职责分离规范
 
 ### Glue文件职责（如module_name_glue.rs）
-生成的胶水代码文件（[module_name_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs)）承担以下职责：
+生成的胶水代码文件（例如 `<module>_glue.rs`）承担以下职责：
 1. **接口桥接**：作为 JavaScript 与 Rust 之间的桥接层
 2. **引擎兼容函数**：包含使用 `#[no_mangle]` 和 `extern "C"` 标记的函数，这些函数直接暴露给JavaScript引擎（例如 `js_say_hello`）
 3. **参数验证**：验证传入参数的数量和类型

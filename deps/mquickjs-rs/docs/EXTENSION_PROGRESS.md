@@ -26,7 +26,7 @@
 - 映射表生命周期与mquickjs实例绑定，实例销毁时同步清理资源
 
 ## 四、静态代码生成架构
-- 所有RIDL定义的功能必须通过jidl-tool在编译时生成Rust和C代码
+- 所有RIDL定义的功能必须通过ridl-tool在编译时生成Rust和C代码
 - 生成代码集成到mqjs_stdlib静态库中
 - 禁止依赖运行时动态注册方案
 - RIDL文件必须一次性完成代码生成，不支持运行时动态添加
@@ -50,7 +50,7 @@
 - 必须使用mquickjs的FFI接口进行代码生成，禁止直接使用QuickJS的C API
 - 在Rust层面通过FFI与C代码交互，确保与mquickjs架构一致
 - 支持将每个RIDL功能模块作为独立cargo子工程，统一纳入mquickjs-rs workspace管理
-- jidl-tool需支持跨子工程扫描并收集所有RIDL files
+- ridl-tool需支持跨子工程扫描并收集所有RIDL files
 - 代码生成阶段对所有模块的RIDL定义进行统一处理和生成
 
 ## 七、目录结构与集成机制
@@ -89,7 +89,7 @@ tests/ridl_tests/
 - 支持全局注册与模块化注册（`module system.network@1.0`）
 
 2. **代码生成阶段**
-- jidl-tool解析RIDL生成C函数实现
+- ridl-tool解析RIDL生成C函数实现
 - 生成JSPropDef数组与JSClassDef类定义
 - 生成模块映射表及require函数
 

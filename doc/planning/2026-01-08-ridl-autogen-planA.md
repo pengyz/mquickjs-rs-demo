@@ -39,7 +39,7 @@
 
 3) 构建触发与稳定性
    - `cargo:rerun-if-changed`：目录 + 每个 `.ridl` + 关键生成输出（如 ridl_modules.rs、shim）。
-   - `RIDL_TOOL_BIN` 环境变量优先；默认路径指向 `deps/ridl-tool/target/debug/jidl-tool`。
+   - `RIDL_TOOL_BIN` 环境变量优先；默认路径指向 `deps/ridl-tool/target/debug/ridl-tool`。
 
 4) 测试（先做）
    - 添加/调整测试，覆盖：
@@ -61,7 +61,7 @@
 - 测试用例全部通过。
 
 ## 风险/待确认问题
-1) **ridl-tool 二进制命名与构建方式**：默认 `target/debug/jidl-tool` 是否总成立？是否需要在 CI/开发流程中先构建 ridl-tool？
+1) **ridl-tool 二进制命名与构建方式**：默认 `target/debug/ridl-tool` 是否总成立？是否需要在 CI/开发流程中先构建 ridl-tool？
 2) **shim 需求**：当前生成 glue 是否硬编码期望 `CARGO_MANIFEST_DIR/<name>_impl.rs`？若是，shim 的保留是必要的。
 3) **测试策略**：构建脚本测试在 Rust 中往往不直观；可能需要将 discover/生成入口拆到可测试模块，或用集成测试跑一次 build。
 

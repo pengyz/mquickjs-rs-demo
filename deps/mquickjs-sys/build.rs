@@ -52,13 +52,13 @@ fn main() {
 
     // Resolve tool binaries (must be built via `cargo run -p xtask -- build-tools`).
     let tools_dir = workspace_root.join("target").join(env::var("PROFILE").unwrap_or_else(|_| "debug".to_string()));
-    let jidl_tool_bin = tools_dir.join(tool_exe_name("jidl-tool"));
+    let ridl_tool_bin = tools_dir.join(tool_exe_name("ridl-tool"));
     let mquickjs_build_bin = tools_dir.join(tool_exe_name("mquickjs-build"));
 
-    if !jidl_tool_bin.exists() || !mquickjs_build_bin.exists() {
+    if !ridl_tool_bin.exists() || !mquickjs_build_bin.exists() {
         panic!(
             "Missing tool binaries. Run: cargo run -p xtask -- build-tools\nExpected: {} and {}",
-            jidl_tool_bin.display(),
+            ridl_tool_bin.display(),
             mquickjs_build_bin.display()
         );
     }
@@ -72,7 +72,7 @@ fn main() {
     if ridl_extensions_enabled {
         // IMPORTANT: resolve against the profile-selected app manifest.
         // The sys crate itself must remain agnostic of RIDL modules (single-point module selection).
-        let mut cmd = Command::new(&jidl_tool_bin);
+        let mut cmd = Command::new(&ridl_tool_bin);
         cmd.arg("resolve")
             .arg("--cargo-toml")
             .arg(&app_manifest)
@@ -80,7 +80,7 @@ fn main() {
             .arg(&plan_path);
         run(cmd);
 
-        let mut cmd = Command::new(&jidl_tool_bin);
+        let mut cmd = Command::new(&ridl_tool_bin);
         cmd.arg("generate")
             .arg("--plan")
             .arg(&plan_path)

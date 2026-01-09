@@ -1,10 +1,10 @@
-# jidl-tool 技术选型文档
+# ridl-tool 技术选型文档
 
 ## 概述
 
-本文档详细说明了 jidl-tool（mquickjs IDL 代码生成工具）的技术选型和实现计划。
+本文档详细说明了 ridl-tool（mquickjs IDL 代码生成工具）的技术选型和实现计划。
 
-**注意：当前文档描述的是jidl-tool的设计方案和实现计划。由于RIDL工具链（ridl-tool）尚未完成，目前的实现是通过手动编写胶水代码和实现代码来验证整个流程。一旦ridl-tool完成，将按照本文档选择的技术方案进行实现。**
+**注意：当前文档描述的是ridl-tool的设计方案和实现计划。由于RIDL工具链（ridl-tool）尚未完成，目前的实现是通过手动编写胶水代码和实现代码来验证整个流程。一旦ridl-tool完成，将按照本文档选择的技术方案进行实现。**
 
 ## 1. 语法解析器选型
 
@@ -49,7 +49,7 @@
 ## 3. 项目结构设计
 
 ```
-jidl-tool/
+ridl-tool/
 ├── Cargo.toml
 ├── src/
 │   ├── main.rs
@@ -168,7 +168,7 @@ impl {{ interface.name }} for {{ implementation }} {
 
 ## 相关文档
 
-- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
-- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
-- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
-- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
+- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
+- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
+- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
+- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块

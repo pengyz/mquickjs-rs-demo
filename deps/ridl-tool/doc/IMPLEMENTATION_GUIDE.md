@@ -450,7 +450,7 @@ RIDL的模块化机制通过全局`require`函数实现，该函数允许用户�
 
 #### 2.1 独立模块文件生成
 
-jidl-tool需要生成一个独立的模块注册表文件，通常命名为`module_registry.rs`，该文件将在mquickjs-rs编译时被引入：
+ridl-tool需要生成一个独立的模块注册表文件，通常命名为`module_registry.rs`，该文件将在mquickjs-rs编译时被引入：
 
 ```
 // 生成的模块注册表文件: module_registry.rs
@@ -521,10 +521,10 @@ pub fn register_require_function(ctx: &Context) -> Result<()> {
 
 #### 2.2 代码生成器实现
 
-jidl-tool需要增强代码生成器，使其能够根据RIDL文件中的模块声明自动生成映射表：
+ridl-tool需要增强代码生成器，使其能够根据RIDL文件中的模块声明自动生成映射表：
 
 ```
-// 伪代码：jidl-tool中的模块映射表生成器
+// 伪代码：ridl-tool中的模块映射表生成器
 impl ModuleRegistryGenerator {
     pub fn generate_module_registry(&self, items: &[IDLItem]) -> String {
         let mut module_creators = Vec::new();
@@ -638,7 +638,7 @@ context.add_global_object("console", console_object);
 mquickjs-rs/
 ├── Cargo.toml (workspace定义)
 ├── deps/
-│   ├── jidl-tool/ (RIDL工具)
+│   ├── ridl-tool/ (RIDL工具)
 │   ├── mquickjs-rs/ (Rust绑定)
 │   └── mquickjs/ (C引擎)
 ├── features/
@@ -664,7 +664,7 @@ mquickjs-rs/
 ```toml
 [workspace]
 members = [
-    "deps/jidl-tool",
+    "deps/ridl-tool",
     "deps/mquickjs-rs",
     "features/network",
     "features/deviceinfo",
@@ -676,10 +676,10 @@ members = [
 
 #### 3.1 RIDL文件扫描
 
-jidl-tool需要扫描workspace中所有子工程的RIDL文件：
+ridl-tool需要扫描workspace中所有子工程的RIDL文件：
 
 ```rust
-// jidl-tool/src/main.rs
+// ridl-tool/src/main.rs
 use std::path::Path;
 use std::fs;
 
@@ -714,7 +714,7 @@ fn find_all_ridl_files(workspace_root: &Path) -> Result<Vec<String>, Box<dyn std
 收集所有RIDL文件后，构建全局AST上下文：
 
 ```rust
-// jidl-tool/src/main.rs
+// ridl-tool/src/main.rs
 fn build_global_context(ridl_files: &[String]) -> Result<GlobalContext, Error> {
     let mut global_context = GlobalContext::new();
     
@@ -828,13 +828,13 @@ void js_register_require(mquickjs_ffi::JSContext *ctx, mquickjs_ffi::JSModuleDef
 
 2. **RIDL收集**：扫描workspace中所有.ridl文件
    ```bash
-   # jidl-tool扫描所有子工程的RIDL文件
-   jidl-tool --scan-workspace
+   # ridl-tool扫描所有子工程的RIDL文件
+   ridl-tool --scan-workspace
    ```
 
 3. **代码生成**：根据所有RIDL定义生成绑定代码
    ```bash
-   jidl-tool --generate-bindings
+   ridl-tool --generate-bindings
    ```
 
 4. **编译绑定**：编译生成的C/Rust代码到mqjs_stdlib静态库
@@ -862,7 +862,7 @@ make
 cd ../..
 
 echo "Step 2: Collecting RIDL files and generating bindings..."
-cargo run -p jidl-tool -- --scan-workspace
+cargo run -p ridl-tool -- --scan-workspace
 
 echo "Step 3: Compiling generated bindings..."
 cargo build -p mquickjs-rs
@@ -905,10 +905,10 @@ fn main() {
 
 ## 相关文档
 
-- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
-- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
-- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
-- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划
+- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
+- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
+- [FEATURE_DEVELOPMENT_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md) - 如何开发和集成基于RIDL的Feature模块
+- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/TECH_SELECTION.md) - ridl-tool的技术选型和实现计划
 
 ## 十二、标准库初始化机制（更新说明）
 - **重要更正**：实际实现中并不存在`JS_InitModuleSTDLib`函数

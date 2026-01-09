@@ -8,7 +8,7 @@ mquickjs-rs = { path = "../../deps/mquickjs-rs" }
 
 [build-dependencies]
 # Use the existing generator binary crate in this repo.
-jidl-tool = { path = "../../deps/ridl-tool" }
+ridl-tool = { path = "../../deps/ridl-tool" }
 
 [lib]
 crate-type = ["rlib"]

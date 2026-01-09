@@ -10,7 +10,7 @@ fn main() {
     let tool = workspace_root
         .join("target")
         .join(&profile)
-        .join(tool_exe_name("jidl-tool"));
+        .join(tool_exe_name("ridl-tool"));
 
     if !tool.exists() {
         panic!(

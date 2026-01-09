@@ -55,15 +55,19 @@ mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
 6.  RIDL 模块的编译和链接由使用者（如 mquickjs-demo）在 build.rs 中处理，不归属于 mquickjs-rs 内部构建流程。
 7.  各模块生成的 rlib 库由最终使用者在构建时统一链接。
 
-## 编译流程
+## 编译流程（当前实现）
 
-1.  使用 ridl-tool 编译所有 ridl 接口文件，生成标准库注册代码（如 mqjs_stdlib.h 和 mquickjs_atoms.h）。
-2.  通过 mquickjs-rs 的 build.rs 将注册代码构建成 mqjs_ridl_stdlib 工具，并编译 mquickjs.a 库，整合 mquickjs.c 主体代码与生成的标准库头文件。
-3.  使用 bindgen 从 C 头文件生成 Rust FFI 绑定。
-4.  RIDL 工具解析 `.ridl` 文件并生成相应的 Rust 胶水代码 (`*_glue.rs`)。
-5.  每个 RIDL 模块作为独立的 Rust crate 进行编译，生成 rlib 库。
-6.  mquickjs-rs 链接 mquickjs.a 库及各 RIDL 模块生成的 rlib 库，形成带标准库扩展的 Rust binding 库。
-7.  mquickjs-demo 项目链接 mquickjs-rs，最终生成可执行 JS 解释器。
+1. App 通过 `[dependencies]` 选择 RIDL modules（只有当依赖 crate 的 `src/` 下存在 `*.ridl` 时才视为 RIDL module）。
+2. App `build.rs` 调用 `ridl-tool`：
+   - `resolve`：解析依赖图并生成 ridl plan
+   - `generate`：基于 plan 生成 `$OUT_DIR/ridl_initialize.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`（以及模块侧 glue/symbols 等中间产物）
+3. `mquickjs-sys` 使用 `mquickjs-build` 编译并产出 `libmquickjs.a`：
+   - 默认构建产出“基础 QuickJS”库（不包含任何 `js_*` 扩展符号），用于 core/tests 等场景
+   - 启用 feature `ridl-extensions` 时，会把 `$OUT_DIR/mquickjs_ridl_register.h` 纳入 C 编译，编译期展开 `JS_RIDL_EXTENSIONS`
+4. `mquickjs-rs` 负责 bindgen + 链接 `libmquickjs.a`，并提供 `ridl_initialize!()` 宏引用 `$OUT_DIR/ridl_initialize.rs`。
+5. 最终 App 进行链接与运行时初始化：
+   - Rust 侧通过 `ridl_initialize!()` 集中调用各模块 initialize
+   - C 侧 stdlib 在编译期已包含扩展表，运行时无需动态注册
 
 ## 架构原则
 
@@ -74,7 +78,7 @@ mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
 
 ## 注意事项
 
--   直接运行 `mqjs_ridl_stdlib` 工具可能无法生成包含最新扩展的头文件，建议始终使用 `cargo build` 触发完整构建流程。
+-   直接运行某个历史工具/二进制来生成头文件并不可取；建议使用 App 的 `cargo run -p xtask -- build-tools` + `cargo build` 触发完整构建流程，确保 `build.rs` 生成的 `$OUT_DIR` 产物与当前依赖图一致。
 -   头文件路径应使用绝对路径或基于 crate 根目录的相对路径，避免路径解析错误。
 
 ## RIDL 工具集成

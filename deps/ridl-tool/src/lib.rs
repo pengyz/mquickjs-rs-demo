@@ -1,4 +1,4 @@
-//! jidl-tool - mquickjs IDL代码生成工具
+//! ridl-tool - mquickjs RIDL 代码生成工具
 //!
 //! 用于将IDL定义转换为Rust胶水代码和C绑定代码的工具
 

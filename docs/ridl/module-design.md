@@ -41,7 +41,7 @@ js_say_hello();
 
 ### 2. Rust 胶水代码生成
 
-RIDL 工具会根据 RIDL 定义文件生成 Rust 胶水代码 [module_name_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs)，其主要作用包括：
+RIDL 工具会根据 RIDL 定义文件生成 Rust 胶水代码（例如 `<module>_glue.rs`），其主要作用包括：
 
 - 定义从 JavaScript 到 Rust 的函数桥接
 - 处理参数类型转换
@@ -82,7 +82,7 @@ pub extern "C" fn js_say_hello(ctx: *mut JSContext, argc: i32, argv: *mut JSValu
 
 ### Glue文件职责（如module_name_glue.rs）
 
-生成的胶水代码文件（[module_name_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs)）承担以下职责：
+生成的胶水代码文件（例如 `<module>_glue.rs`）承担以下职责：
 
 1. **接口桥接**：作为 JavaScript 与 Rust 之间的桥接层
 2. **引擎兼容函数**：包含使用 `#[no_mangle` 和 `extern "C"` 标记的函数，这些函数直接暴露给JavaScript引擎（例如 `js_say_hello`）
@@ -177,7 +177,10 @@ pub extern "C" fn js_say_hello(ctx: *mut JSContext, argc: i32, argv: *mut JSValu
 
 ### 1. 动态模块加载
 
-未来计划支持运行时动态加载 RIDL 模块，进一步提升系统的灵活性。
+> 备注：当前 mquickjs 的 stdlib 扩展注册必须发生在编译期（C 侧通过 `JS_RIDL_EXTENSIONS` 展开），因此**无法在运行时动态注册**标准库扩展项。
+> 如果未来要支持“动态加载”，需要区分：
+> - JS 层面的模块加载（`require`/module system）
+> - C 侧 stdlib 扩展表的编译期注册（不可运行时变更）
 
 ### 2. 模块版本管理
 

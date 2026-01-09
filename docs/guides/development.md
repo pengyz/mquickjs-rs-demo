@@ -17,18 +17,17 @@
 
 ```
 mquickjs-demo/
-├── Cargo.toml              # 项目配置文件
-├── build.rs                # 构建脚本（调用 ridl-tool 生成代码）
+├── Cargo.toml              # App manifest（RIDL 模块选择单一事实源 / SoT）
+├── build.rs                # App 构建脚本：调用 ridl-tool 生成 app OUT_DIR 下的 ridl_initialize.rs 等
 ├── src/
 │   └── main.rs             # 主程序入口
-├── generated/              # 生成产物（*_glue.rs、*_impl.rs、ridl_symbols.rs 等）
-├── ridl_modules/           # RIDL 模块源码与生成物的源目录
-│   ├── stdlib/
+├── ridl-modules/           # RIDL 模块 crate（每个模块是一个独立 Rust crate）
 │   └── stdlib_demo/
 ├── deps/
 │   ├── mquickjs/           # QuickJS 源码
-│   ├── mquickjs-rs/        # Rust 绑定库
-│   └── ridl-tool/          # RIDL 解析/校验/生成 CLI
+│   ├── mquickjs-sys/       # 原生构建编排（负责产出 libmquickjs.a；不暴露 Rust API）
+│   ├── mquickjs-rs/        # Rust 封装层（负责 bindgen + 链接 libmquickjs.a；提供 ridl_initialize! 宏）
+│   └── ridl-tool/          # RIDL 解析/校验/生成 CLI（crate: ridl-tool；bin: ridl-tool）
 ├── docs/                   # 项目文档
 └── doc/planning/           # 需求计划文档（每个需求一份计划）
 ```
@@ -37,7 +36,8 @@ mquickjs-demo/
 
 ### 创建/接入新模块（当前流程）
 
-> 现在新增 RIDL module 时不需要修改 mquickjs-rs 的 `build.rs` 或 registry 的 Rust 代码；只需要在 `ridl-modules/registry/Cargo.toml` 添加一个 path 依赖即可纳入聚合。
+> 现在新增 RIDL module 时，不需要修改 mquickjs-rs/mquickjs-sys 的 build.rs。
+> 只需要在 **最终 App 的 Cargo.toml** 里添加对应 RIDL module 的 path dependency，即可纳入聚合（App manifest 是单点注册/SoT）。
 
 #### 1) 创建模块 crate
 
@@ -53,9 +53,14 @@ ridl-modules/<your_module>/
 
 判定规则：只有当 `ridl-modules/<your_module>/src/` 下至少存在 1 个 `*.ridl` 文件时，该 crate 才会被视为 RIDL module 并参与聚合。
 
-#### 2) 在 registry 做“单一注册”
+#### 2) 在 App manifest 做“单一注册”
 
-编辑：`ridl-modules/registry/Cargo.toml`
+编辑：仓库根 `Cargo.toml` 的 `[dependencies]`，添加：
+
+```toml
+# RIDL modules selected for this app
+my_module = { path = "ridl-modules/my_module" }
+```
 
 ```toml
 [dependencies]
@@ -65,14 +70,19 @@ your_module = { path = "../your_module" }
 #### 3) 构建生成
 
 ```bash
+# 先构建 build.rs 依赖的工具（ridl-tool / mquickjs-build）
+cargo run -p xtask -- build-tools
+
+# 再编译（会执行 App build.rs 并生成 OUT_DIR 产物）
 cargo build
 ```
 
-构建时：
-- `ridl-modules/registry/build.rs` 生成 `$OUT_DIR/ridl_manifest.json` 并导出 `RIDL_REGISTRY_MANIFEST=$OUT_DIR/ridl_manifest.json`
-- `deps/mquickjs-rs/build.rs` 读取 `RIDL_REGISTRY_MANIFEST`，调用 `ridl-tool` 生成/聚合并更新：
-  - `deps/mquickjs-rs/generated/mquickjs_ridl_register.h`
-  - `deps/mquickjs-rs/generated/ridl_symbols.rs`
+构建时（当前实现）：
+- **App `build.rs`** 解析 App manifest（根 `Cargo.toml` 的 `[dependencies]`），筛选出 `src/` 下包含 `*.ridl` 的依赖 crate 作为 RIDL modules。
+- App `build.rs` 通过 `ridl-tool` 生成：
+  - `$OUT_DIR/ridl_initialize.rs`：聚合初始化入口（由 `mquickjs_rs::ridl_initialize!()` 引用）
+  - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开 `JS_RIDL_EXTENSIONS`
+- **mquickjs-sys `build.rs`** 使用 `mquickjs-build` 产出 `libmquickjs.a`；当启用 feature `ridl-extensions` 时，会把上面的 `mquickjs_ridl_register.h` 纳入编译。
 
 > 注意：当前示例模块为 `stdlib_demo`（位于 `ridl-modules/stdlib_demo/`），可参考其 `Cargo.toml` 与目录结构。
 
@@ -117,7 +127,7 @@ RIDL 定义的类型会自动映射到 Rust 类型：
 
 ### Glue文件职责（如my_module_glue.rs）
 
-生成的胶水代码文件（[my_module_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs)）承担以下职责：
+生成的胶水代码文件（例如 `<module>_glue.rs`）承担以下职责：
 
 1. **接口桥接**：作为 JavaScript 与 Rust 之间的桥接层
 2. **引擎兼容函数**：包含使用 `#[no_mangle` 和 `extern "C"` 标记的函数，这些函数直接暴露给JavaScript引擎（例如 `js_say_hello`）
@@ -155,20 +165,21 @@ RIDL 定义的类型会自动映射到 Rust 类型：
 运行以下命令构建项目：
 
 ```bash
+cargo run -p xtask -- build-tools
 cargo build
 ```
 
 此命令将：
-1. 执行 `build.rs` 脚本
-2. 生成 RIDL 标准库扩展
-3. 编译所有依赖
+1. 构建 build.rs 依赖的工具（`ridl-tool` / `mquickjs-build`）
+2. 执行 App `build.rs`（生成 `$OUT_DIR/ridl_initialize.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`）
+3. 按 feature 配置编译 QuickJS（`mquickjs-sys`）与 Rust 封装层（`mquickjs-rs`）
 4. 链接最终的可执行文件
 
 ## 调试技巧
 
 ### 调试 RIDL 生成的代码
 
-1. 检查生成的 [module_name_glue.rs](file:///home/peng/workspace/mquickjs-demo/tests/ridl_tests/stdlib/src/lib.rs) 文件内容
+1. 检查生成的 `<module>_glue.rs` 文件内容
 2. 确认函数签名是否正确
 3. 验证参数转换逻辑
 
@@ -184,11 +195,11 @@ cargo build
 
 1. "找不到 mquickjs-rs 依赖"：
    - 检查路径是否正确
-   - 确认 [Cargo.toml](file:///home/peng/workspace/mquickjs-demo/Cargo.toml) 中的依赖声明
+   - 确认根 `Cargo.toml` 中的依赖声明
 
-2. "函数符号未定义"：
-   - 检查函数是否使用 `#[no_mangle` 和 `extern "C"` 标记
-   - 确认函数名是否正确拼写
+2. "函数符号未定义"（例如 `js_sayhello`）
+   - 确认是否启用了 `ridl-extensions`，以及对应模块是否被 App 选入（根 `Cargo.toml` 的 `[dependencies]`）
+   - 对于 Rust 单元测试目标，如果链接到启用了扩展的 `libmquickjs.a`，也需要把模块的 `js_*` 符号强制拉入/保活（否则会在链接阶段报 undefined symbol）
 
 3. "类型转换错误"：
    - 检查 RIDL 定义和 Rust 实现之间的类型匹配
@@ -289,6 +300,21 @@ cargo build
 2. 测试覆盖率满足要求
 3. 性能指标达标
 4. 文档更新完整
+
+## 测试策略
+
+- `mquickjs-sys` / `mquickjs-rs`：默认只测试“基础 QuickJS”（不开启 `ridl-extensions`），以保证 core crates 的 `cargo test` 可以稳定通过。
+- `mquickjs-demo`（App）：在需要验证 RIDL stdlib 扩展时，通过 feature `ridl-extensions` 开启，并在 App 侧做集成测试（因为扩展的符号拉入/保活与最终链接目标相关）。
+
+示例：
+
+```bash
+# core crates
+cargo test --workspace
+
+# app 集成测试（启用 RIDL 扩展）
+cargo test -p mquickjs-demo --features ridl-extensions
+```
 
 ## 常见问题
 

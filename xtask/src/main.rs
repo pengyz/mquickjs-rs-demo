@@ -32,7 +32,7 @@ fn build_tools() {
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("-p")
-        .arg("jidl-tool")
+        .arg("ridl-tool")
         .arg("-p")
         .arg("mquickjs-build");
     run(cmd);
@@ -40,7 +40,7 @@ fn build_tools() {
     // Print their expected locations for convenience.
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
     let bin_dir = if profile == "release" { "target/release" } else { "target/debug" };
-    eprintln!("Built tools under {bin_dir}/ (jidl-tool, mquickjs-build)");
+    eprintln!("Built tools under {bin_dir}/ (ridl-tool, mquickjs-build)");
 }
 
 fn run(mut cmd: Command) {

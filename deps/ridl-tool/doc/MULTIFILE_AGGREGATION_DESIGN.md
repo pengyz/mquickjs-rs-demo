@@ -263,8 +263,8 @@ pub fn generate_code(
 
 ### 2. 命令行接口
 支持多种使用方式：
-- 单文件处理：`jidl-tool file.ridl [output_dir]`
-- 多文件处理：`jidl-tool file1.ridl file2.ridl ... [output_dir]`
+- 单文件处理：`ridl-tool file.ridl [output_dir]`
+- 多文件处理：`ridl-tool file1.ridl file2.ridl ... [output_dir]`
 
 ## 测试策略
 

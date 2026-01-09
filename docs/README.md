@@ -21,7 +21,7 @@
 ### 开发指南
 - [开发指南](guides/development.md) - 开发者指南，包括 RIDL 模块开发、构建流程和最佳实践
 
-### RIDL 工具链（ridl-tool）设计/实现
+### RIDL 工具链（ridl-tool / deps/ridl-tool）设计/实现
 - [技术选型](../deps/ridl-tool/doc/TECH_SELECTION.md)
 - [语法规范](../deps/ridl-tool/doc/RIDL_GRAMMAR_SPEC.md)
 - [功能开发指南](../deps/ridl-tool/doc/FEATURE_DEVELOPMENT_GUIDE.md)

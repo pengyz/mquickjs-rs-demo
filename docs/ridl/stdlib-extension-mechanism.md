@@ -2,7 +2,9 @@
 
 ## 概述
 
-本项目通过修改 mquickjs 的标准库注册机制，将 RIDL（Rust Interface Description Language）定义的接口注册到 JS 环境中。我们通过自定义的构建流程生成 `mqjs_ridl_stdlib` 工具，该工具负责将 RIDL 定义的接口编译为 mquickjs 可用的标准库头文件。
+本项目通过修改 mquickjs 的标准库注册机制，将 RIDL（Rust Interface Description Language）定义的接口注册到 JS 环境中。
+
+关键约束：**注册必须发生在编译期**。C 侧 stdlib 表在编译时包含 `mquickjs_ridl_register.h` 并展开 `JS_RIDL_EXTENSIONS`，因此无法在运行时动态注册。
 
 ## 核心原理
 
@@ -12,7 +14,7 @@ mquickjs 通过 C 语言的结构体数组定义标准库函数和对象。其�
 
 ### 1. RIDL 定义
 - RIDL 文件定义了 JS 接口的签名和行为
-- 通过 `ridl-tool` 解析 RIDL 文件，生成对应的 Rust 胶水代码（`module_name_glue.rs`）
+- 通过 `ridl-tool` 解析 RIDL 文件，生成对应的 Rust 胶水代码（例如 `<module>_glue.rs`）
 - 开发者根据RIDL定义手动实现具体功能（`module_name_impl.rs`）
 
 ### 2. 模板文件生成
@@ -24,18 +26,18 @@ mquickjs 通过 C 语言的结构体数组定义标准库函数和对象。其�
 - `ridl-tool` 生成 `mquickjs_ridl_register.h` 头文件
 - 该文件定义了 `JS_RIDL_EXTENSIONS` 宏，包含所有 RIDL 定义的接口
 
-#### 聚合输入来源（registry 驱动）
+#### 聚合输入来源（App manifest 驱动 / SoT）
 
 `mquickjs_ridl_register.h` 属于“聚合头文件”，其输入是一组 RIDL 文件列表。
 当前实现中：
 
-- **RIDL 清单由 `ridl-modules/registry` 提供**：registry 的 `build.rs` 会解析 `Cargo.toml` 中的 `path` 依赖，筛选出 `src/` 下存在 `*.ridl` 的 crate 作为 RIDL module，然后把这些 `*.ridl` 的绝对路径写入 `$OUT_DIR/ridl_manifest.json`。
-- registry 同时通过环境变量导出清单路径：`RIDL_REGISTRY_MANIFEST=$OUT_DIR/ridl_manifest.json`。
-- **mquickjs 标准库生成由 `deps/mquickjs-rs` 负责**：`deps/mquickjs-rs/build.rs` 会读取 `RIDL_REGISTRY_MANIFEST`，并调用 `ridl-tool aggregate` 生成：
-  - `deps/mquickjs-rs/generated/mquickjs_ridl_register.h`
-  - `deps/mquickjs-rs/generated/ridl_symbols.rs`
+- **RIDL modules 由 App manifest（根 `Cargo.toml` 的 `[dependencies]`）决定**：只有当依赖 crate 的 `src/` 下至少存在 1 个 `*.ridl` 文件时，该 crate 才会被视为 RIDL module。
+- **App `build.rs` 负责生成聚合产物**（通过 `ridl-tool`）：
+  - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开 `JS_RIDL_EXTENSIONS`
+  - `$OUT_DIR/ridl_initialize.rs`：供 Rust 侧集中初始化（`mquickjs_rs::ridl_initialize!()`）
+- **mquickjs-sys `build.rs`** 在启用 feature `ridl-extensions` 时，将上面的 `mquickjs_ridl_register.h` 纳入 QuickJS stdlib 编译，从而把扩展项静态编进 `libmquickjs.a`。
 
-这样新增模块时只需要在 registry 的 `Cargo.toml` 添加 path 依赖即可被纳入聚合。
+因此新增模块时，不需要修改 mquickjs-sys/mquickjs-rs 的 build.rs；只需要在最终 App 的 `Cargo.toml` 添加对应模块依赖即可。
 
 ## 标准库模块化机制
 

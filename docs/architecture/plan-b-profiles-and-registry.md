@@ -23,7 +23,7 @@
 
 ### 2.1 SoT：以最终 App 的 Cargo 依赖图作为注册源
 
-- 不再要求存在专门的 `ridl-modules/registry` 作为 SoT。
+- 不再要求存在专门的 `ridl-modules/registry` 作为 SoT（当前 SoT 为 App manifest：根 `Cargo.toml` 的 `[dependencies]`）。
 - 最终 App（例如仓库根 `mquickjs-demo` 的 `Cargo.toml`）作为 registry source：
   - App 显式以 path dependency 依赖所需 RIDL modules（如 `ridl-modules/stdlib_demo`）。
   - 构建时根据该依赖图解析得到“需要注册的 RIDL modules”。
@@ -46,11 +46,11 @@
 `deps/mquickjs-sys/build.rs` 是 C 产物与 bindings 的单点构建入口：
 
 1) 读取 `mquickjs.build.toml`：确定当前 profile 与其 `app_manifest`
-2) 调用 `jidl-tool resolve --manifest-path <app_manifest>`：
+2) 调用 `ridl-tool resolve --manifest-path <app_manifest>`：
    - 解析依赖图
    - 仅保留 path deps 且其 `<dep>/src` 含 `*.ridl` 的 crate
    - 生成 `ridl_plan.json`
-3) 调用 `jidl-tool generate --plan <ridl_plan.json> --out <outdir>`：
+3) 调用 `ridl-tool generate --plan <ridl_plan.json> --out <outdir>`：
    - 生成 per-module 产物（Rust glue、symbols 等）
    - 生成聚合头 `mquickjs_ridl_register.h`（含 `JS_RIDL_EXTENSIONS`）
 4) 调用 `mquickjs-build`：

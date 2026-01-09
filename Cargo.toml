@@ -17,8 +17,12 @@ name = "mquickjs-demo"
 path = "src/main.rs"
 
 [dependencies]
-mquickjs-rs = { path = "deps/mquickjs-rs", features = ["ridl-extensions"] }
+mquickjs-rs = { path = "deps/mquickjs-rs" }
 mquickjs-sys = { path = "deps/mquickjs-sys" }
 
 # RIDL modules selected for this app
 stdlib_demo = { path = "ridl-modules/stdlib_demo" }
+
+[features]
+# App opt-in for RIDL stdlib extensions.
+ridl-extensions = ["mquickjs-rs/ridl-extensions"]

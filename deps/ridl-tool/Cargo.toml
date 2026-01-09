@@ -1,5 +1,5 @@
 [package]
-name = "jidl-tool"
+name = "ridl-tool"
 version = "0.1.0"
 edition = "2021"
 
@@ -12,5 +12,5 @@ toml = "0.8"
 askama = { version = "0.12", features = ["config"] }
 
 [lib]
-name = "jidl_tool"
+name = "ridl_tool"
 path = "src/lib.rs"

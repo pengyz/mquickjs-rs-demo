@@ -2,7 +2,7 @@
 
 ## 概述
 
-本文档详细介绍了如何开发和集成基于RIDL的Feature模块。Feature模块是指实现特定功能的独立Cargo工程，它们通过jidl-tool生成绑定代码，并通过mquickjs提供JavaScript接口。
+本文档详细介绍了如何开发和集成基于RIDL的Feature模块。Feature模块是指实现特定功能的独立Cargo工程，它们通过ridl-tool生成绑定代码，并通过mquickjs提供JavaScript接口。
 
 ## 项目结构
 
@@ -24,7 +24,7 @@ features/network/
 mquickjs-rs/
 ├── Cargo.toml          # workspace定义
 ├── deps/
-│   ├── jidl-tool/     # RIDL工具
+│   ├── ridl-tool/     # RIDL工具
 │   ├── mquickjs-rs/   # Rust绑定
 │   └── mquickjs/      # C引擎
 ├── features/
@@ -126,7 +126,7 @@ impl MyFeature for MyFeatureImpl {
 
 // 初始化函数
 pub fn init_module(ctx: &Context) -> Result<()> {
-    // 这里会由jidl-tool生成的代码调用
+    // 这里会由ridl-tool生成的代码调用
     Ok(())
 }
 ```
@@ -138,7 +138,7 @@ pub fn init_module(ctx: &Context) -> Result<()> {
 ``toml
 [workspace]
 members = [
-    "deps/jidl-tool",
+    "deps/ridl-tool",
     "deps/mquickjs-rs",
     "features/network",
     "features/deviceinfo",
@@ -199,11 +199,11 @@ msgpack struct Config {
 
 ### 1. 代码生成
 
-运行jidl-tool收集所有RIDL文件并生成绑定代码：
+运行ridl-tool收集所有RIDL文件并生成绑定代码：
 
 ```bash
 # 收集并生成所有绑定代码
-cargo run -p jidl-tool -- --generate-all
+cargo run -p ridl-tool -- --generate-all
 
 # 或者使用make命令（如果配置了）
 make generate-bindings
@@ -228,7 +228,7 @@ cargo build -p my_feature
 set -e
 
 echo "Step 1: Generate bindings from all .ridl files..."
-cargo run -p jidl-tool -- --generate-all
+cargo run -p ridl-tool -- --generate-all
 
 echo "Step 2: Build the project..."
 cargo build
@@ -337,7 +337,7 @@ mod tests {
 
 ### 1. 生成代码检查
 
-检查jidl-tool生成的代码：
+检查ridl-tool生成的代码：
 
 ```
 # 生成的Rust代码
@@ -387,7 +387,7 @@ impl MyFeature for MyFeatureImpl {
 
 ## 相关文档
 
-- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
-- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
-- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
-- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/jidl-tool/doc/TECH_SELECTION.md) - jidl-tool的技术选型和实现计划
+- [RIDL_DESIGN.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_DESIGN.md) - RIDL设计文档，提供设计原则和语法设计背景
+- [RIDL_GRAMMAR_SPEC.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/RIDL_GRAMMAR_SPEC.md) - 词法和文法规范，提供详细语法定义
+- [IMPLEMENTATION_GUIDE.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/IMPLEMENTATION_GUIDE.md) - 与 Rust 实现的对应关系和代码生成机制
+- [TECH_SELECTION.md](file:///home/peng/workspace/mquickjs-rs-demo/deps/ridl-tool/doc/TECH_SELECTION.md) - ridl-tool的技术选型和实现计划
