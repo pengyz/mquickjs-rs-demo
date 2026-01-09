@@ -223,6 +223,19 @@ pub fn generate_module_files(
     Ok(())
 }
 
+pub fn generate_module_api_file(
+    out_dir: &Path,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let api = "// Generated module initializer API for RIDL extensions\n\
+\
+pub fn initialize_module() {\n\
+    crate::generated::symbols::ensure_symbols();\n\
+}\n";
+
+    std::fs::write(out_dir.join("ridl_module_api.rs"), api)?;
+    Ok(())
+}
+
 pub fn generate_shared_files(
     ridl_files: &[String],
     output_dir: &str,
@@ -302,13 +315,13 @@ pub fn generate_shared_files(
     for (_module_name, functions, interfaces) in &all_module_symbols {
         for function in functions {
             let func_name_lower = function.name.to_lowercase();
-            agg_symbols_content.push_str(&format!("extern \"C\" {{ fn js_{func}(ctx: *mut JSContext, this_val: JSValue, argc: i32, argv: *mut JSValue) -> JSValue; }}\n", func=func_name_lower));
+            agg_symbols_content.push_str(&format!("unsafe extern \"C\" {{ fn js_{func}(ctx: *mut JSContext, this_val: JSValue, argc: i32, argv: *mut JSValue) -> JSValue; }}\n", func=func_name_lower));
         }
         for interface in interfaces {
             for method in &interface.methods {
                 let interface_name_lower = interface.name.to_lowercase();
                 let method_name_lower = method.name.to_lowercase();
-                agg_symbols_content.push_str(&format!("extern \"C\" {{ fn js_{iface}_{meth}(ctx: *mut JSContext, this_val: JSValue, argc: i32, argv: *mut JSValue) -> JSValue; }}\n",
+                agg_symbols_content.push_str(&format!("unsafe extern \"C\" {{ fn js_{iface}_{meth}(ctx: *mut JSContext, this_val: JSValue, argc: i32, argv: *mut JSValue) -> JSValue; }}\n",
                     iface=interface_name_lower, meth=method_name_lower));
             }
         }
@@ -332,9 +345,14 @@ pub fn generate_shared_files(
     }
     agg_symbols_content.push_str("}\n");
 
-    std::fs::write(
-        std::path::Path::new(output_dir).join("ridl_symbols.rs"),
-        agg_symbols_content,
-    )?;
+    let out_dir = std::path::Path::new(output_dir);
+
+    std::fs::write(out_dir.join("ridl_symbols.rs"), &agg_symbols_content)?;
+
+    // Generate a small helper module that strongly references the selected module crates.
+    // This ensures the rlibs that define js_* symbols are linked into the final binary.
+    // NOTE: module list must be derived from the resolve plan (crate names), not ridl file stems.
+    // `generate` command will assemble this file using plan.modules.
+
     Ok(())
 }

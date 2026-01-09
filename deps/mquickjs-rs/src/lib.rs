@@ -1,5 +1,12 @@
+// bindgen output is noisy and not actionable for this project.
+#[allow(
+    non_camel_case_types,
+    non_snake_case,
+    non_upper_case_globals,
+    clippy::all
+)]
 pub mod mquickjs_ffi {
-    pub use mquickjs_sys::*;
+    include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 }
 
 pub use context::Context;
@@ -13,19 +20,27 @@ pub mod object;
 pub mod value;
 
 pub fn register_extensions() {
-    // This is a user-facing initialization step.
-    // Compile-time RIDL registration happens in the C stdlib tables.
-    // Here we ensure all RIDL module glue symbols are linked and available.
-    #[cfg(feature = "ridl-modules")]
-    {
-        stdlib_demo::ensure_linked();
-    }
+    // Kept for API compatibility.
+    // In mquickjs, C-side registration is compile-time only. The application is responsible for
+    // selecting RIDL modules and linking their symbols.
+}
+
+#[macro_export]
+macro_rules! ridl_initialize {
+    () => {{
+        mod __mquickjs_ridl_initialize {
+            include!(concat!(env!("OUT_DIR"), "/ridl_initialize.rs"));
+        }
+
+        __mquickjs_ridl_initialize::ridl_initialize::initialize();
+    }};
 }
 
 #[deprecated(note = "Use register_extensions() instead.")]
 pub fn register_all_ridl_modules() {
     register_extensions();
 }
+
 
 #[cfg(test)]
 mod tests {

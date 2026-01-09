@@ -2,9 +2,11 @@ mod generated;
 
 pub mod impls;
 
-pub fn ensure_linked() {
-    generated::symbols::ensure_symbols();
+mod __ridl_module_api {
+    include!(concat!(env!("OUT_DIR"), "/ridl_module_api.rs"));
 }
+
+pub use __ridl_module_api::initialize_module;
 
 pub fn register(_ctx: *mut mquickjs_sys::JSContext) {
     // Registration is compile-time via C stdlib tables.

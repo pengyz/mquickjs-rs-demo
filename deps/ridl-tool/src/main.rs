@@ -166,10 +166,40 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .to_string();
                     generator::generate_module_files(&items, &module_out, &module_name)?;
                 }
+
             }
 
-            // aggregate header (must be placed at <out>/mquickjs_ridl_register.h for mquickjs-build)
+            // aggregate header + symbols
             generator::generate_shared_files(&ridl_files, out_dir.to_str().ok_or("Invalid out dir")?)?;
+
+            // app-side module initialization aggregator (derived from plan.modules crate names)
+            let init_path = out_dir.join("ridl_modules_initialize.rs");
+            let mut init_rs = String::new();
+            init_rs.push_str("// Generated module initialization for RIDL extensions\n");
+            init_rs.push_str("pub fn initialize_modules() {\n");
+            for m in &plan.modules {
+                init_rs.push_str(&format!("    {crate_name}::initialize_module();\n", crate_name = m.crate_name));
+            }
+            init_rs.push_str("}\n");
+            fs::write(&init_path, init_rs)?;
+
+            // unified initializer entrypoint (used by macro include)
+            let unified_path = out_dir.join("ridl_initialize.rs");
+            let unified_rs = "// Generated RIDL initializer entrypoint\n\
+pub mod ridl_initialize {\n\
+    mod symbols {\n\
+        include!(concat!(env!(\"OUT_DIR\"), \"/ridl_symbols.rs\"));\n\
+    }\n\
+    mod modules {\n\
+        include!(concat!(env!(\"OUT_DIR\"), \"/ridl_modules_initialize.rs\"));\n\
+    }\n\
+\n\
+    pub fn initialize() {\n\
+        modules::initialize_modules();\n\
+        symbols::ensure_symbols();\n\
+    }\n\
+}\n";
+            fs::write(&unified_path, unified_rs)?;
         }
         _ => {
             eprintln!("Unknown command: {}", command);

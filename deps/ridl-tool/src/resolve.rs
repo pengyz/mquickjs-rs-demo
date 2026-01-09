@@ -71,6 +71,7 @@ pub fn resolve_from_cargo_toml(cargo_toml_path: &Path, out_dir: &Path) -> Result
         }
 
         modules.push(RidlModule {
+            crate_name: dep_name.clone(),
             name: dep_name,
             crate_dir,
             ridl_files,

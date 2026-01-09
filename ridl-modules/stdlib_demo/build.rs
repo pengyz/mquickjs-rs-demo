@@ -18,6 +18,9 @@ fn main() {
     jidl_tool::generator::generate_module_files(&items, out_dir, "stdlib_demo")
         .expect("generate module files");
 
+    jidl_tool::generator::generate_module_api_file(out_dir)
+        .expect("generate module api");
+
     // Also generate module-local symbols file (we'll include it from OUT_DIR).
     // The current generator doesn't have a dedicated per-module symbols command, so we
     // reuse shared-file generation on a single ridl.

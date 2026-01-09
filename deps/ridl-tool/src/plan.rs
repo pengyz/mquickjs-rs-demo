@@ -12,6 +12,9 @@ pub struct RidlPlan {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct RidlModule {
+    /// Dependency key / Rust crate ident used by downstream Rust code (e.g. `stdlib_demo`).
+    pub crate_name: String,
+    /// Logical module name (currently equals dependency key).
     pub name: String,
     pub crate_dir: PathBuf,
     pub ridl_files: Vec<PathBuf>,
