@@ -87,7 +87,9 @@ group_type = { "(" ~ WS ~ type ~ WS ~ ")" }
 
 // Parameter list - correctly handling empty parameter list
 param_list = { param ~ (WS ~ "," ~ WS ~ param)* }
-param = { identifier ~ WS ~ ":" ~ WS ~ type }
+param = { variadic_param | normal_param }
+normal_param = { identifier ~ WS ~ ":" ~ WS ~ type }
+variadic_param = { "..." ~ identifier ~ WS ~ ":" ~ WS ~ type }
 
 // Literals
 literal = { string_literal | integer_literal | float_literal | bool_literal }

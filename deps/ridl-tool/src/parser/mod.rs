@@ -574,54 +574,58 @@ fn parse_param_list(
         }
     }
 
+    // 语义约束：variadic 参数必须是最后一个
+    if let Some(last_variadic_idx) = params.iter().position(|p| p.variadic) {
+        if last_variadic_idx != params.len() - 1 {
+            return Err("Variadic parameter must be the last parameter".into());
+        }
+        if params.iter().skip(last_variadic_idx + 1).any(|p| p.variadic) {
+            return Err("Only one variadic parameter is allowed".into());
+        }
+    }
+
     Ok(params)
 }
 
 fn parse_param(pair: pest::iterators::Pair<Rule>) -> Result<Param, Box<dyn std::error::Error>> {
-    let inner_pairs = pair.into_inner();
-
-    // 按照语法定义：param = { identifier ~ WS ~ ":" ~ WS ~ type }
-    // 但是解析器会将所有子规则展开，所以需要找到标识符和类型
-    let mut name: Option<String> = None;
-    let mut param_type: Option<Type> = None;
-
-    let mut pair_iter = inner_pairs.peekable();
-
-    // 遍历所有子规则，识别标识符和类型
-    while let Some(p) = pair_iter.next() {
-        match p.as_rule() {
-            Rule::identifier => {
-                // 这应该是参数名
-                name = Some(p.as_str().to_string());
-            }
-            Rule::r#type => {
-                // 这是参数类型
-                param_type = Some(parse_type(p)?);
-            }
-            Rule::WS => {
-                // 跳过空白
-            }
-            _ => {
-                // 遇到其他规则，检查是否是冒号
-                if p.as_str() == ":" {
-                    // 冒号，继续处理
-                    continue;
-                } else {
-                    // 不期望的规则，继续处理而不是报错
-                    continue;
-                }
-            }
+    match pair.as_rule() {
+        Rule::param => {
+            // param = { variadic_param | normal_param }
+            let inner = pair
+                .into_inner()
+                .next()
+                .ok_or("Parameter definition is empty")?;
+            parse_param(inner)
         }
+        Rule::normal_param | Rule::variadic_param => {
+            let variadic = matches!(pair.as_rule(), Rule::variadic_param);
+            let mut inner_pairs = pair.into_inner();
+
+            let name_pair = inner_pairs
+                .next()
+                .ok_or("Parameter name not found in definition")?;
+            if name_pair.as_rule() != Rule::identifier {
+                return Err("Parameter name not found in definition".into());
+            }
+            let name = name_pair.as_str().to_string();
+
+            let type_pair = inner_pairs
+                .next()
+                .ok_or("Parameter type not found in definition")?;
+            if type_pair.as_rule() != Rule::r#type {
+                return Err("Parameter type not found in definition".into());
+            }
+            let param_type = parse_type(type_pair)?;
+
+            Ok(Param {
+                name,
+                param_type,
+                optional: false,
+                variadic,
+            })
+        }
+        _ => Err(format!("Unexpected rule for param: {:?}", pair.as_rule()).into()),
     }
-
-    let name = name.ok_or("Parameter name not found in definition")?;
-    let param_type = param_type.ok_or("Parameter type not found in definition")?;
-
-    Ok(Param {
-        name,
-        param_type,
-        optional: false, // 简化处理，不支持可选参数
-    })
 }
 
 fn parse_enum(pair: pest::iterators::Pair<Rule>) -> Result<Enum, Box<dyn std::error::Error>> {

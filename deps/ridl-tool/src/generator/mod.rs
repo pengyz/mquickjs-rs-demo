@@ -143,8 +143,7 @@ impl TemplateParam {
     fn from_with_mode(param: Param, file_mode: crate::parser::FileMode) -> Self {
         let name = param.name;
         let ty = param.param_type.clone();
-        let (mut glue_extract, glue_arg) = glue_param_snippet(&name, &ty, file_mode);
-        // Fill argv indices later in caller where we know the order.
+        let (glue_extract, glue_arg) = glue_param_snippet(&name, &ty, param.variadic, file_mode);
 
         Self {
             name,
@@ -170,89 +169,152 @@ fn rust_type_name_for_codegen(ty: &Type) -> String {
 fn glue_param_snippet(
     name: &str,
     ty: &Type,
-    file_mode: crate::parser::FileMode,
+    variadic: bool,
+    _file_mode: crate::parser::FileMode,
 ) -> (String, String) {
     let idx = "{IDX}";
+    // NOTE: avoid nested format! strings that contain `{name}` because the outer Rust format! will
+    // treat them as placeholders and emit warnings.
+    let vararg_err_name = format!("{}[{}]", name, "{}");
+
     match ty {
         Type::String => {
-            let strict_check = match file_mode {
-                crate::parser::FileMode::Strict => format!(
-                    "if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
-                    idx0 = "{IDX0}",
-                    name = name
-                ),
-                crate::parser::FileMode::Default => "".to_string(),
-            };
+            if variadic {
+                return (
+                    format!(
+                        "let mut {name}: Vec<*const c_char> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\n    let ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut {name}_buf as *mut _);\n    if ptr.is_null() {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    {name}.push(ptr);\n}}",
+                        name = name,
+                        idx0 = "{IDX0}",
+                        vararg_err_name = vararg_err_name
+                    ),
+                    name.to_string(),
+                );
+            }
+
+            let check = format!(
+                "if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
+                idx0 = "{IDX0}",
+                name = name
+            );
 
             (
                 format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n{strict_check}let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\nlet {name}_ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _);\nif {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n// v1: treat the returned pointer as a temporary view. Do not store it, and do not cross async boundaries.\n// NOTE: this fork may allocate a C string for non-inline cases; v1 does not call JS_FreeCString yet.\nlet {name}: *const c_char = {name}_ptr;",
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n{check}let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\nlet {name}_ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _);\nif {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\nlet {name}: *const c_char = {name}_ptr;",
                     idx = idx,
                     idx0 = "{IDX0}",
                     name = name,
-                    strict_check = strict_check
+                    check = check
                 ),
                 name.to_string(),
             )
         }
-        Type::Int => (
-            format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: i32 = 0;\n{strict_check}if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
-                idx = idx,
-                idx0 = "{IDX0}",
-                name = name,
-                strict_check = match file_mode {
-                    crate::parser::FileMode::Strict => format!(
-                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \\\"invalid int argument: {name}\\\"); }}\\n",
+        Type::Int => {
+            if variadic {
+                return (
+                    format!(
+                        "let mut {name}: Vec<i32> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    let mut out: i32 = 0;\n    if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut out as *mut _, v) < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
+                        name = name,
+                        idx0 = "{IDX0}",
+                        vararg_err_name = vararg_err_name
+                    ),
+                    name.to_string(),
+                );
+            }
+
+            (
+                format!(
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: i32 = 0;\n{check}if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
+                    idx = idx,
+                    idx0 = "{IDX0}",
+                    name = name,
+                    check = format!(
+                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n",
                         idx0 = "{IDX0}",
                         name = name
+                    )
+                ),
+                name.to_string(),
+            )
+        }
+        Type::Bool => {
+            if variadic {
+                return (
+                    format!(
+                        "let mut {name}: Vec<bool> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let rel = i - {idx0};\n    let v: u32 = unsafe {{ *argv.add(i) }} as u32;\n    if (v & ((1 << mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1)) != 3 {{ return js_throw_type_error(ctx, &format!(\"invalid bool argument: {vararg_err_name}\", rel)); }}\n    {name}.push(v != 3);\n}}",
+                        name = name,
+                        idx0 = "{IDX0}",
+                        vararg_err_name = vararg_err_name
                     ),
-                    crate::parser::FileMode::Default => "".to_string(),
-                }
-            ),
-            name.to_string(),
-        ),
-        Type::Bool => (
-            format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+                    name.to_string(),
+                );
+            }
+
+            (
+                format!(
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
 // Only accept actual booleans in v1.
 // bindings doesn't expose JS_IsBool; detect via NaN-boxed tag (JS_TAG_BOOL = 3).
 let {name}_v: u32 = unsafe {{ *argv.add({idx0}) }} as u32;\n\
 if ({name}_v & ((1 << mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1)) != 3 {{ return js_throw_type_error(ctx, \"invalid bool argument: {name}\"); }}\n\
 let {name}: bool = {name}_v != 3;",
-                idx = idx,
-                idx0 = "{IDX0}",
-                name = name
-            ),
-            name.to_string(),
-        ),
-        Type::Double | Type::Float => (
-            format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: f64 = 0.0;\n{strict_check}if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
-                idx = idx,
-                idx0 = "{IDX0}",
-                name = name,
-                strict_check = match file_mode {
-                    crate::parser::FileMode::Strict => format!(
-                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \\\"invalid double argument: {name}\\\"); }}\\n",
+                    idx = idx,
+                    idx0 = "{IDX0}",
+                    name = name
+                ),
+                name.to_string(),
+            )
+        }
+        Type::Double | Type::Float => {
+            if variadic {
+                return (
+                    format!(
+                        "let mut {name}: Vec<f64> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    let mut out: f64 = 0.0;\n    if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut out as *mut _, v) < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
+                        name = name,
+                        idx0 = "{IDX0}",
+                        vararg_err_name = vararg_err_name
+                    ),
+                    name.to_string(),
+                );
+            }
+
+            (
+                format!(
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: f64 = 0.0;\n{check}if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
+                    idx = idx,
+                    idx0 = "{IDX0}",
+                    name = name,
+                    check = format!(
+                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n",
                         idx0 = "{IDX0}",
                         name = name
+                    )
+                ),
+                name.to_string(),
+            )
+        }
+        Type::Any => {
+            if variadic {
+                return (
+                    format!(
+                        "let mut {name}: Vec<JSValue> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    {name}.push(unsafe {{ *argv.add(i) }});\n}}",
+                        name = name,
+                        idx0 = "{IDX0}"
                     ),
-                    crate::parser::FileMode::Default => "".to_string(),
-                }
-            ),
-            name.to_string(),
-        ),
-        Type::Any => (
-            format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+                    name.to_string(),
+                );
+            }
+
+            (
+                format!(
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
 let {name}: JSValue = unsafe {{ *argv.add({idx0}) }};",
-                idx = idx,
-                idx0 = "{IDX0}",
-                name = name
-            ),
-            name.to_string(),
-        ),
+                    idx = idx,
+                    idx0 = "{IDX0}",
+                    name = name
+                ),
+                name.to_string(),
+            )
+        }
         _ => (
             format!("compile_error!(\"v1 glue: unsupported param type '{ty}' for {name}\");", ty = ty, name = name),
             name.to_string(),

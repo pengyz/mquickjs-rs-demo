@@ -14,7 +14,7 @@ fn main() {
     let content = std::fs::read_to_string(ridl_path).expect("read ridl");
     let parsed = ridl_tool::parser::parse_ridl_file(&content).expect("parse ridl");
     let items = parsed.items;
-    ridl_tool::validator::validate(&items).expect("validate ridl");
+    ridl_tool::validator::validate_with_mode(&items, parsed.mode).expect("validate ridl");
 
     ridl_tool::generator::generate_module_files(&items, parsed.mode, out_dir, "stdlib_demo2")
         .expect("generate module files");

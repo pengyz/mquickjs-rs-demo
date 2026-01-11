@@ -123,6 +123,7 @@ pub struct Param {
     pub name: String,
     pub param_type: Type,
     pub optional: bool,
+    pub variadic: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

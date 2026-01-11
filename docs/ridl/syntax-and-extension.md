@@ -9,8 +9,33 @@ RIDL (Rust Interface Definition Language) 是一种用于定义 JavaScript 接�
 1. **强类型**：所有接口、方法、属性都必须有明确的类型声明
 2. **ES5 兼容**：语法设计基于 ES5 的功能集
 3. **Rust 集成**：类型定义与 Rust 类型映射
-4. **自动转换**：支持 JSValue 到 Rust 类型，Rust 类型到 JSValue 的类型转换
+4. **强类型优先**：默认不依赖 JS 的隐式类型转换（ToString/ToNumber）。如需额外收紧，可使用 `mode strict;`。
 5. **Rust 风格语法**：采用类似 Rust 的语法风格，包括类型后置等特性
+
+## 文法（精简）
+
+以下片段用于描述本项目 RIDL 的关键扩展点（非完整语法）。实现以 `deps/ridl-tool/src/parser/grammar.pest` 为准。
+
+### 文件级 mode
+
+- 必须在文件顶部，且位于 `module ...` 之前
+
+```ebnf
+idl          ::= SOI mode_decl? module_decl? definition* EOI
+mode_decl    ::= "mode" WS mode_name ";"
+mode_name    ::= "strict"
+```
+
+### 参数与可变参数（varargs）
+
+- `...` 只能出现在参数列表的最后一个参数
+
+```ebnf
+param_list   ::= param ("," param)*
+param        ::= normal_param | variadic_param
+normal_param ::= identifier ":" type
+variadic_param ::= "..." identifier ":" type
+```
 
 ## 类型后置规则
 
@@ -174,11 +199,12 @@ singleton console {
 ### 语义（v1）
 
 - default（未声明 mode）
-  - 允许 QuickJS 默认转换（例如 string<->number 的 ToString/ToNumber）
-  - 例：`echo_str(123)` 返回 `"123"`
-  - 例：`add_i32("1", "2")` 返回 `3`
+  - 强类型（安全优先）：参数必须满足声明的 JS 类型；不进行 JS 默认转换（ToString/ToNumber）。
+  - 例：`echo_str(123)` 抛 TypeError（因为参数必须是 string）
+  - 例：`add_i32("1", "2")` 抛 TypeError（因为参数必须是 number）
 
 - strict
+  - 同样是强类型；并额外收紧：禁止 `any` 出现在非可变参数位置。
   - 对不满足类型要求的参数：抛 TypeError，并返回 `JS_EXCEPTION`
 
 ### 当前类型检查策略（v1）
@@ -187,22 +213,42 @@ singleton console {
 
 - `string`
   - strict：必须是 JS string（`JS_IsString(ctx, val) != 0`），否则 TypeError
-  - default：允许 ToString（通过 `JS_ToCString`）
+  - default：必须是 JS string（不允许 ToString）
 
 - `bool`
   - strict/default：必须是 JS bool（内部基于 tag 检查 `JS_TAG_BOOL`）
 
 - `int` / `double`
-  - strict：当前实现会先做 `JS_IsNumber` 检查，再 `JS_ToInt32` / `JS_ToNumber`
-  - default：直接 `JS_ToInt32` / `JS_ToNumber`（允许 ToNumber）
-  - 备注：后续计划在 strict 下也放宽 int/double（仅依赖 ToInt32/ToNumber），以贴近 JS 开发者心智
+  - strict：必须是 JS number（`JS_IsNumber`），然后 `JS_ToInt32` / `JS_ToNumber`
+  - default：必须是 JS number（`JS_IsNumber`），然后 `JS_ToInt32` / `JS_ToNumber`
 
 - `any`
-  - strict/default：不做类型限制（透传）
+  - default：允许（不做类型限制，透传）
+  - strict：仅允许用于可变参数（varargs）。非 varargs 位置使用 `any` 会在 RIDL 校验阶段报错。
 
 ### 限制与后续
 
 - v1 暂不对 `null/undefined` 做额外限制（等 nullable/optional 类型完善后再扩展 strict 规则）。
+
+## 可变参数（varargs）
+
+RIDL 支持在函数/方法参数列表中声明可变参数（必须位于最后一个参数位置）：
+
+```ridl
+fn log(...args: any);
+fn sum(...nums: int) -> int;
+```
+
+语义：
+
+- `...args: T` 表示该参数会绑定到 `argv[idx..argc)` 的所有剩余参数。
+- `T` 的检查按文件 mode 执行：
+  - default：强类型（安全优先），逐元素检查必须满足 T。
+  - strict：同样逐元素强类型检查；并且仅 varargs 位置允许 `T = any`。
+
+错误：
+
+- 若某个元素类型不匹配，应抛 TypeError（建议消息带上参数名与元素下标，例如 `invalid int argument: nums[2]`）。
 
 ## 基础类型映射
 

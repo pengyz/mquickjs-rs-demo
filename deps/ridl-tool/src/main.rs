@@ -47,7 +47,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let content = std::fs::read_to_string(ridl_file)?;
                 let parsed = parser::parse_ridl_file(&content)?;
                 let items = parsed.items;
-                validator::validate(&items)?;
+                validator::validate_with_mode(&items, parsed.mode)?;
 
                 // 从文件路径提取模块名
                 let module_name = Path::new(ridl_file)
@@ -159,7 +159,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     let content = fs::read_to_string(&ridl_file)?;
                     let parsed = parser::parse_ridl_file(&content)?;
                     let items = parsed.items;
-                    validator::validate(&items)?;
+                    validator::validate_with_mode(&items, parsed.mode)?;
                     let module_name = Path::new(&ridl_file)
                         .file_stem()
                         .ok_or("Invalid ridl file path")?

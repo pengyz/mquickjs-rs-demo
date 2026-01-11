@@ -1,1 +1,4 @@
-fn sayHello2() -> string;
+// stdlib_demo2: demo module for RIDL glue
+
+fn sum_i32(...nums: int) -> int;
+fn count_args(...args: any) -> int;

@@ -364,8 +364,15 @@ impl SemanticValidator {
     }
 }
 
-/// 验证IDL项目列表
+/// 验证IDL项目列表（默认模式：兼容旧行为）
 pub fn validate(items: &[IDLItem]) -> Result<(), Box<dyn std::error::Error>> {
+    validate_with_mode(items, crate::parser::FileMode::Default)
+}
+
+pub fn validate_with_mode(
+    items: &[IDLItem],
+    file_mode: crate::parser::FileMode,
+) -> Result<(), Box<dyn std::error::Error>> {
     // 创建一个临时的IDL结构体来包装items
     let mut idl = IDL {
         module: None,
@@ -397,7 +404,13 @@ pub fn validate(items: &[IDLItem]) -> Result<(), Box<dyn std::error::Error>> {
     // 创建验证器并验证
     let mut validator = SemanticValidator::new("unknown.ridl".to_string());
     match validator.validate(&idl) {
-        Ok(()) => Ok(()),
+        Ok(()) => {
+            // 附加规则：strict 下，禁止 any 出现在非 variadic 参数位置。
+            if matches!(file_mode, crate::parser::FileMode::Strict) {
+                validate_strict_any_usage(&idl)?;
+            }
+            Ok(())
+        }
         Err(errors) => {
             let error_messages: Vec<String> = errors
                 .iter()
@@ -406,4 +419,58 @@ pub fn validate(items: &[IDLItem]) -> Result<(), Box<dyn std::error::Error>> {
             Err(format!("Validation errors: {}", error_messages.join("; ")).into())
         }
     }
+}
+
+fn validate_strict_any_usage(idl: &IDL) -> Result<(), Box<dyn std::error::Error>> {
+    // functions
+    for f in &idl.functions {
+        validate_strict_any_params(&f.name, &f.params)?;
+    }
+
+    // interfaces
+    for i in &idl.interfaces {
+        for m in &i.methods {
+            validate_strict_any_params(&format!("{}.{}", i.name, m.name), &m.params)?;
+        }
+    }
+
+    // singletons
+    for s in &idl.singletons {
+        for m in &s.methods {
+            validate_strict_any_params(&format!("{}.{}", s.name, m.name), &m.params)?;
+        }
+    }
+
+    // classes (methods/ctor)
+    for c in &idl.classes {
+        if let Some(ctor) = &c.constructor {
+            validate_strict_any_params(&format!("{}::constructor", c.name), &ctor.params)?;
+        }
+        for m in &c.methods {
+            validate_strict_any_params(&format!("{}::{}", c.name, m.name), &m.params)?;
+        }
+    }
+
+    // callbacks
+    for cb in &idl.callbacks {
+        validate_strict_any_params(&format!("callback {}", cb.name), &cb.params)?;
+    }
+
+    Ok(())
+}
+
+fn validate_strict_any_params(
+    ctx: &str,
+    params: &[Param],
+) -> Result<(), Box<dyn std::error::Error>> {
+    for p in params {
+        if matches!(p.param_type, Type::Any) && !p.variadic {
+            return Err(format!(
+                "strict mode forbids `any` outside variadic parameters: {} param '{}'",
+                ctx, p.name
+            )
+            .into());
+        }
+    }
+    Ok(())
 }

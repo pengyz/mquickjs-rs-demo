@@ -25,14 +25,16 @@ var ok = false;
 try { add_i32(1); } catch (err1) { ok = true; }
 if (!ok) throw new Error("expected throw for missing arg");
 
-// non-strict: number conversions are allowed (e.g. strings may be coerced).
-if (add_i32("1", "2") !== 3) throw new Error("expected add_i32 to coerce strings in non-strict mode");
+ok = false;
+try { add_i32("1", "2"); } catch (err2) { ok = true; }
+if (!ok) throw new Error("expected throw for bad types (string -> int)");
 
 ok = false;
 try { not_bool(1); } catch (err3) { ok = true; }
 if (!ok) throw new Error("expected throw for bad types (number -> bool)");
 
-// non-strict: string conversions are allowed (e.g. numbers may be coerced).
-if (echo_str(123) !== "123") throw new Error("expected echo_str to coerce number in non-strict mode");
+ok = false;
+try { echo_str(123); } catch (err4) { ok = true; }
+if (!ok) throw new Error("expected throw for bad types (number -> string)");
 
 "ok";
