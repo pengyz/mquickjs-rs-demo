@@ -15,8 +15,13 @@ keyword = _{
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
 
 // Main entry point
-idl = { SOI ~ (WS? ~ module_decl ~ WS)? ~ (WS? ~ definition ~ WS?)* ~ EOI }
+idl = { SOI ~ (WS? ~ mode_decl ~ WS)? ~ (WS? ~ module_decl ~ WS)? ~ WS? ~ (definition ~ WS?)* ~ EOI }
 definition = { interface_def | class_def | enum_def | struct_def | global_function | callback_def | using_def | import_stmt | singleton_def }
+
+// File-level mode (RIDL extensions)
+mode_decl = { "mode" ~ WS ~ mode_name ~ WS? ~ ";" }
+mode_name = { identifier }
+
 module_decl = { "module" ~ WS ~ module_path ~ ("@" ~ WS ~ version)? }
 module_path = { identifier ~ ("." ~ identifier)* }
 version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }

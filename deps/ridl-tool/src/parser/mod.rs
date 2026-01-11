@@ -13,8 +13,25 @@ use ast::{
     Property, PropertyModifier, SerializationFormat, StructDef, Type,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FileMode {
+    Default,
+    Strict,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct ParsedIDL {
+    pub mode: FileMode,
+    pub items: Vec<IDLItem>,
+}
+
 /// 解析IDL内容
 pub fn parse_idl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Error>> {
+    Ok(parse_idl_file(content)?.items)
+}
+
+/// 解析IDL内容并携带文件级 mode 信息
+pub fn parse_idl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Error>> {
     let mut pairs =
         IDLParser::parse(Rule::idl, content).map_err(|e| format!("Parse error: {}", e))?;
 
@@ -22,10 +39,14 @@ pub fn parse_idl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Erro
     let idl_pair = pairs.next().unwrap();
     let mut items = Vec::new();
     let mut module: Option<ModuleDeclaration> = None;
+    let mut mode: FileMode = FileMode::Default;
 
     // 遍历idl内部的元素
     for pair in idl_pair.into_inner() {
         match pair.as_rule() {
+            Rule::mode_decl => {
+                mode = parse_mode_decl(pair)?;
+            }
             Rule::module_decl => {
                 // 解析模块声明，只在开头出现
                 module = Some(parse_module_decl(pair)?);
@@ -44,12 +65,28 @@ pub fn parse_idl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Erro
         }
     }
 
-    Ok(items)
+    Ok(ParsedIDL { mode, items })
+}
+
+fn parse_mode_decl(pair: pest::iterators::Pair<Rule>) -> Result<FileMode, Box<dyn std::error::Error>> {
+    let mut inner_pairs = pair.into_inner();
+    let mode_name_pair = inner_pairs.next().ok_or("Mode declaration has no name")?;
+    let name = mode_name_pair.as_str();
+
+    match name {
+        "strict" => Ok(FileMode::Strict),
+        _ => Err(format!("Unknown mode: {name}").into()),
+    }
 }
 
 /// 解析RIDL内容（与parse_idl相同，用于API一致性）
 pub fn parse_ridl(content: &str) -> Result<Vec<IDLItem>, Box<dyn std::error::Error>> {
     parse_idl(content)
+}
+
+/// 解析RIDL内容并携带文件级 mode 信息
+pub fn parse_ridl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Error>> {
+    parse_idl_file(content)
 }
 
 fn parse_module_decl(

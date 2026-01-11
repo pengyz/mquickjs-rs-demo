@@ -45,7 +45,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
                 // 解析RIDL文件
                 let content = std::fs::read_to_string(ridl_file)?;
-                let items = parser::parse_ridl(&content)?;
+                let parsed = parser::parse_ridl_file(&content)?;
+                let items = parsed.items;
                 validator::validate(&items)?;
 
                 // 从文件路径提取模块名
@@ -57,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string();
 
                 // 生成模块特定文件
-                generator::generate_module_files(&items, Path::new(output_dir), &module_name)?;
+                generator::generate_module_files(&items, parsed.mode, Path::new(output_dir), &module_name)?;
             }
         }
         "aggregate" => {
@@ -156,7 +157,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 for f in &m.ridl_files {
                     let ridl_file = f.display().to_string();
                     let content = fs::read_to_string(&ridl_file)?;
-                    let items = parser::parse_ridl(&content)?;
+                    let parsed = parser::parse_ridl_file(&content)?;
+                    let items = parsed.items;
                     validator::validate(&items)?;
                     let module_name = Path::new(&ridl_file)
                         .file_stem()
@@ -164,7 +166,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .to_str()
                         .ok_or("Invalid UTF-8 in file name")?
                         .to_string();
-                    generator::generate_module_files(&items, &module_out, &module_name)?;
+                    generator::generate_module_files(&items, parsed.mode, &module_out, &module_name)?;
                 }
 
             }

@@ -12,10 +12,11 @@ fn main() {
     // Generate module-specific files into OUT_DIR.
     // Note: we call the generator library directly to avoid relying on a prebuilt binary.
     let content = std::fs::read_to_string(ridl_path).expect("read ridl");
-    let items = ridl_tool::parser::parse_ridl(&content).expect("parse ridl");
+    let parsed = ridl_tool::parser::parse_ridl_file(&content).expect("parse ridl");
+    let items = parsed.items;
     ridl_tool::validator::validate(&items).expect("validate ridl");
 
-    ridl_tool::generator::generate_module_files(&items, out_dir, "stdlib_demo2")
+    ridl_tool::generator::generate_module_files(&items, parsed.mode, out_dir, "stdlib_demo2")
         .expect("generate module files");
 
     ridl_tool::generator::generate_module_api_file(out_dir)

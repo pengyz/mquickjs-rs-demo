@@ -85,24 +85,32 @@ struct TemplateFunction {
     return_kind: String,
 }
 
-impl From<Interface> for TemplateInterface {
-    fn from(interface: Interface) -> Self {
+impl TemplateInterface {
+    fn from_with_mode(interface: Interface, file_mode: crate::parser::FileMode) -> Self {
         Self {
             name: interface.name,
-            methods: interface.methods.into_iter().map(|m| m.into()).collect(),
+            methods: interface
+                .methods
+                .into_iter()
+                .map(|m| TemplateMethod::from_with_mode(m, file_mode))
+                .collect(),
         }
     }
 }
 
-impl From<Method> for TemplateMethod {
-    fn from(method: Method) -> Self {
+impl TemplateMethod {
+    fn from_with_mode(method: Method, file_mode: crate::parser::FileMode) -> Self {
         let return_type = if matches!(method.return_type, Type::Void) {
             None
         } else {
             Some(rust_type_name_for_codegen(&method.return_type))
         };
 
-        let params: Vec<TemplateParam> = method.params.into_iter().map(|p| p.into()).collect();
+        let params: Vec<TemplateParam> = method
+            .params
+            .into_iter()
+            .map(|p| TemplateParam::from_with_mode(p, file_mode))
+            .collect();
         let glue_param_extract = params
             .iter()
             .enumerate()
@@ -131,11 +139,11 @@ impl From<Method> for TemplateMethod {
     }
 }
 
-impl From<Param> for TemplateParam {
-    fn from(param: Param) -> Self {
+impl TemplateParam {
+    fn from_with_mode(param: Param, file_mode: crate::parser::FileMode) -> Self {
         let name = param.name;
         let ty = param.param_type.clone();
-        let (mut glue_extract, glue_arg) = glue_param_snippet(&name, &ty);
+        let (mut glue_extract, glue_arg) = glue_param_snippet(&name, &ty, file_mode);
         // Fill argv indices later in caller where we know the order.
 
         Self {
@@ -159,32 +167,48 @@ fn rust_type_name_for_codegen(ty: &Type) -> String {
     }
 }
 
-fn glue_param_snippet(name: &str, ty: &Type) -> (String, String) {
+fn glue_param_snippet(
+    name: &str,
+    ty: &Type,
+    file_mode: crate::parser::FileMode,
+) -> (String, String) {
     let idx = "{IDX}";
     match ty {
-        Type::String => (
-            format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
-let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\n\
-let {name}_ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _);\n\
-if {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n\
-let {name}: *const c_char = {name}_ptr;",
-                idx = idx,
-                idx0 = "{IDX0}",
-                name = name
-            ),
-            name.to_string(),
-        ),
+        Type::String => {
+            let strict_check = match file_mode {
+                crate::parser::FileMode::Strict => format!(
+                    "if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
+                    idx0 = "{IDX0}",
+                    name = name
+                ),
+                crate::parser::FileMode::Default => "".to_string(),
+            };
+
+            (
+                format!(
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n{strict_check}let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\nlet {name}_ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _);\nif {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n// v1: treat the returned pointer as a temporary view. Do not store it, and do not cross async boundaries.\n// NOTE: this fork may allocate a C string for non-inline cases; v1 does not call JS_FreeCString yet.\nlet {name}: *const c_char = {name}_ptr;",
+                    idx = idx,
+                    idx0 = "{IDX0}",
+                    name = name,
+                    strict_check = strict_check
+                ),
+                name.to_string(),
+            )
+        }
         Type::Int => (
             format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
-let mut {name}: i32 = 0;\n\
-// Reject non-number explicitly; this fork may coerce strings in JS_ToInt32.
-if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n\
-if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: i32 = 0;\n{strict_check}if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
                 idx = idx,
                 idx0 = "{IDX0}",
-                name = name
+                name = name,
+                strict_check = match file_mode {
+                    crate::parser::FileMode::Strict => format!(
+                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \\\"invalid int argument: {name}\\\"); }}\\n",
+                        idx0 = "{IDX0}",
+                        name = name
+                    ),
+                    crate::parser::FileMode::Default => "".to_string(),
+                }
             ),
             name.to_string(),
         ),
@@ -204,13 +228,18 @@ let {name}: bool = {name}_v != 3;",
         ),
         Type::Double | Type::Float => (
             format!(
-                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
-let mut {name}: f64 = 0.0;\n\
-if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n\
-if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: f64 = 0.0;\n{strict_check}if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
                 idx = idx,
                 idx0 = "{IDX0}",
-                name = name
+                name = name,
+                strict_check = match file_mode {
+                    crate::parser::FileMode::Strict => format!(
+                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \\\"invalid double argument: {name}\\\"); }}\\n",
+                        idx0 = "{IDX0}",
+                        name = name
+                    ),
+                    crate::parser::FileMode::Default => "".to_string(),
+                }
             ),
             name.to_string(),
         ),
@@ -243,15 +272,19 @@ fn glue_return_kind(ty: &Type) -> String {
     }
 }
 
-impl From<Function> for TemplateFunction {
-    fn from(function: Function) -> Self {
+impl TemplateFunction {
+    fn from_with_mode(function: Function, file_mode: crate::parser::FileMode) -> Self {
         let return_type = if matches!(function.return_type, Type::Void) {
             None
         } else {
             Some(rust_type_name_for_codegen(&function.return_type))
         };
 
-        let params: Vec<TemplateParam> = function.params.into_iter().map(|p| p.into()).collect();
+        let params: Vec<TemplateParam> = function
+            .params
+            .into_iter()
+            .map(|p| TemplateParam::from_with_mode(p, file_mode))
+            .collect();
         let glue_param_extract = params
             .iter()
             .enumerate()
@@ -286,7 +319,8 @@ pub fn collect_definitions(ridl_files: &[String]) -> Result<Vec<IDL>, Box<dyn st
 
     for ridl_file in ridl_files {
         let content = std::fs::read_to_string(ridl_file)?;
-        let items = crate::parser::parse_ridl(&content)?;
+        let parsed = crate::parser::parse_ridl_file(&content)?;
+        let items = parsed.items;
 
         // 将解析出的Vec<IDLItem>转换为单个IDL结构
         let mut functions = Vec::new();
@@ -334,6 +368,7 @@ pub fn collect_definitions(ridl_files: &[String]) -> Result<Vec<IDL>, Box<dyn st
 
 pub fn generate_module_files(
     items: &[IDLItem],
+    file_mode: crate::parser::FileMode,
     output_path: &Path,
     module_name: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -343,10 +378,10 @@ pub fn generate_module_files(
     for item in items {
         match item {
             crate::parser::ast::IDLItem::Function(f) => {
-                functions.push(TemplateFunction::from(f.clone()))
+                functions.push(TemplateFunction::from_with_mode(f.clone(), file_mode))
             }
             crate::parser::ast::IDLItem::Interface(i) => {
-                interfaces.push(TemplateInterface::from(i.clone()))
+                interfaces.push(TemplateInterface::from_with_mode(i.clone(), file_mode))
             }
             // 其他类型暂不处理，可根据需要添加
             _ => {}
@@ -357,12 +392,15 @@ pub fn generate_module_files(
     let mut singletons = Vec::new();
     for item in items {
         if let crate::parser::ast::IDLItem::Singleton(s) = item {
-            singletons.push(TemplateInterface::from(crate::parser::ast::Interface {
-                name: s.name.clone(),
-                methods: s.methods.clone(),
-                properties: vec![],
-                module: None,
-            }));
+            singletons.push(TemplateInterface::from_with_mode(
+                crate::parser::ast::Interface {
+                    name: s.name.clone(),
+                    methods: s.methods.clone(),
+                    properties: vec![],
+                    module: None,
+                },
+                file_mode,
+            ));
         }
     }
 
@@ -438,7 +476,8 @@ pub fn generate_shared_files(
 
         // 读取并解析RIDL文件
         let content = std::fs::read_to_string(ridl_file)?;
-        let items = crate::parser::parse_ridl(&content)?;
+        let parsed = crate::parser::parse_ridl_file(&content)?;
+        let items = parsed.items;
 
         // 提取函数/接口/单例（stdlib 注入依赖 singleton）
         let mut functions = Vec::new();
@@ -448,10 +487,10 @@ pub fn generate_shared_files(
         for item in items {
             match item {
                 crate::parser::ast::IDLItem::Function(f) => {
-                    functions.push(TemplateFunction::from(f))
+                    functions.push(TemplateFunction::from_with_mode(f, parsed.mode))
                 }
                 crate::parser::ast::IDLItem::Interface(i) => {
-                    interfaces.push(TemplateInterface::from(i))
+                    interfaces.push(TemplateInterface::from_with_mode(i, crate::parser::FileMode::Default))
                 }
                 crate::parser::ast::IDLItem::Singleton(s) => {
                     singletons.push(s)

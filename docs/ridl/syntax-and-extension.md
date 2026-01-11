@@ -154,6 +154,56 @@ interface Example {
 }
 ```
 
+## mode strict
+
+RIDL 支持文件级声明 `mode strict;`，用于收紧 glue 层的参数类型检查，避免 QuickJS 的默认类型转换（ToString/ToNumber）掩盖调用错误。
+
+### 语法
+
+- 作用域：文件级（必须放在 RIDL 文件顶部，位于 `module ...` 之前）
+- 当前启用：`ridl-modules/stdlib/src/stdlib.ridl` 已启用 strict（用于 console 等 stdlib glue）
+
+```ridl
+mode strict;
+
+singleton console {
+    fn log(content: string);
+}
+```
+
+### 语义（v1）
+
+- default（未声明 mode）
+  - 允许 QuickJS 默认转换（例如 string<->number 的 ToString/ToNumber）
+  - 例：`echo_str(123)` 返回 `"123"`
+  - 例：`add_i32("1", "2")` 返回 `3`
+
+- strict
+  - 对不满足类型要求的参数：抛 TypeError，并返回 `JS_EXCEPTION`
+
+### 当前类型检查策略（v1）
+
+> v1 目标类型：`string/bool/i32/f64/any`（含 `void` 返回）。
+
+- `string`
+  - strict：必须是 JS string（`JS_IsString(ctx, val) != 0`），否则 TypeError
+  - default：允许 ToString（通过 `JS_ToCString`）
+
+- `bool`
+  - strict/default：必须是 JS bool（内部基于 tag 检查 `JS_TAG_BOOL`）
+
+- `int` / `double`
+  - strict：当前实现会先做 `JS_IsNumber` 检查，再 `JS_ToInt32` / `JS_ToNumber`
+  - default：直接 `JS_ToInt32` / `JS_ToNumber`（允许 ToNumber）
+  - 备注：后续计划在 strict 下也放宽 int/double（仅依赖 ToInt32/ToNumber），以贴近 JS 开发者心智
+
+- `any`
+  - strict/default：不做类型限制（透传）
+
+### 限制与后续
+
+- v1 暂不对 `null/undefined` 做额外限制（等 nullable/optional 类型完善后再扩展 strict 规则）。
+
 ## 基础类型映射
 
 | RIDL 类型 | JS 类型 | Rust 类型 | 说明 |

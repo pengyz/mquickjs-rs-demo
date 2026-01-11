@@ -9,11 +9,12 @@ fn main() {
     let ridl_path = Path::new("src/stdlib.ridl");
     let content = std::fs::read_to_string(ridl_path).expect("read ridl");
 
-    let items = ridl_tool::parser::parse_ridl(&content).expect("parse ridl");
+    let parsed = ridl_tool::parser::parse_ridl_file(&content).expect("parse ridl");
+    let items = parsed.items;
     ridl_tool::validator::validate(&items).expect("validate ridl");
 
     // Module-specific glue
-    ridl_tool::generator::generate_module_files(&items, out_dir, "stdlib")
+    ridl_tool::generator::generate_module_files(&items, parsed.mode, out_dir, "stdlib")
         .expect("generate module files");
 
     ridl_tool::generator::generate_module_api_file(out_dir)
