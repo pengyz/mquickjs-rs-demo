@@ -1,7 +1,6 @@
 # Workspace-level mquickjs build profiles.
 #
 # Each profile maps to an application Cargo.toml (SoT for RIDL module selection).
-# The profile name must match a feature in the `mquickjs-profile` crate.
 
 default = "framework"
 

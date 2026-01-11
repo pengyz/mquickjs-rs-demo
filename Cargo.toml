@@ -4,7 +4,7 @@ members = [
     "deps/mquickjs-rs",
     "deps/ridl-tool",
     "ridl-modules/stdlib_demo",
-    ".", "mquickjs-profile", "deps/mquickjs-build", "xtask",
+    ".", "deps/mquickjs-build", "xtask",
 ]
 
 [package]

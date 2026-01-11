@@ -134,8 +134,6 @@ fn main() {
     }
 
     println!("cargo:rerun-if-changed={}", cfg_path.display());
-    // We can't reliably enumerate profile features dynamically; always rerun when mquickjs-profile changes.
-    println!("cargo:rerun-if-changed={}", workspace_root.join("mquickjs-profile/Cargo.toml").display());
 
     for inp in &build_output.inputs {
         println!("cargo:rerun-if-changed={}", inp.display());
@@ -168,16 +166,6 @@ fn read_build_output(path: &Path) -> MquickjsBuildOutput {
 }
 
 fn select_profile(cfg: &WorkspaceBuildConfig) -> String {
-    // Prefer an explicitly enabled profile feature (from mquickjs-profile crate).
-    // Cargo exposes enabled features to build scripts as env vars: CARGO_FEATURE_<FEATURE_NAME>.
-    let candidates = ["framework", "tooling", "tests"];
-    for c in candidates {
-        let key = format!("CARGO_FEATURE_{}", c.to_uppercase().replace('-', "_"));
-        if env::var_os(key).is_some() {
-            return c.to_string();
-        }
-    }
-
     cfg.default.clone().unwrap_or_else(|| "framework".to_string())
 }
 
