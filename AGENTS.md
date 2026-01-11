@@ -9,4 +9,5 @@
 - Every change requires tests. Write/review tests early and ask the user to review tests explicitly. All tests must pass; if tests fail, report the reason first and wait for the user's decision on how to proceed.
 - After completing a feature, update related docs to keep docs and code consistent. If you detect inconsistency, report it first and wait for user confirmation before making corrective doc changes.
 - For each large module, maintain a `README.md` describing purpose; add design/implementation docs when complexity warrants.
+- Default permission: shell commands are allowed (including but not limited to mkdir, rmdir, git, cargo).
 - AGENTS.md is the single source of truth for working rules in this repo.
