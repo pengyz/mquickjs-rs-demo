@@ -22,7 +22,9 @@ mquickjs-demo/
 ├── src/
 │   └── main.rs             # 主程序入口
 ├── ridl-modules/           # RIDL 模块 crate（每个模块是一个独立 Rust crate）
-│   └── stdlib_demo/
+│   ├── ridl_module_demo_default/
+│   ├── ridl_module_demo_strict/
+│   └── stdlib/
 ├── deps/
 │   ├── mquickjs/           # QuickJS 源码
 │   ├── mquickjs-sys/       # 原生构建编排（负责产出 libmquickjs.a；不暴露 Rust API）
@@ -84,7 +86,7 @@ cargo build
   - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开 `JS_RIDL_EXTENSIONS`
 - **mquickjs-sys `build.rs`** 使用 `mquickjs-build` 产出 `libmquickjs.a`；当启用 feature `ridl-extensions` 时，会把上面的 `mquickjs_ridl_register.h` 纳入编译。
 
-> 注意：当前示例模块为 `stdlib_demo`（位于 `ridl-modules/stdlib_demo/`），可参考其 `Cargo.toml` 与目录结构。
+> 注意：当前示例模块为 `ridl_module_demo_default` / `ridl_module_demo_strict`（位于 `ridl-modules/`），可参考其 `Cargo.toml` 与目录结构。
 
 ```rust
 use mquickjs_rs::{JSContext, JSValue};

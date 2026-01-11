@@ -47,7 +47,7 @@ mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
 
 ## 构建规范
 
-1.  每个 RIDL 模块（如 stdlib、stdlib_demo）必须作为独立 Rust crate 存在，拥有独立 Cargo.toml，编译生成 rlib 静态库。
+1.  每个 RIDL 模块（如 stdlib、ridl_module_demo_default、ridl_module_demo_strict）必须作为独立 Rust crate 存在，拥有独立 Cargo.toml，编译生成 rlib 静态库。
 2.  rlib 库包含该模块的 Rust 实现代码 (`*_impl.rs`) 及 RIDL 工具生成的 Rust 胶水代码 (`*_glue.rs`)。
 3.  mquickjs-rs 主库不直接编译 RIDL 模块源码，而是通过链接基础 mquickjs.a 库与各 RIDL 模块生成的 rlib 库完成最终构建。
 4.  禁止在 mquickjs-rs 的 build.rs 中直接处理 RIDL 模块的胶水代码编译。
@@ -176,18 +176,18 @@ tests/ridl_tests/stdlib/
 └── src/
     └── lib.rs
 
-tests/ridl_tests/stdlib_demo/
+tests/ridl_tests/ridl_module_demo_default/
 ├── Cargo.toml
-├── stdlib_demo.ridl
-├── stdlib_demo_glue.rs  # (由RIDL工具生成)
-├── stdlib_demo_impl.rs
+├── ridl_module_demo_default.ridl
+├── ridl_module_demo_default_glue.rs  # (由RIDL工具生成)
+├── ridl_module_demo_default_impl.rs
 └── src/
     └── lib.rs
 ```
 
 ### 步骤2：移除RIDL模块的build.rs
 
-由于使用Rust胶水代码，不再需要为RIDL模块编写build.rs来编译C代码。因此，**删除** `tests/ridl_tests/stdlib/build.rs` 和 `tests/ridl_tests/stdlib_demo/build.rs` 文件。
+由于使用Rust胶水代码，不再需要为RIDL模块编写build.rs来编译C代码。因此，**删除** `tests/ridl_tests/stdlib/build.rs` 和 `tests/ridl_tests/ridl_module_demo_default/build.rs` 文件。
 
 ### 步骤3：更新RIDL模块的Cargo.toml
 
@@ -195,7 +195,7 @@ tests/ridl_tests/stdlib_demo/
 
 ```toml
 [package]
-name = "stdlib"  # 或 stdlib_demo
+name = "stdlib"  # 或 ridl_module_demo_default / ridl_module_demo_strict
 version = "0.1.0"
 edition = "2021"
 
@@ -218,7 +218,7 @@ use std::os::raw::c_char;
 
 // 依赖于RIDL模块
 use stdlib;
-use stdlib_demo;
+use ridl_module_demo_default;
 
 pub mod mquickjs_ffi;
 

@@ -7,7 +7,7 @@
 ## 旧方案：C胶水代码
 
 ### 实现方式
-- RIDL 工具生成 C 语言胶水代码（历史方案示例：`tests/ridl_tests/stdlib_demo/stdlib_glue.c`）
+- RIDL 工具生成 C 语言胶水代码（历史方案示例：`tests/ridl_tests/ridl_module_demo_default/stdlib_glue.c`）
 - 需要 C 编译器参与构建过程
 - 类型转换在 C 代码中处理
 - 需要额外的头文件管理

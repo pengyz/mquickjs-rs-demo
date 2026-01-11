@@ -25,7 +25,7 @@
 
 - 不再要求存在专门的 `ridl-modules/registry` 作为 SoT（当前 SoT 为 App manifest：根 `Cargo.toml` 的 `[dependencies]`）。
 - 最终 App（例如仓库根 `mquickjs-demo` 的 `Cargo.toml`）作为 registry source：
-  - App 显式以 path dependency 依赖所需 RIDL modules（如 `ridl-modules/stdlib_demo`）。
+  - App 显式以 path dependency 依赖所需 RIDL modules（如 `ridl-modules/ridl_module_demo_default` / `ridl-modules/ridl_module_demo_strict`）。
   - 构建时根据该依赖图解析得到“需要注册的 RIDL modules”。
 
 这能自然支持复杂工程：

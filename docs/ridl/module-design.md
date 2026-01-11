@@ -35,8 +35,8 @@ module_name/
 RIDL 定义文件（`.ridl` 扩展名）定义了 JavaScript 可调用的函数接口：
 
 ```ridl
-// stdlib_demo.ridl 示例
-js_say_hello();
+// ridl_module_demo_default.ridl 示例
+fn default_echo_str(s: string) -> string;
 ```
 
 ### 2. Rust 胶水代码生成
