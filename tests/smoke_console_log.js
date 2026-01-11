@@ -9,8 +9,7 @@ if (typeof console.log !== "function") {
 
 console.log("hi");
 
-var ok = false;
-try { console.log(123); } catch (err1) { ok = true; }
-if (!ok) throw new Error("expected console.log(123) to throw in strict mode");
+// log(...args:any): should accept any types.
+console.log(123);
 
 "ok";

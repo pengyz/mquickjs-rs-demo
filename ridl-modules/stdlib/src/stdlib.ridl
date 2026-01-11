@@ -7,8 +7,8 @@ mode strict;
 
 // 控制台对象
 singleton console {
-    fn log(content: string);
-    fn error(content: string);
+    fn log(...args: any);
+    fn error(...args: any);
     readonly property enabled: bool;
 }
 

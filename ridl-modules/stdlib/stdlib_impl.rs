@@ -5,45 +5,71 @@
 //! end-to-end via the build-time stdlib injection mechanism.
 
 use std::ffi::CStr;
-use std::os::raw::c_char;
 
+use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
 
-#[no_mangle]
-pub extern "C" fn rust_console_log(
-    _ctx: *mut std::ffi::c_void,
-    _this_val: mquickjs_rs::mquickjs_ffi::JSValue,
-    content: *const c_char,
-) -> mquickjs_rs::mquickjs_ffi::JSValue {
-    if !content.is_null() {
-        let c_str = unsafe { CStr::from_ptr(content) };
-        if let Ok(s) = c_str.to_str() {
-            println!("{s}");
-        } else {
-            println!("[invalid utf-8]");
+fn print_js_values(ctx: *mut JSContext, args: &[JSValue], is_err: bool) {
+    for (i, v) in args.iter().copied().enumerate() {
+        if i != 0 {
+            if is_err {
+                eprint!(" ");
+            } else {
+                print!(" ");
+            }
         }
-    } else {
-        println!();
-    }
 
+        let mut buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };
+        let ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut buf as *mut _) };
+        if ptr.is_null() {
+            if is_err {
+                eprint!("[toString failed]");
+            } else {
+                print!("[toString failed]");
+            }
+            continue;
+        }
+
+        let s = unsafe { CStr::from_ptr(ptr) };
+        match s.to_str() {
+            Ok(s) => {
+                if is_err {
+                    eprint!("{s}");
+                } else {
+                    print!("{s}");
+                }
+            }
+            Err(_) => {
+                if is_err {
+                    eprint!("[invalid utf-8]");
+                } else {
+                    print!("[invalid utf-8]");
+                }
+            }
+        }
+
+        // NOTE: this project currently doesn't expose JS_FreeCString in bindings.
+        // v1: we keep the original behavior (leak per call in worst case) until bindings are extended.
+    }
+}
+
+pub fn rust_console_log(
+    ctx: *mut std::ffi::c_void,
+    _this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    args: Vec<JSValue>,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let ctx = ctx as *mut JSContext;
+    print_js_values(ctx, &args, false);
+    println!();
     0x02 // JS_UNDEFINED
 }
 
-#[no_mangle]
-pub extern "C" fn rust_console_error(
-    _ctx: *mut std::ffi::c_void,
+pub fn rust_console_error(
+    ctx: *mut std::ffi::c_void,
     _this_val: mquickjs_rs::mquickjs_ffi::JSValue,
-    content: *const c_char,
+    args: Vec<JSValue>,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
-    if !content.is_null() {
-        let c_str = unsafe { CStr::from_ptr(content) };
-        if let Ok(s) = c_str.to_str() {
-            eprintln!("{s}");
-        } else {
-            eprintln!("[invalid utf-8]");
-        }
-    } else {
-        eprintln!();
-    }
-
+    let ctx = ctx as *mut JSContext;
+    print_js_values(ctx, &args, true);
+    eprintln!();
     0x02 // JS_UNDEFINED
 }
