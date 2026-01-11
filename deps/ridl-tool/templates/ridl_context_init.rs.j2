@@ -1,0 +1,90 @@
+// Generated RIDL context initializer entrypoint
+// NOTE: finalizer must not call any JS API.
+
+pub mod ridl_context_init {
+    use std::os::raw::{c_int, c_void};
+
+    use mquickjs_rs::mquickjs_ffi;
+
+    const RIDL_CTX_EXT_MAGIC: u32 = 0x5249444c; // 'RIDL'
+    const RIDL_CTX_EXT_ABI_VERSION: u32 = 1;
+
+    {%- for s in singletons %}
+    #[repr(C)]
+    pub struct {{ s.vtable_struct_name }} {
+        pub self_ptr: *mut c_void,
+        pub drop_fn: unsafe extern "C" fn(*mut c_void),
+        pub log_fn: unsafe extern "C" fn(
+            *mut c_void,
+            *mut mquickjs_ffi::JSContext,
+            mquickjs_ffi::JSValue,
+            c_int,
+            *const mquickjs_ffi::JSValue,
+        ),
+        pub error_fn: unsafe extern "C" fn(
+            *mut c_void,
+            *mut mquickjs_ffi::JSContext,
+            mquickjs_ffi::JSValue,
+            c_int,
+            *const mquickjs_ffi::JSValue,
+        ),
+        pub enabled_fn: unsafe extern "C" fn(*mut c_void) -> c_int,
+    }
+
+    {%- endfor %}
+
+    #[repr(C)]
+    pub struct {{ header_struct_name }} {
+        pub magic: u32,
+        pub abi_version: u32,
+        {%- for s in singletons %}
+        pub {{ s.field_name }}: {{ s.vtable_struct_name }},
+        {%- endfor %}
+    }
+
+    unsafe extern "C" fn ctx_user_data_finalizer(_ctx: *mut mquickjs_ffi::JSContext, user_data: *mut c_void) {
+        if user_data.is_null() {
+            return;
+        }
+        // Safety: user_data was created by ridl_context_init via Box::into_raw.
+        unsafe {
+            let ext = Box::from_raw(user_data as *mut {{ header_struct_name }});
+            {%- for s in singletons %}
+            let self_ptr = ext.{{ s.field_name }}.self_ptr;
+            if !self_ptr.is_null() {
+                (ext.{{ s.field_name }}.drop_fn)(self_ptr);
+            }
+            {%- endfor %}
+            // ext is dropped here; do not call any JS API from finalizer.
+        }
+    }
+
+    pub unsafe fn ridl_context_init(ctx: *mut mquickjs_ffi::JSContext) {
+        if ctx.is_null() {
+            return;
+        }
+
+        // idempotent
+        let existing = unsafe { mquickjs_ffi::JS_GetContextUserData(ctx) };
+        if !existing.is_null() {
+            return;
+        }
+
+        // Allocate per-context singleton instances (C ABI vtable).
+        {%- for s in singletons %}
+        let {{ s.field_name }} = {{ s.vtable_create_path }}();
+        {%- endfor %}
+
+        let ext = Box::new({{ header_struct_name }} {
+            magic: RIDL_CTX_EXT_MAGIC,
+            abi_version: RIDL_CTX_EXT_ABI_VERSION,
+            {%- for s in singletons %}
+            {{ s.field_name }},
+            {%- endfor %}
+        });
+        let ext_ptr = Box::into_raw(ext) as *mut c_void;
+        unsafe {
+            mquickjs_ffi::JS_SetContextUserData(ctx, ext_ptr, Some(ctx_user_data_finalizer));
+        }
+    }
+}

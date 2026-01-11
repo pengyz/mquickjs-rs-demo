@@ -2,7 +2,36 @@ use crate::parser::ast::{Function, IDLItem, Interface, Method, Param, Type, IDL}
 use askama::Template;
 use std::path::Path;
 
+fn to_rust_type_ident_simple(name: &str) -> String {
+    // Minimal PascalCase conversion for RIDL identifiers.
+    let mut out = String::new();
+    let mut upper = true;
+    for ch in name.chars() {
+        if ch == '_' || ch == '-' {
+            upper = true;
+            continue;
+        }
+        if upper {
+            out.extend(ch.to_uppercase());
+            upper = false;
+        } else {
+            out.push(ch);
+        }
+    }
+    if out.is_empty() {
+        "Singleton".to_string()
+    } else {
+        out
+    }
+}
+
 mod filters;
+mod context_init;
+
+pub use context_init::generate_ridl_context_init;
+
+// singleton aggregation (Option A: erased slots)
+pub mod singleton_aggregate;
 
 #[derive(Template)]
 #[template(path = "c_header.rs.j2")]
@@ -29,6 +58,7 @@ struct RustImplTemplate {
     module_name: String,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
+    singletons: Vec<TemplateInterface>,
 }
 
 #[derive(Template)]
@@ -48,10 +78,19 @@ struct AggSymbolsTemplate {
     functions: Vec<TemplateFunction>,
 }
 
+#[derive(Template)]
+#[template(path = "ridl_context_init.rs.j2")]
+struct RidlContextInitTemplate {
+    header_struct_name: String,
+    singletons: Vec<context_init::TemplateSingletonVTable>,
+}
+
 #[derive(Debug, Clone)]
 struct TemplateInterface {
     name: String,
+    slot_index: u32,
     methods: Vec<TemplateMethod>,
+    properties: Vec<crate::parser::ast::Property>,
 }
 
 #[derive(Debug, Clone)]
@@ -89,11 +128,13 @@ impl TemplateInterface {
     fn from_with_mode(interface: Interface, file_mode: crate::parser::FileMode) -> Self {
         Self {
             name: interface.name,
+            slot_index: 0,
             methods: interface
                 .methods
                 .into_iter()
                 .map(|m| TemplateMethod::from_with_mode(m, file_mode))
                 .collect(),
+            properties: interface.properties,
         }
     }
 }
@@ -147,7 +188,7 @@ impl TemplateParam {
 
         Self {
             name,
-            param_type: ty.to_string(),
+            param_type: rust_type_name_for_codegen(&ty),
             glue_extract,
             glue_arg,
         }
@@ -182,7 +223,7 @@ fn glue_param_snippet(
             if variadic {
                 return (
                     format!(
-                        "let mut {name}: Vec<*const c_char> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\n    let ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut {name}_buf as *mut _);\n    if ptr.is_null() {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    {name}.push(ptr);\n}}",
+                        "let mut {name}: Vec<*const c_char> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\n    let ptr = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut {name}_buf as *mut _) }};\n    if ptr.is_null() {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    {name}.push(ptr);\n}}",
                         name = name,
                         idx0 = "{IDX0}",
                         vararg_err_name = vararg_err_name
@@ -192,14 +233,14 @@ fn glue_param_snippet(
             }
 
             let check = format!(
-                "if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
+                "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) }} == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
                 idx0 = "{IDX0}",
                 name = name
             );
 
             (
                 format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n{check}let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\nlet {name}_ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _);\nif {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\nlet {name}: *const c_char = {name}_ptr;",
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n{check}let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\nlet {name}_ptr = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _) }};\nif {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\nlet {name}: *const c_char = {name}_ptr;",
                     idx = idx,
                     idx0 = "{IDX0}",
                     name = name,
@@ -212,7 +253,7 @@ fn glue_param_snippet(
             if variadic {
                 return (
                     format!(
-                        "let mut {name}: Vec<i32> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    let mut out: i32 = 0;\n    if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut out as *mut _, v) < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
+                        "let mut {name}: Vec<i32> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    let mut out: i32 = 0;\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut out as *mut _, v) }} < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
                         name = name,
                         idx0 = "{IDX0}",
                         vararg_err_name = vararg_err_name
@@ -223,12 +264,12 @@ fn glue_param_snippet(
 
             (
                 format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: i32 = 0;\n{check}if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: i32 = 0;\n{check}if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) }} < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
                     idx = idx,
                     idx0 = "{IDX0}",
                     name = name,
                     check = format!(
-                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n",
+                        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) }} == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n",
                         idx0 = "{IDX0}",
                         name = name
                     )
@@ -268,7 +309,7 @@ let {name}: bool = {name}_v != 3;",
             if variadic {
                 return (
                     format!(
-                        "let mut {name}: Vec<f64> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    let mut out: f64 = 0.0;\n    if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut out as *mut _, v) < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
+                        "let mut {name}: Vec<f64> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    let mut out: f64 = 0.0;\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut out as *mut _, v) }} < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
                         name = name,
                         idx0 = "{IDX0}",
                         vararg_err_name = vararg_err_name
@@ -279,12 +320,12 @@ let {name}: bool = {name}_v != 3;",
 
             (
                 format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: f64 = 0.0;\n{check}if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
+                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: f64 = 0.0;\n{check}if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) }} < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
                     idx = idx,
                     idx0 = "{IDX0}",
                     name = name,
                     check = format!(
-                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n",
+                        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) }} == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n",
                         idx0 = "{IDX0}",
                         name = name
                     )
@@ -451,6 +492,8 @@ pub fn generate_module_files(
     }
 
     // 生成Rust胶水代码
+    // NOTE: singletons are modelled as interface-like shapes for method glue generation.
+    // Properties are handled separately.
     let mut singletons = Vec::new();
     for item in items {
         if let crate::parser::ast::IDLItem::Singleton(s) = item {
@@ -458,7 +501,7 @@ pub fn generate_module_files(
                 crate::parser::ast::Interface {
                     name: s.name.clone(),
                     methods: s.methods.clone(),
-                    properties: vec![],
+                    properties: s.properties.clone(),
                     module: None,
                 },
                 file_mode,
@@ -483,6 +526,7 @@ pub fn generate_module_files(
         module_name: module_name.to_string(),
         interfaces: interfaces.clone(),
         functions: functions.clone(),
+        singletons: rust_glue_template.singletons.clone(),
     };
     let rust_impl_code = rust_impl_template.render()?;
     std::fs::write(
@@ -496,13 +540,23 @@ pub fn generate_module_files(
 }
 
 #[allow(dead_code)]
-pub fn generate_module_api_file(
-    out_dir: &Path,
-) -> Result<(), Box<dyn std::error::Error>> {
+pub fn generate_module_api_file_default(out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let api = "// Generated module initializer API for RIDL extensions\n\
-\
+\n\
+/// Ensure QuickJS C-side symbols for this module are registered.\n\
+///\n\
+/// NOTE: This is *not* the per-context singleton initialization.\n\
 pub fn initialize_module() {\n\
     crate::generated::symbols::ensure_symbols();\n\
+}\n\
+\n\
+/// Fill per-context RIDL extension slots for this module.\n\
+/// Called by the app-level aggregated ridl_context_init.\n\
+///\n\
+/// This API must not reference any app crate types (e.g. app-owned `CtxExt`).\n\
+pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotWriter) {\n\
+    // Default implementation: nothing to fill.\n\
+    let _ = w;\n\
 }\n";
 
     std::fs::write(out_dir.join("ridl_module_api.rs"), api)?;

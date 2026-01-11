@@ -1,7 +1,9 @@
-use std::env;
-use std::fs;
+use std::{env, fs, process};
 
-use mquickjs_rs::Context;
+use mquickjs_demo::Context;
+
+// App-level facade: mquickjs-rs is framework-only; RIDL module set is chosen by this app.
+// The actual facade type will be introduced in src/lib.rs (mquickjs_demo::Context).
 
 fn main() {
     mquickjs_rs::ridl_initialize!();
@@ -26,6 +28,7 @@ fn main() {
         }
         Err(error) => {
             eprintln!("Error: {}", error);
+            process::exit(1);
         }
     }
 }

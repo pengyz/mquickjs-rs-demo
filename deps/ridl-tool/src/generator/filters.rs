@@ -1,4 +1,4 @@
-use crate::parser::ast::Type;
+use crate::parser::ast::{PropertyModifier, Type};
 
 // Rust类型转换辅助函数，用于模板
 #[allow(dead_code)]
@@ -111,4 +111,14 @@ pub fn js_conversion_type(idl_type: &Type) -> Result<String, askama::Error> {
     .to_string();
 
     Ok(conversion_method)
+}
+
+pub fn is_readonly_prop(modifiers: &[PropertyModifier]) -> ::askama::Result<bool> {
+    Ok(modifiers.contains(&PropertyModifier::ReadOnly))
+}
+
+// Turn a singleton/interface name into a Rust type identifier suffix.
+// E.g. "console" -> "Console", "my_console" -> "MyConsole".
+pub fn to_rust_type_ident(name: &str) -> ::askama::Result<String> {
+    camelcase(name)
 }

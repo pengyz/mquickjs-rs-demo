@@ -1,20 +1,23 @@
 // Auto-generated Rust glue code for RIDL interfaces
 use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
+
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 
 const JS_UNDEFINED: JSValue = 0x02;
 
 #[inline]
-unsafe fn js_throw_type_error(ctx: *mut JSContext, msg: &str) -> JSValue {
+fn js_throw_type_error(ctx: *mut JSContext, msg: &str) -> JSValue {
     let cstr = CString::new(msg).unwrap_or_else(|_| CString::new("TypeError").unwrap());
     // mquickjs exposes JS_ThrowTypeError as a macro; bindings expose JS_ThrowError.
     // JS_CLASS_TYPE_ERROR is stable in this fork.
-    mquickjs_rs::mquickjs_ffi::JS_ThrowError(
-        ctx,
-        mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_TYPE_ERROR,
-        cstr.as_ptr(),
-    )
+    unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_ThrowError(
+            ctx,
+            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_TYPE_ERROR,
+            cstr.as_ptr(),
+        )
+    }
 }
 
 // Call into crate-local implementations.
@@ -34,13 +37,14 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
     JS_UNDEFINED
     {%- else if function.return_kind == "string" %}
     let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr())
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }
     {%- else if function.return_kind == "int" %}
-    mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result)
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
     {%- else if function.return_kind == "bool" %}
-    if result { 0x07 } else { 0x03 }
+    // JS_TRUE/JS_FALSE encoding: JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL, v)
+    if result { 0x23 } else { 0x03 }
     {%- else if function.return_kind == "double" %}
-    mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result)
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
     {%- else if function.return_kind == "any" %}
     result
     {%- else %}
@@ -57,26 +61,78 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
 pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     {{ method.glue_param_extract|safe }}
 
-    let result = rust_{{ s.name|lower }}_{{ method.name|lower }}(ctx as *mut core::ffi::c_void, this_val, {{ method.glue_call_args }});
-    {%- if method.return_kind == "void" %}
-    let _ = result;
+    // v_next (A2): per-JSContext singleton dispatch via ctx user_data -> ContextInner -> ridl_ext.
+    let Some(mut h) = (unsafe { mquickjs_rs::context::ContextHandle::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+
+    let ext_ptr = h.inner.ridl_ext_ptr();
+    if ext_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
+    }
+    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot(ext_ptr, {{ s.slot_index }}) }) else {
+        return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
+    };
+    let slot = unsafe { &mut *slot_ptr };
+    if !slot.is_set() {
+        return js_throw_type_error(ctx, "singleton not initialized");
+    }
+
+    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::impls::{{ s.name|capitalize }}Singleton);
+    let fat = unsafe { *holder_ptr };
+    let s = unsafe { &mut *fat };
+
+    s.{{ method.name|lower }}(ctx, core::slice::from_raw_parts(argv, argc as usize).to_vec());
     JS_UNDEFINED
-    {%- else if method.return_kind == "string" %}
+}
+{%- endfor %}
+
+{%- for prop in s.properties %}
+{%- if prop.modifiers|is_readonly_prop %}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+    let _ = this_val;
+    let _ = argc;
+    let _ = argv;
+
+    // v_next (A2): per-JSContext singleton dispatch via ctx user_data -> ContextInner -> ridl_ext.
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextHandle::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+
+    let ext_ptr = h.inner.ridl_ext_ptr();
+    if ext_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
+    }
+    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot(ext_ptr, {{ s.slot_index }}) }) else {
+        return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
+    };
+    let slot = unsafe { &mut *slot_ptr };
+    if !slot.is_set() {
+        return js_throw_type_error(ctx, "singleton not initialized");
+    }
+
+    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::impls::{{ s.name|capitalize }}Singleton);
+    let fat = unsafe { *holder_ptr };
+    let s = unsafe { &mut *fat };
+
+    let result = if s.{{ prop.name|lower }}() { 1 } else { 0 };
+    {%- if prop.property_type|js_conversion_type == "to_bool" %}
+    // JS_TRUE/JS_FALSE encoding: JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL, v)
+    if result != 0 { 0x23 } else { 0x03 }
+    {%- else if prop.property_type|js_conversion_type == "to_i32" %}
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
+    {%- else if prop.property_type|js_conversion_type == "to_f64" %}
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
+    {%- else if prop.property_type|js_conversion_type == "to_string" %}
     let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr())
-    {%- else if method.return_kind == "int" %}
-    mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result)
-    {%- else if method.return_kind == "bool" %}
-    if result { 0x07 } else { 0x03 }
-    {%- else if method.return_kind == "double" %}
-    mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result)
-    {%- else if method.return_kind == "any" %}
-    result
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }
     {%- else %}
-    compile_error!("v1 glue: unsupported return type");
+    compile_error!("v1 glue: unsupported singleton readonly property type");
     JS_UNDEFINED
     {%- endif %}
 }
+{%- endif %}
 {%- endfor %}
 {%- endfor %}
 
@@ -93,13 +149,14 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
     JS_UNDEFINED
     {%- else if method.return_kind == "string" %}
     let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr())
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }
     {%- else if method.return_kind == "int" %}
-    mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result)
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
     {%- else if method.return_kind == "bool" %}
-    if result { 0x07 } else { 0x03 }
+    // JS_TRUE/JS_FALSE encoding: JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL, v)
+    if result { 0x23 } else { 0x03 }
     {%- else if method.return_kind == "double" %}
-    mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result)
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
     {%- else if method.return_kind == "any" %}
     result
     {%- else %}

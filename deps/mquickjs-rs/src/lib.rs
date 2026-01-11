@@ -19,6 +19,14 @@ pub mod function;
 pub mod object;
 pub mod value;
 
+// Note: ridl_modules are generated/aggregated by the app crate build and included there.
+
+#[cfg(feature = "ridl-extensions")]
+pub mod ridl_runtime;
+
+#[cfg(feature = "ridl-extensions")]
+pub mod ridl_ext_access;
+
 pub fn register_extensions() {
     // Kept for API compatibility.
     // In mquickjs, C-side registration is compile-time only. The application is responsible for

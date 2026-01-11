@@ -1,6 +1,7 @@
 ## Mi Code Added Memories
 - In this project, treat a crate as a RIDL module only if the dependency path's src/ directory contains at least one *.ridl file; otherwise exclude it from registry-driven RIDL aggregation.
 - In this project (mquickjs), C API registration cannot happen at runtime; registration must be done at compile time. This constraint is the root reason for the symbol keep-alive + build-time aggregation design; avoid suggesting runtime QuickJS C API registration.
+- User will close VSCode and work directly in terminal for this repo/session (to reduce concurrent cargo/rust-analyzer build conflicts like ETXTBSY).
 
 ## Working Conventions
 - For any requirement, think deeply first and produce a concrete plan. Store plans under `doc/planning/` (one plan per requirement) and mark the plan as completed when done.

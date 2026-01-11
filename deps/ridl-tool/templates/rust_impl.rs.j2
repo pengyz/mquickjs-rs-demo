@@ -21,6 +21,25 @@ mod {{ interface.name|lower }}_impl {
 }
 {%- endfor %}
 
+{%- for singleton in singletons %}
+// Singleton {{ singleton.name }}
+pub trait {{ singleton.name|capitalize }}Singleton {
+    {%- for method in singleton.methods %}
+    fn {{ method.name|lower }}(&mut self, ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>);
+    {%- endfor %}
+
+    {%- for prop in singleton.properties %}
+    {%- if prop.modifiers|is_readonly_prop %}
+    fn {{ prop.name|lower }}(&self) -> {{ prop.property_type|rust_type_from_idl }};
+    {%- endif %}
+    {%- endfor %}
+}
+
+pub fn create_{{ singleton.name|lower }}_singleton() -> Box<dyn {{ singleton.name|capitalize }}Singleton> {
+    todo!("Implement {{ singleton.name }} singleton");
+}
+{%- endfor %}
+
 {%- for function in functions %}
 // Implementation for {{ function.name }} function
 pub fn {{ function.name|lower }}(

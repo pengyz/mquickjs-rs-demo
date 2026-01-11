@@ -1,29 +1,97 @@
 use std::ffi::{CStr, CString};
 use std::marker::PhantomData;
 use std::os::raw::c_void;
+use std::sync::Arc;
 
 use crate::mquickjs_ffi;
 use crate::Value;
 
+pub struct ContextInner {
+    // NOTE: host per-context extensions (initialized by application-generated ridl_context_init).
+    // Type-erased to avoid coupling mquickjs-rs to generated RIDL types.
+    ridl_ext_ptr: std::cell::UnsafeCell<*mut c_void>,
+    ridl_ext_drop: std::cell::UnsafeCell<Option<unsafe fn(*mut c_void)>>,
+}
+
+unsafe impl Send for ContextInner {}
+unsafe impl Sync for ContextInner {}
+
+impl ContextInner {
+    pub(crate) fn new() -> Self {
+        Self {
+            ridl_ext_ptr: std::cell::UnsafeCell::new(std::ptr::null_mut()),
+            ridl_ext_drop: std::cell::UnsafeCell::new(None),
+        }
+    }
+
+    /// Safety: must only be set once per ContextInner.
+    pub unsafe fn set_ridl_ext(&self, ptr: *mut c_void, drop_fn: unsafe fn(*mut c_void)) {
+        let p = unsafe { &mut *self.ridl_ext_ptr.get() };
+        debug_assert!(p.is_null());
+        *p = ptr;
+
+        let d = unsafe { &mut *self.ridl_ext_drop.get() };
+        debug_assert!(d.is_none());
+        *d = Some(drop_fn);
+    }
+
+    pub fn ridl_ext_ptr(&self) -> *mut c_void {
+        unsafe { *self.ridl_ext_ptr.get() }
+    }
+}
+
+impl Drop for ContextInner {
+    fn drop(&mut self) {
+        // Safety: Drop happens when all Arcs are gone. Must not call any JS API.
+        let p = unsafe { *self.ridl_ext_ptr.get() };
+        let drop_fn = unsafe { *self.ridl_ext_drop.get() };
+        if let (Some(f), false) = (drop_fn, p.is_null()) {
+            unsafe { f(p) };
+        }
+    }
+}
+
 pub struct Context {
     pub ctx: *mut mquickjs_ffi::JSContext,
-    _memory: Vec<u8>, // 重命名以表明这是未使用的字段
+    pub(crate) inner: Arc<ContextInner>,
+    _memory: Vec<u8>,
+}
+
+/// Borrow-like handle reconstructed from JSContext user_data.
+/// It must NOT free the JSContext.
+pub struct ContextHandle {
+    pub ctx: *mut mquickjs_ffi::JSContext,
+    pub inner: Arc<ContextInner>,
+}
+
+impl ContextHandle {
+    /// Safety: ctx must be alive, and ctx user_data must have been set by mquickjs-rs Context.
+    pub unsafe fn from_js_ctx(ctx: *mut mquickjs_ffi::JSContext) -> Option<Self> {
+        if ctx.is_null() {
+            return None;
+        }
+        let p = unsafe { mquickjs_ffi::JS_GetContextUserData(ctx) };
+        if p.is_null() {
+            return None;
+        }
+
+        // user_data holds a raw Arc<ContextInner> pointer (created by Arc::into_raw).
+        let inner_ptr = p as *const ContextInner;
+        let inner = unsafe { Arc::increment_strong_count(inner_ptr) };
+        let inner = unsafe { Arc::from_raw(inner_ptr) };
+        Some(Self { ctx, inner })
+    }
 }
 
 impl Context {
     pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn std::error::Error>> {
-        // 为JSContext分配内存空间
         let mut memory = vec![0u8; memory_capacity];
 
-        // 加载标准库定义
         extern "C" {
             static js_stdlib: mquickjs_ffi::JSSTDLibraryDef;
         }
-
-        // 安全地访问静态变量
         let stdlib_def = unsafe { js_stdlib };
 
-        // 创建新的JSContext
         let ctx = unsafe {
             mquickjs_ffi::JS_NewContext(
                 memory.as_mut_ptr() as *mut c_void,
@@ -36,8 +104,30 @@ impl Context {
             return Err("Failed to create JSContext".into());
         }
 
+        let inner = Arc::new(ContextInner::new());
+
+        // Store an Arc clone inside JSContext user_data.
+        // Finalizer will drop this clone; Context::drop will drop its own Arc.
+        unsafe extern "C" fn user_data_finalizer(
+            _ctx: *mut mquickjs_ffi::JSContext,
+            user_data: *mut c_void,
+        ) {
+            if user_data.is_null() {
+                return;
+            }
+            // Safety: user_data created by Arc::into_raw.
+            let arc = unsafe { Arc::from_raw(user_data as *const ContextInner) };
+            drop(arc);
+        }
+
+        let arc_ptr = Arc::into_raw(inner.clone()) as *mut c_void;
+        unsafe {
+            mquickjs_ffi::JS_SetContextUserData(ctx, arc_ptr, Some(user_data_finalizer));
+        }
+
         Ok(Context {
             ctx,
+            inner,
             _memory: memory,
         })
     }

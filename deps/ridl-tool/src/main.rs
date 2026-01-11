@@ -4,9 +4,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-mod generator;
-mod parser;
-mod validator;
+use ridl_tool::{generator, parser, validator};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args: Vec<String> = env::args().collect();
@@ -202,6 +200,11 @@ pub mod ridl_initialize {\n\
     }\n\
 }\n";
             fs::write(&unified_path, unified_rs)?;
+
+            // context-level initializer entrypoint (per-JSContext init)
+            // This must remain separate from process-level symbol keep-alive.
+            // NOTE: singleton aggregation is generated as ridl_ctx_ext.rs + ridl_context_init.rs.
+            generator::singleton_aggregate::generate_ctx_ext_and_context_init(&plan, &out_dir)?;
         }
         _ => {
             eprintln!("Unknown command: {}", command);

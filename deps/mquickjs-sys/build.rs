@@ -52,16 +52,37 @@ fn main() {
     fs::create_dir_all(&ridl_out).expect("create ridl out dir");
 
     // Resolve tool binaries (must be built via `cargo run -p xtask -- build-tools`).
-    let tools_dir = workspace_root.join("target").join(env::var("PROFILE").unwrap_or_else(|_| "debug".to_string()));
-    let ridl_tool_bin = tools_dir.join(tool_exe_name("ridl-tool"));
-    let mquickjs_build_bin = tools_dir.join(tool_exe_name("mquickjs-build"));
+    // NOTE: On some systems we occasionally hit `ETXTBSY`/`EACCES` when executing binaries
+    // directly from `target/debug/` while Cargo/rust-analyzer may rebuild or inspect them.
+    // To make the build more robust, we copy the tools into this crate's OUT_DIR and execute
+    // the private copies.
+    let tools_dir = workspace_root
+        .join("target")
+        .join(env::var("PROFILE").unwrap_or_else(|_| "debug".to_string()));
+    let ridl_tool_bin_src = tools_dir.join(tool_exe_name("ridl-tool"));
+    let mquickjs_build_bin_src = tools_dir.join(tool_exe_name("mquickjs-build"));
 
-    if !ridl_tool_bin.exists() || !mquickjs_build_bin.exists() {
+    let ridl_tool_bin = out_dir.join(tool_exe_name("ridl-tool"));
+    let mquickjs_build_bin = out_dir.join(tool_exe_name("mquickjs-build"));
+
+    if !ridl_tool_bin_src.exists() || !mquickjs_build_bin_src.exists() {
         panic!(
             "Missing tool binaries. Run: cargo run -p xtask -- build-tools\nExpected: {} and {}",
-            ridl_tool_bin.display(),
-            mquickjs_build_bin.display()
+            ridl_tool_bin_src.display(),
+            mquickjs_build_bin_src.display()
         );
+    }
+
+    // Refresh private tool copies in OUT_DIR.
+    fs::copy(&ridl_tool_bin_src, &ridl_tool_bin).expect("copy ridl-tool into OUT_DIR");
+    fs::copy(&mquickjs_build_bin_src, &mquickjs_build_bin).expect("copy mquickjs-build into OUT_DIR");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&ridl_tool_bin, fs::Permissions::from_mode(0o755))
+            .expect("chmod ridl-tool");
+        fs::set_permissions(&mquickjs_build_bin, fs::Permissions::from_mode(0o755))
+            .expect("chmod mquickjs-build");
     }
 
     // When RIDL extensions are disabled (default), build a base QuickJS library.
@@ -222,7 +243,29 @@ fn run(mut cmd: Command) {
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
 
-    let status = cmd.status().expect("failed to run command");
+    eprintln!("[mquickjs-sys] run: {:?}", cmd);
+
+    // Workaround for sporadic ETXTBSY/EACCES when executing freshly-copied binaries.
+    // Retrying is safe here because these tools are deterministic given the same inputs.
+    let status = (0..20)
+        .find_map(|i| {
+            match cmd.status() {
+                Ok(s) => Some(s),
+                Err(e)
+                    if (e.kind() == std::io::ErrorKind::PermissionDenied
+                        || e.raw_os_error() == Some(26)) =>
+                {
+                    eprintln!("[mquickjs-sys] exec failed (attempt {}): {}", i + 1, e);
+                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    None
+                }
+                Err(e) => {
+                    eprintln!("[mquickjs-sys] exec failed: {}", e);
+                    panic!("failed to run command");
+                }
+            }
+        })
+        .expect("failed to run command");
     if !status.success() {
         panic!("command failed: {status}");
     }

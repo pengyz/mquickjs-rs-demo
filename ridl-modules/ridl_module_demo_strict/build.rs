@@ -19,7 +19,7 @@ fn main() {
     ridl_tool::generator::generate_module_files(&items, parsed.mode, out_dir, "ridl_module_demo_strict")
         .expect("generate module files");
 
-    ridl_tool::generator::generate_module_api_file(out_dir)
+    ridl_tool::generator::generate_module_api_file_default(out_dir)
         .expect("generate module api");
 
     // Also generate module-local symbols file (we'll include it from OUT_DIR).
