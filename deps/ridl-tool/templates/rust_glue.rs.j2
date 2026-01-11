@@ -1,28 +1,111 @@
 // Auto-generated Rust glue code for RIDL interfaces
-use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue, JS_NewString};
+use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
 use std::ffi::CString;
-use std::os::raw::c_int;
+use std::os::raw::{c_char, c_int};
+
+const JS_UNDEFINED: JSValue = 0x02;
+
+#[inline]
+unsafe fn js_throw_type_error(ctx: *mut JSContext, msg: &str) -> JSValue {
+    let cstr = CString::new(msg).unwrap_or_else(|_| CString::new("TypeError").unwrap());
+    // mquickjs exposes JS_ThrowTypeError as a macro; bindings expose JS_ThrowError.
+    // JS_CLASS_TYPE_ERROR is stable in this fork.
+    mquickjs_rs::mquickjs_ffi::JS_ThrowError(
+        ctx,
+        mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_TYPE_ERROR,
+        cstr.as_ptr(),
+    )
+}
 
 // Call into crate-local implementations.
 // The module crate is expected to provide `crate::impls::*`.
 use crate::impls::*;
 
-// Glue implementations for functions (only zero-arg supported)
+// Glue implementations for functions
 {%- for function in functions %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, _this_val: JSValue, _argc: c_int, _argv: *mut JSValue) -> JSValue {
-    let result = {{ function.name|lower }}();
+pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+    let _ = this_val;
+    {{ function.glue_param_extract|safe }}
+
+    let result = {{ function.name|lower }}({{ function.glue_call_args }});
+    {%- if function.return_kind == "void" %}
+    let _ = result;
+    JS_UNDEFINED
+    {%- else if function.return_kind == "string" %}
     let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    JS_NewString(ctx, cstr.as_ptr())
+    mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr())
+    {%- else if function.return_kind == "int" %}
+    mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result)
+    {%- else if function.return_kind == "bool" %}
+    if result { 0x07 } else { 0x03 }
+    {%- else if function.return_kind == "double" %}
+    mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result)
+    {%- else if function.return_kind == "any" %}
+    result
+    {%- else %}
+    compile_error!("v1 glue: unsupported return type");
+    JS_UNDEFINED
+    {%- endif %}
 }
 {%- endfor %}
 
-// Interface implementations (stub)
+// Glue implementations for singletons
+{%- for s in singletons %}
+{%- for method in s.methods %}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+    {{ method.glue_param_extract|safe }}
+
+    let result = rust_{{ s.name|lower }}_{{ method.name|lower }}(ctx as *mut core::ffi::c_void, this_val, {{ method.glue_call_args }});
+    {%- if method.return_kind == "void" %}
+    let _ = result;
+    JS_UNDEFINED
+    {%- else if method.return_kind == "string" %}
+    let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
+    mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr())
+    {%- else if method.return_kind == "int" %}
+    mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result)
+    {%- else if method.return_kind == "bool" %}
+    if result { 0x07 } else { 0x03 }
+    {%- else if method.return_kind == "double" %}
+    mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result)
+    {%- else if method.return_kind == "any" %}
+    result
+    {%- else %}
+    compile_error!("v1 glue: unsupported return type");
+    JS_UNDEFINED
+    {%- endif %}
+}
+{%- endfor %}
+{%- endfor %}
+
+// Interface implementations
 {%- for interface in interfaces %}
 {%- for method in interface.methods %}
-pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name }}(_ctx: *mut JSContext, _this_val: JSValue, _argc: c_int, _argv: *mut JSValue) -> JSValue {
-    // Not implemented
-    JSValue { u: Default::default(), tag: 0 }
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+    {{ method.glue_param_extract|safe }}
+
+    let result = {{ interface.name|lower }}_{{ method.name|lower }}(this_val, {{ method.glue_call_args }});
+    {%- if method.return_kind == "void" %}
+    let _ = result;
+    JS_UNDEFINED
+    {%- else if method.return_kind == "string" %}
+    let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
+    mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr())
+    {%- else if method.return_kind == "int" %}
+    mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result)
+    {%- else if method.return_kind == "bool" %}
+    if result { 0x07 } else { 0x03 }
+    {%- else if method.return_kind == "double" %}
+    mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result)
+    {%- else if method.return_kind == "any" %}
+    result
+    {%- else %}
+    compile_error!("v1 glue: unsupported return type");
+    JS_UNDEFINED
+    {%- endif %}
 }
 {%- endfor %}
 {%- endfor %}

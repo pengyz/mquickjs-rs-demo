@@ -30,19 +30,56 @@ extern const JSClassDef js_{{ interface.name|lower }}_class_def;
 int js_{{ interface.name|lower }}_init(JSContext *ctx, JSModuleDef *m);
 {%- endfor %}
 
+// Singletons
+{%- for s in singletons %}
+{%- for method in s.methods %}
+JSValue js_{{ s.name|lower }}_{{ method.name|lower }}(JSContext *ctx, JSValue this_val, int argc, JSValue *argv);
+{%- endfor %}
+{%- endfor %}
+
 // Extension definitions
+//
+// NOTE: For global singletons (e.g. `console`), registration requires file-scope
+// declarations/definitions (props/object defs) *and* global table entries.
+// A single macro expanded only inside `js_global_object[]` is insufficient.
+
+// File-scope declarations/definitions for RIDL extensions
+#define JS_RIDL_DECLS \
+{%- for s in singletons %}
+    static const JSPropDef js_{{ s.name|lower }}_props[] = { \
+{%- for method in s.methods %}
+        JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ s.name|lower }}_{{ method.name|lower }}), \
+{%- endfor %}
+        JS_PROP_END, \
+    }; \
+    static const JSClassDef js_{{ s.name|lower }}_obj = \
+        JS_OBJECT_DEF("{{ s.name|capitalize }}", js_{{ s.name|lower }}_props); \
+{%- endfor %}
+    /* empty */
+
+/* Ensure `JS_RIDL_DECLS` can be used as a statement in C code. */
+#define JS_RIDL_DECLS_STMT do { } while (0)
+
+// Entries injected into `js_global_object[]`
 #define JS_STDLIB_EXTENSIONS_{{ module_name|upper }} \
 {%- for function in functions %}
     JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}), \
 {%- endfor %}
 {%- for interface in interfaces -%}
 {%- for method in interface.methods %}
-    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ interface.name|lower }}_{{ method.name }}), \
+    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ interface.name|lower }}_{{ method.name|lower }}), \
 {%- endfor -%}
 {%- endfor %}
+/* singletons are registered as global object properties (e.g. globalThis.console) */ \
+{%- for s in singletons %}
+    JS_PROP_CLASS_DEF("{{ s.name }}", &js_{{ s.name|lower }}_obj), \
+{%- endfor %}
 
-// Global extension properties
-#define JS_RIDL_EXTENSIONS \
+#define JS_RIDL_GLOBAL_PROPS \
     JS_STDLIB_EXTENSIONS_{{ module_name|upper }}
+
+// Backward-compat hook (to be migrated out of templates)
+#define JS_RIDL_EXTENSIONS \
+    JS_RIDL_GLOBAL_PROPS
 
 #endif // MJS_RIDL_REGISTER_H

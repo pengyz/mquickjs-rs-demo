@@ -10,6 +10,7 @@ struct CHeaderTemplate {
     module_name: String,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
+    singletons: Vec<crate::parser::ast::Singleton>,
 }
 
 #[derive(Template)]
@@ -19,6 +20,7 @@ struct RustGlueTemplate {
     module_name: String,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
+    singletons: Vec<TemplateInterface>,
 }
 
 #[derive(Template)]
@@ -38,6 +40,14 @@ struct SymbolsTemplate {
     functions: Vec<TemplateFunction>,
 }
 
+#[derive(Template)]
+#[template(path = "aggregated_symbols.rs.j2")]
+#[allow(dead_code)]
+struct AggSymbolsTemplate {
+    interfaces: Vec<TemplateInterface>,
+    functions: Vec<TemplateFunction>,
+}
+
 #[derive(Debug, Clone)]
 struct TemplateInterface {
     name: String,
@@ -49,12 +59,19 @@ struct TemplateMethod {
     name: String,
     params: Vec<TemplateParam>,
     return_type: Option<String>,
+
+    glue_param_extract: String,
+    glue_call_args: String,
+    return_kind: String,
 }
 
 #[derive(Debug, Clone)]
 struct TemplateParam {
     name: String,
     param_type: String,
+
+    glue_extract: String,
+    glue_arg: String,
 }
 
 #[derive(Debug, Clone)]
@@ -62,6 +79,10 @@ struct TemplateFunction {
     name: String,
     params: Vec<TemplateParam>,
     return_type: Option<String>,
+
+    glue_param_extract: String,
+    glue_call_args: String,
+    return_kind: String,
 }
 
 impl From<Interface> for TemplateInterface {
@@ -81,19 +102,47 @@ impl From<Method> for TemplateMethod {
             Some(rust_type_name_for_codegen(&method.return_type))
         };
 
+        let params: Vec<TemplateParam> = method.params.into_iter().map(|p| p.into()).collect();
+        let glue_param_extract = params
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                p.glue_extract
+                    .replace("{IDX}", &(i + 1).to_string())
+                    .replace("{IDX0}", &i.to_string())
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let glue_call_args = params
+            .iter()
+            .map(|p| p.glue_arg.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let return_kind = glue_return_kind(&method.return_type);
+
         Self {
             name: method.name,
-            params: method.params.into_iter().map(|p| p.into()).collect(),
+            params,
             return_type,
+            glue_param_extract,
+            glue_call_args,
+            return_kind,
         }
     }
 }
 
 impl From<Param> for TemplateParam {
     fn from(param: Param) -> Self {
+        let name = param.name;
+        let ty = param.param_type.clone();
+        let (mut glue_extract, glue_arg) = glue_param_snippet(&name, &ty);
+        // Fill argv indices later in caller where we know the order.
+
         Self {
-            name: param.name,
-            param_type: param.param_type.to_string(),
+            name,
+            param_type: ty.to_string(),
+            glue_extract,
+            glue_arg,
         }
     }
 }
@@ -101,10 +150,96 @@ impl From<Param> for TemplateParam {
 fn rust_type_name_for_codegen(ty: &Type) -> String {
     match ty {
         Type::Void => "()".to_string(),
-        // Keep this small and local: current demo needs `string` => `String`.
-        // Other primitives already come through as Rust-like names.
-        Type::String => "String".to_string(),
+        Type::Bool => "bool".to_string(),
+        Type::Int => "i32".to_string(),
+        Type::Float | Type::Double => "f64".to_string(),
+        Type::String => "*const std::os::raw::c_char".to_string(),
+        Type::Any => "mquickjs_rs::mquickjs_ffi::JSValue".to_string(),
         _ => ty.to_string(),
+    }
+}
+
+fn glue_param_snippet(name: &str, ty: &Type) -> (String, String) {
+    let idx = "{IDX}";
+    match ty {
+        Type::String => (
+            format!(
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\n\
+let {name}_ptr = mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _);\n\
+if {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n\
+let {name}: *const c_char = {name}_ptr;",
+                idx = idx,
+                idx0 = "{IDX0}",
+                name = name
+            ),
+            name.to_string(),
+        ),
+        Type::Int => (
+            format!(
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+let mut {name}: i32 = 0;\n\
+// Reject non-number explicitly; this fork may coerce strings in JS_ToInt32.
+if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n\
+if mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
+                idx = idx,
+                idx0 = "{IDX0}",
+                name = name
+            ),
+            name.to_string(),
+        ),
+        Type::Bool => (
+            format!(
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+// Only accept actual booleans in v1.
+// bindings doesn't expose JS_IsBool; detect via NaN-boxed tag (JS_TAG_BOOL = 3).
+let {name}_v: u32 = unsafe {{ *argv.add({idx0}) }} as u32;\n\
+if ({name}_v & ((1 << mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1)) != 3 {{ return js_throw_type_error(ctx, \"invalid bool argument: {name}\"); }}\n\
+let {name}: bool = {name}_v != 3;",
+                idx = idx,
+                idx0 = "{IDX0}",
+                name = name
+            ),
+            name.to_string(),
+        ),
+        Type::Double | Type::Float => (
+            format!(
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+let mut {name}: f64 = 0.0;\n\
+if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n\
+if mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
+                idx = idx,
+                idx0 = "{IDX0}",
+                name = name
+            ),
+            name.to_string(),
+        ),
+        Type::Any => (
+            format!(
+                "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
+let {name}: JSValue = unsafe {{ *argv.add({idx0}) }};",
+                idx = idx,
+                idx0 = "{IDX0}",
+                name = name
+            ),
+            name.to_string(),
+        ),
+        _ => (
+            format!("compile_error!(\"v1 glue: unsupported param type '{ty}' for {name}\");", ty = ty, name = name),
+            name.to_string(),
+        ),
+    }
+}
+
+fn glue_return_kind(ty: &Type) -> String {
+    match ty {
+        Type::Void => "void".to_string(),
+        Type::String => "string".to_string(),
+        Type::Int => "int".to_string(),
+        Type::Bool => "bool".to_string(),
+        Type::Double | Type::Float => "double".to_string(),
+        Type::Any => "any".to_string(),
+        _ => "unsupported".to_string(),
     }
 }
 
@@ -116,10 +251,31 @@ impl From<Function> for TemplateFunction {
             Some(rust_type_name_for_codegen(&function.return_type))
         };
 
+        let params: Vec<TemplateParam> = function.params.into_iter().map(|p| p.into()).collect();
+        let glue_param_extract = params
+            .iter()
+            .enumerate()
+            .map(|(i, p)| {
+                p.glue_extract
+                    .replace("{IDX}", &(i + 1).to_string())
+                    .replace("{IDX0}", &i.to_string())
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        let glue_call_args = params
+            .iter()
+            .map(|p| p.glue_arg.clone())
+            .collect::<Vec<_>>()
+            .join(", ");
+        let return_kind = glue_return_kind(&function.return_type);
+
         Self {
             name: function.name,
-            params: function.params.into_iter().map(|p| p.into()).collect(),
+            params,
             return_type,
+            glue_param_extract,
+            glue_call_args,
+            return_kind,
         }
     }
 }
@@ -198,10 +354,23 @@ pub fn generate_module_files(
     }
 
     // 生成Rust胶水代码
+    let mut singletons = Vec::new();
+    for item in items {
+        if let crate::parser::ast::IDLItem::Singleton(s) = item {
+            singletons.push(TemplateInterface::from(crate::parser::ast::Interface {
+                name: s.name.clone(),
+                methods: s.methods.clone(),
+                properties: vec![],
+                module: None,
+            }));
+        }
+    }
+
     let rust_glue_template = RustGlueTemplate {
         module_name: module_name.to_string(),
         interfaces: interfaces.clone(),
         functions: functions.clone(),
+        singletons,
     };
     let rust_glue_code = rust_glue_template.render()?;
     std::fs::write(
@@ -271,9 +440,10 @@ pub fn generate_shared_files(
         let content = std::fs::read_to_string(ridl_file)?;
         let items = crate::parser::parse_ridl(&content)?;
 
-        // 提取函数和接口
+        // 提取函数/接口/单例（stdlib 注入依赖 singleton）
         let mut functions = Vec::new();
         let mut interfaces = Vec::new();
+        let mut singletons = Vec::new();
 
         for item in items {
             match item {
@@ -283,27 +453,34 @@ pub fn generate_shared_files(
                 crate::parser::ast::IDLItem::Interface(i) => {
                     interfaces.push(TemplateInterface::from(i))
                 }
+                crate::parser::ast::IDLItem::Singleton(s) => {
+                    singletons.push(s)
+                }
                 // 其他类型暂不处理
                 _ => {}
             }
         }
 
-        all_module_symbols.push((module_name, functions, interfaces));
+        all_module_symbols.push((module_name, functions, interfaces, singletons));
     }
 
     // 生成聚合的C头文件
     let mut all_interfaces = Vec::new();
     let mut all_functions = Vec::new();
 
-    for (_, functions, interfaces) in &all_module_symbols {
+    let mut all_singletons = Vec::new();
+
+    for (_, functions, interfaces, singletons) in &all_module_symbols {
         all_functions.extend(functions.clone());
         all_interfaces.extend(interfaces.clone());
+        all_singletons.extend(singletons.clone());
     }
 
     let c_template = CHeaderTemplate {
         module_name: "mquickjs_ridl".to_string(),
-        interfaces: all_interfaces,
-        functions: all_functions,
+        interfaces: all_interfaces.clone(),
+        functions: all_functions.clone(),
+        singletons: all_singletons,
     };
     let c_code = c_template.render()?;
     std::fs::write(
@@ -311,44 +488,12 @@ pub fn generate_shared_files(
         c_code,
     )?;
 
-    // 生成总的聚合符号文件
-    let mut agg_symbols_content =
-        "// Generated symbol references for RIDL extensions\n".to_string();
-    agg_symbols_content.push_str("use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};\n");
-
-    // extern 声明所有 js_* 符号（不 include glue，避免重复定义）
-    for (_module_name, functions, interfaces) in &all_module_symbols {
-        for function in functions {
-            let func_name_lower = function.name.to_lowercase();
-            agg_symbols_content.push_str(&format!("unsafe extern \"C\" {{ fn js_{func}(ctx: *mut JSContext, this_val: JSValue, argc: i32, argv: *mut JSValue) -> JSValue; }}\n", func=func_name_lower));
-        }
-        for interface in interfaces {
-            for method in &interface.methods {
-                let interface_name_lower = interface.name.to_lowercase();
-                let method_name_lower = method.name.to_lowercase();
-                agg_symbols_content.push_str(&format!("unsafe extern \"C\" {{ fn js_{iface}_{meth}(ctx: *mut JSContext, this_val: JSValue, argc: i32, argv: *mut JSValue) -> JSValue; }}\n",
-                    iface=interface_name_lower, meth=method_name_lower));
-            }
-        }
-    }
-
-    // 通过 ensure_symbols 引用符号，防止裁剪
-    agg_symbols_content.push_str("\npub fn ensure_symbols() {\n");
-    for (_module_name, functions, interfaces) in &all_module_symbols {
-        for function in functions {
-            let func_name_lower = function.name.to_lowercase();
-            agg_symbols_content.push_str(&format!("    let _ = js_{func_name_lower} as unsafe extern \"C\" fn(*mut JSContext, JSValue, i32, *mut JSValue) -> JSValue;\n", func_name_lower=func_name_lower));
-        }
-        for interface in interfaces {
-            for method in &interface.methods {
-                let interface_name_lower = interface.name.to_lowercase();
-                let method_name_lower = method.name.to_lowercase();
-                agg_symbols_content.push_str(&format!("    let _ = js_{iface}_{meth} as unsafe extern \"C\" fn(*mut JSContext, JSValue, i32, *mut JSValue) -> JSValue;\n",
-                    iface=interface_name_lower, meth=method_name_lower));
-            }
-        }
-    }
-    agg_symbols_content.push_str("}\n");
+    // 生成总的聚合符号文件（extern 声明 + ensure_symbols 引用，避免 include glue 导致重复定义）
+    let agg_symbols = AggSymbolsTemplate {
+        interfaces: all_interfaces.clone(),
+        functions: all_functions.clone(),
+    };
+    let agg_symbols_content = agg_symbols.render()?;
 
     let out_dir = std::path::Path::new(output_dir);
 

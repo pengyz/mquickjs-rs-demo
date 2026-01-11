@@ -1,1 +1,12 @@
-fn sayHello() -> string;
+// v1 glue coverage demo
+
+fn echo_str(s: string) -> string;
+fn add_i32(a: int, b: int) -> int;
+fn not_bool(v: bool) -> bool;
+fn add_f64(a: double, b: double) -> double;
+fn id_any(v: any) -> any;
+fn void_ok();
+
+singleton demo {
+  fn ping(s: string);
+}

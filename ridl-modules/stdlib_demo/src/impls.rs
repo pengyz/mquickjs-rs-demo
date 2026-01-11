@@ -1,4 +1,4 @@
-pub fn sayhello() -> String {
-    // TODO: replace with real implementation
-    "hello".to_string()
-}
+#[path = "../stdlib_demo_impl.rs"]
+mod stdlib_demo_impl;
+
+pub use stdlib_demo_impl::*;

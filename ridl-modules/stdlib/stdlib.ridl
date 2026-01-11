@@ -21,8 +21,8 @@ fn clearTimeout(timerId: int);
 
 // 控制台对象
 singleton console {
-    fn log(message: string);
-    fn error(message: string);
+    fn log(content: string);
+    fn error(content: string);
     readonly property enabled: bool;
 }
 

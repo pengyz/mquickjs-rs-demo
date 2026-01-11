@@ -32,6 +32,9 @@
 /* Include RIDL-generated standard library extensions (from build.rs copied into mquickjs/) */
 #include "mquickjs_ridl_register.h"
 
+/* File-scope declarations/definitions for RIDL extensions */
+JS_RIDL_DECLS;
+
 /* defined in mqjs_example.c */
 //#define CONFIG_CLASS_EXAMPLE
 
@@ -315,20 +318,10 @@ static const JSPropDef js_date[] = {
 static const JSClassDef js_date_class =
     JS_CLASS_DEF("Date", 7, js_date_constructor, JS_CLASS_DATE, js_date, NULL, NULL, NULL);
 
-static const JSPropDef js_console[] = {
-    JS_CFUNC_DEF("log", 1, js_print),
-    JS_PROP_END,
-};
-
-static const JSClassDef js_console_obj =
-    JS_OBJECT_DEF("Console", js_console);
-
-static const JSPropDef js_performance[] = {
-    JS_CFUNC_DEF("now", 0, js_performance_now),
-    JS_PROP_END,
-};
-static const JSClassDef js_performance_obj =
-    JS_OBJECT_DEF("Performance", js_performance);
+/*
+ * NOTE: Host/OS-level stdlib objects (console/performance/timers/...) are
+ * provided via RIDL extensions. Do not keep partial C registrations here.
+ */
 
 static const JSPropDef js_global_object[] = {
     JS_PROP_CLASS_DEF("Object", &js_object_class),

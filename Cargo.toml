@@ -3,6 +3,7 @@ members = [
     "deps/mquickjs-sys",
     "deps/mquickjs-rs",
     "deps/ridl-tool",
+    "ridl-modules/stdlib",
     "ridl-modules/stdlib_demo",
     "ridl-modules/stdlib_demo2",
     ".", "deps/mquickjs-build", "xtask",
@@ -22,6 +23,7 @@ mquickjs-rs = { path = "deps/mquickjs-rs" }
 mquickjs-sys = { path = "deps/mquickjs-sys" }
 
 # RIDL modules selected for this app
+stdlib = { path = "ridl-modules/stdlib" }
 stdlib_demo = { path = "ridl-modules/stdlib_demo" }
 stdlib_demo2 = { path = "ridl-modules/stdlib_demo2" }
 

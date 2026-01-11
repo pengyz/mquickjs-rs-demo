@@ -1,0 +1,12 @@
+// mquickjs标准库平台相关功能定义
+// 这些功能将通过全局注册方式注册到全局对象
+//
+// v0 范围：仅补齐 console（后续再扩展 timers/performance/load/gc 等）。
+
+// 控制台对象
+singleton console {
+    fn log(content: string);
+    fn error(content: string);
+    readonly property enabled: bool;
+}
+
