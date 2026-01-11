@@ -170,7 +170,7 @@ fn glue_param_snippet(
     name: &str,
     ty: &Type,
     variadic: bool,
-    file_mode: crate::parser::FileMode,
+    _file_mode: crate::parser::FileMode,
 ) -> (String, String) {
     let idx = "{IDX}";
     // NOTE: avoid nested format! strings that contain `{name}` because the outer Rust format! will
@@ -191,14 +191,11 @@ fn glue_param_snippet(
                 );
             }
 
-            let check = match file_mode {
-                crate::parser::FileMode::Strict => format!(
-                    "if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
-                    idx0 = "{IDX0}",
-                    name = name
-                ),
-                crate::parser::FileMode::Default => "".to_string(),
-            };
+            let check = format!(
+                "if mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
+                idx0 = "{IDX0}",
+                name = name
+            );
 
             (
                 format!(
@@ -230,14 +227,11 @@ fn glue_param_snippet(
                     idx = idx,
                     idx0 = "{IDX0}",
                     name = name,
-                    check = match file_mode {
-                        crate::parser::FileMode::Strict => format!(
-                            "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n",
-                            idx0 = "{IDX0}",
-                            name = name
-                        ),
-                        crate::parser::FileMode::Default => "".to_string(),
-                    }
+                    check = format!(
+                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n",
+                        idx0 = "{IDX0}",
+                        name = name
+                    )
                 ),
                 name.to_string(),
             )
@@ -289,14 +283,11 @@ let {name}: bool = {name}_v != 3;",
                     idx = idx,
                     idx0 = "{IDX0}",
                     name = name,
-                    check = match file_mode {
-                        crate::parser::FileMode::Strict => format!(
-                            "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n",
-                            idx0 = "{IDX0}",
-                            name = name
-                        ),
-                        crate::parser::FileMode::Default => "".to_string(),
-                    }
+                    check = format!(
+                        "if mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n",
+                        idx0 = "{IDX0}",
+                        name = name
+                    )
                 ),
                 name.to_string(),
             )
