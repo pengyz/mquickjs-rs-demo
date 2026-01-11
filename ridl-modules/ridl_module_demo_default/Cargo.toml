@@ -1,7 +1,7 @@
 [package]
-name = "stdlib_demo2"
+name = "ridl_module_demo_default"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 mquickjs-rs = { path = "../../deps/mquickjs-rs" }

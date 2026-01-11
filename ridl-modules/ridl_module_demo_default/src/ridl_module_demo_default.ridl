@@ -1,0 +1,13 @@
+// v1 glue coverage demo
+
+fn default_echo_str(s: string) -> string;
+fn default_add_i32(a: int, b: int) -> int;
+fn default_not_bool(v: bool) -> bool;
+fn default_add_f64(a: double, b: double) -> double;
+// any is allowed in default mode.
+fn default_id_any(v: any) -> any;
+fn default_void_ok();
+
+singleton demo {
+  fn ping(s: string);
+}
