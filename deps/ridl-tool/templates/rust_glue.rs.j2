@@ -4,7 +4,7 @@ use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
 use std::ffi::CString;
 use std::os::raw::{c_char, c_int};
 
-const JS_UNDEFINED: JSValue = 0x02;
+const JS_UNDEFINED: JSValue = mquickjs_rs::mquickjs_ffi::JS_UNDEFINED;
 
 #[inline]
 fn js_throw_type_error(ctx: *mut JSContext, msg: &str) -> JSValue {
@@ -41,8 +41,7 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
     {%- else if function.return_kind == "int" %}
     unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
     {%- else if function.return_kind == "bool" %}
-    // JS_TRUE/JS_FALSE encoding: JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL, v)
-    if result { 0x23 } else { 0x03 }
+    mquickjs_rs::mquickjs_ffi::js_mkbool(result)
     {%- else if function.return_kind == "double" %}
     unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
     {%- else if function.return_kind == "any" %}
@@ -118,8 +117,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
 
     let result = if s.{{ prop.name|lower }}() { 1 } else { 0 };
     {%- if prop.property_type|js_conversion_type == "to_bool" %}
-    // JS_TRUE/JS_FALSE encoding: JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL, v)
-    if result != 0 { 0x23 } else { 0x03 }
+    mquickjs_rs::mquickjs_ffi::js_mkbool(result != 0)
     {%- else if prop.property_type|js_conversion_type == "to_i32" %}
     unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
     {%- else if prop.property_type|js_conversion_type == "to_f64" %}
@@ -153,8 +151,7 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
     {%- else if method.return_kind == "int" %}
     unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
     {%- else if method.return_kind == "bool" %}
-    // JS_TRUE/JS_FALSE encoding: JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL, v)
-    if result { 0x23 } else { 0x03 }
+    mquickjs_rs::mquickjs_ffi::js_mkbool(result)
     {%- else if method.return_kind == "double" %}
     unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
     {%- else if method.return_kind == "any" %}

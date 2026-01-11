@@ -24,9 +24,7 @@ impl<'ctx> Value<'ctx> {
 
     // 修复 is_bool 方法 - 检查值是否为布尔类型
     pub fn is_bool(&self, _ctx: &'ctx Context) -> bool {
-        // 检查值的标签是否为布尔类型 (JS_TAG_BOOL)
-        let tag = (self.value as u32) & ((1 << mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1);
-        tag == 0x03 // JS_TAG_BOOL (JS_TAG_SPECIAL | (0 << 2)) = 3
+        mquickjs_ffi::js_is_bool(self.value)
     }
 
     // 修复 is_function 方法

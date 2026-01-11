@@ -37,5 +37,5 @@ pub extern "C" fn rust_demo_ping(
     s: *const c_char,
 ) -> JSValue {
     let _ = default_echo_str(s);
-    0x02 // JS_UNDEFINED
+    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
 }

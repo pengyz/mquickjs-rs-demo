@@ -7,6 +7,35 @@
 )]
 pub mod mquickjs_ffi {
     include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+
+    // ---- QuickJS value encoding helpers / constants ----
+    // bindgen does not reliably export C macros, so we keep a small, canonical set here.
+
+    pub const JS_NULL: JSValue = JS_VALUE_MAKE_SPECIAL(JS_TAG_NULL as u32, 0);
+    pub const JS_UNDEFINED: JSValue = JS_VALUE_MAKE_SPECIAL(JS_TAG_UNDEFINED as u32, 0);
+    pub const JS_FALSE: JSValue = JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL as u32, 0);
+    pub const JS_TRUE: JSValue = JS_VALUE_MAKE_SPECIAL(JS_TAG_BOOL as u32, 1);
+
+    #[inline]
+    pub const fn JS_VALUE_MAKE_SPECIAL(tag: u32, v: u32) -> JSValue {
+        // Matches C macro: ((tag) | ((v) << JS_TAG_SPECIAL_BITS))
+        (tag | (v << (JS_TAG_SPECIAL_BITS as u32))) as JSValue
+    }
+
+    #[inline]
+    pub const fn js_mkbool(v: bool) -> JSValue {
+        if v { JS_TRUE } else { JS_FALSE }
+    }
+
+    #[inline]
+    pub const fn js_value_special_tag(v: JSValue) -> u32 {
+        (v as u32) & ((1u32 << (JS_TAG_SPECIAL_BITS as u32)) - 1)
+    }
+
+    #[inline]
+    pub const fn js_is_bool(v: JSValue) -> bool {
+        js_value_special_tag(v) == (JS_TAG_BOOL as u32)
+    }
 }
 
 pub use context::Context;

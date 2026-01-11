@@ -223,7 +223,7 @@ pub fn rust_console_log(
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::impls::ConsoleSingleton>;
     let s: &mut dyn crate::impls::ConsoleSingleton = unsafe { &mut **holder_ptr };
     s.log(ctx, args);
-    0x02 // JS_UNDEFINED
+    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
 }
 
 pub fn rust_console_error(
@@ -280,7 +280,7 @@ pub fn rust_console_error(
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::impls::ConsoleSingleton>;
     let s: &mut dyn crate::impls::ConsoleSingleton = unsafe { &mut **holder_ptr };
     s.error(ctx, args);
-    0x02 // JS_UNDEFINED
+    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
 }
 
 pub fn rust_console_get_enabled(ctx: *mut std::ffi::c_void) -> bool {
