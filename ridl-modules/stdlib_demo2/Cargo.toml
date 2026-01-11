@@ -1,0 +1,14 @@
+[package]
+name = "stdlib_demo2"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+mquickjs-rs = { path = "../../deps/mquickjs-rs" }
+
+[build-dependencies]
+# Use the existing generator binary crate in this repo.
+ridl-tool = { path = "../../deps/ridl-tool" }
+
+[lib]
+crate-type = ["rlib"]
