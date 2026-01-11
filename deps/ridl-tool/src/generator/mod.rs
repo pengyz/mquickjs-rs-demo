@@ -15,6 +15,7 @@ struct CHeaderTemplate {
 #[derive(Template)]
 #[template(path = "rust_glue.rs.j2")]
 struct RustGlueTemplate {
+    #[allow(dead_code)]
     module_name: String,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
@@ -30,6 +31,7 @@ struct RustImplTemplate {
 
 #[derive(Template)]
 #[template(path = "symbols.rs.j2")]
+#[allow(dead_code)]
 struct SymbolsTemplate {
     module_name: String,
     interfaces: Vec<TemplateInterface>,
@@ -122,6 +124,7 @@ impl From<Function> for TemplateFunction {
     }
 }
 
+#[allow(dead_code)]
 pub fn collect_definitions(ridl_files: &[String]) -> Result<Vec<IDL>, Box<dyn std::error::Error>> {
     let mut all_definitions = Vec::new();
 
@@ -223,6 +226,7 @@ pub fn generate_module_files(
     Ok(())
 }
 
+#[allow(dead_code)]
 pub fn generate_module_api_file(
     out_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {

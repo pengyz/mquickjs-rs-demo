@@ -23,6 +23,7 @@ struct MquickjsBuildOutput {
     schema_version: u32,
     lib_dir: PathBuf,
     include_dir: PathBuf,
+    #[allow(dead_code)]
     libs: Vec<String>,
     inputs: Vec<PathBuf>,
 }

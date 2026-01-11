@@ -15,6 +15,7 @@ struct RidlPlan {
 
 #[derive(Debug, Deserialize)]
 struct RidlGenerated {
+    #[allow(dead_code)]
     out_dir: PathBuf,
     mquickjs_ridl_register_h: PathBuf,
 }

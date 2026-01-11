@@ -7,8 +7,10 @@ use std::collections::HashMap;
 /// RIDL错误类型枚举
 #[derive(Debug, Clone)]
 pub enum RIDLErrorType {
+    #[allow(dead_code)]
     SyntaxError,
     SemanticError,
+    #[allow(dead_code)]
     ValidationError,
 }
 
@@ -18,7 +20,9 @@ pub struct RIDLError {
     pub message: String,
     pub line: usize,
     pub column: usize,
+    #[allow(dead_code)]
     pub file: String,
+    #[allow(dead_code)]
     pub error_type: RIDLErrorType,
 }
 

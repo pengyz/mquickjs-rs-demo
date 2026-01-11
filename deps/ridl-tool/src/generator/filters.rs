@@ -1,6 +1,7 @@
 use crate::parser::ast::Type;
 
 // Rust类型转换辅助函数，用于模板
+#[allow(dead_code)]
 pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
     let rust_type = match idl_type {
         Type::Bool => "bool".to_string(),
@@ -29,6 +30,7 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
 }
 
 // 修复此函数以正确处理字符串类型的Rust转换
+#[allow(dead_code)]
 pub fn rust_type_from_str_opt(opt_type: &Option<String>) -> ::askama::Result<String> {
     match opt_type {
         Some(type_str) => {
@@ -57,6 +59,7 @@ pub fn default(s: &Option<String>, default: &str) -> ::askama::Result<String> {
 }
 
 // 将字符串转换为驼峰命名
+#[allow(dead_code)]
 pub fn camelcase(s: &str) -> ::askama::Result<String> {
     let mut result = String::new();
     let mut capitalize_next = false;
@@ -78,11 +81,13 @@ pub fn camelcase(s: &str) -> ::askama::Result<String> {
 }
 
 // 将字符串转换为小写
+#[allow(dead_code)]
 pub fn lower(s: &str) -> ::askama::Result<String> {
     Ok(s.to_lowercase())
 }
 
 // 将字符串转换为大写
+#[allow(dead_code)]
 pub fn upper(s: &str) -> ::askama::Result<String> {
     Ok(s.to_uppercase())
 }
@@ -93,6 +98,7 @@ pub fn length<T>(slice: &[T]) -> ::askama::Result<usize> {
 }
 
 // JS类型转换辅助函数，用于模板
+#[allow(dead_code)]
 pub fn js_conversion_type(idl_type: &Type) -> Result<String, askama::Error> {
     let conversion_method = match idl_type {
         Type::Bool => "to_bool",

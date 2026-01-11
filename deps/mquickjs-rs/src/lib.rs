@@ -194,7 +194,7 @@ mod tests {
 
     #[test]
     fn test_string_creation() {
-        let mut context = Context::new(1024 * 1024).unwrap();
+        let context = Context::new(1024 * 1024).unwrap();
         let value = context.create_string("Hello, World!").unwrap();
         assert!(value.is_string(&context));
 
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn test_value_type_checks() {
-        let mut context = Context::new(1024 * 1024).unwrap();
+        let context = Context::new(1024 * 1024).unwrap();
 
         // Test string
         let c_code = CString::new("'test string'").unwrap();
