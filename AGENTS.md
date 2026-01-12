@@ -12,6 +12,7 @@
 - Every change requires tests. Write/review tests early and ask the user to review tests explicitly. All tests must pass; if tests fail, report the reason first and wait for the user's decision on how to proceed.
 - After finishing a feature, run JS integration cases under `tests/` (in addition to `cargo test`). Command: `cargo run -- tests`.
 - After completing a feature, update related docs to keep docs and code consistent. If you detect inconsistency, report it first and wait for user confirmation before making corrective doc changes.
+- 文档要求：项目内文档（尤其是 doc/planning/ 下的设计/规划文档）使用中文编写。
 - For each large module, maintain a `README.md` describing purpose; add design/implementation docs when complexity warrants.
 - Default permission: shell commands are allowed (not limited to git/rmdir; any CLI tool is allowed).
 - Git commit message format: subject/title line < 50 columns; body lines < 88 columns.
