@@ -112,9 +112,10 @@ pub fn generate_ctx_ext_and_context_init(
         (a.crate_name.as_str(), a.slot_index).cmp(&(b.crate_name.as_str(), b.slot_index))
     });
 
-    // Only initialize singletons that are required for current smoke tests.
-    // This prevents calling into placeholder singletons that `panic!()`.
-    singleton_inits.retain(|s| s.singleton_key == "console");
+    // Do not filter here. All declared singletons are initialized.
+    //
+    // IMPORTANT: module crates must provide non-panicking `create_*_singleton()` implementations.
+    // Missing implementations should be caught at build time.
 
     // ctx-ext struct + slot indices must be generated from the same `slots` list to avoid divergence.
     let slot_indices = RustSlotIndicesTemplate {

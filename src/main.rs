@@ -1,9 +1,6 @@
-use std::{env, fs, process};
+use std::{env, path::Path, process};
 
-use mquickjs_demo::Context;
-
-// App-level facade: mquickjs-rs is framework-only; RIDL module set is chosen by this app.
-// The actual facade type will be introduced in src/lib.rs (mquickjs_demo::Context).
+use mquickjs_demo::test_runner;
 
 fn main() {
     mquickjs_rs::ridl_initialize!();
@@ -11,32 +8,44 @@ fn main() {
     let args: Vec<String> = env::args().collect();
 
     if args.len() < 2 {
-        println!("Usage: {} <javascript-file>", args[0]);
-        return;
+        eprintln!("Usage: {} <js-file-or-dir>", args[0]);
+        process::exit(2);
     }
 
-    let filename = &args[1];
-    let script = fs::read_to_string(filename).expect("Failed to read JavaScript file");
-
-    // 使用默认内存容量创建上下文
-    let mut context = Context::default();
-
-    // 执行JavaScript代码
-    match context.eval(&script) {
-        Ok(result) => {
-            println!("Result: {}", result);
+    let path = Path::new(&args[1]);
+    let files = match test_runner::collect_js_files(path) {
+        Ok(v) => v,
+        Err(e) => {
+            eprintln!("Error: {e}");
+            process::exit(2);
         }
-        Err(error) => {
-            eprintln!("Error: {}", error);
-            process::exit(1);
+    };
+
+    if files.is_empty() {
+        eprintln!("No .js files found under: {}", path.display());
+        process::exit(2);
+    }
+
+    let mut failed = 0usize;
+    for f in &files {
+        match test_runner::run_one_js_file(f) {
+            Ok(()) => {
+                println!("PASS {}", f.display());
+            }
+            Err(err) => {
+                failed += 1;
+                println!("FAIL {}", f.display());
+                eprintln!("  {err}");
+            }
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn test_quickjs_eval() {
-        // 测试代码
+    let total = files.len();
+    let passed = total - failed;
+    println!("\nSummary: {passed}/{total} passed");
+
+    if failed == 0 {
+        process::exit(0);
     }
+    process::exit(1);
 }

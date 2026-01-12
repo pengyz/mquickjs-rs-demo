@@ -562,7 +562,10 @@ pub fn initialize_module() {\n\
 ///\n\
 /// This API must not reference any app crate types (e.g. app-owned `CtxExt`).\n\
 pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotWriter) {\n\
-    // Default implementation: nothing to fill.\n\
+    // If this module declares singletons, their constructors must be implemented\n\
+    // in `crate::impls` (not a generated `todo!()` stub).\n\
+    //\n\
+    // Default behavior: do nothing.\n\
     let _ = w;\n\
 }\n";
 
