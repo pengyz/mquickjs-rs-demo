@@ -45,7 +45,7 @@ pub mod mquickjs_ffi {
 pub use context::Context;
 pub use function::Function;
 pub use object::Object;
-pub use value::Value;
+pub use value::{PinnedValue, Value, ValueRef};
 
 pub mod context;
 pub mod function;
@@ -86,7 +86,43 @@ pub fn register_all_ridl_modules() {
 mod tests {
     use super::*;
     use std::ffi::CString;
-    use std::marker::PhantomData;
+
+    #[test]
+    fn test_pinned_value_survives_gc() {
+        // Pin a value as a GC root and force a GC; it should remain usable.
+        let mut context = Context::new(1024 * 1024).unwrap();
+        let v = context.create_string("pinned").unwrap();
+        let pinned = v.pin(&context);
+
+        unsafe { mquickjs_ffi::JS_GC(context.ctx) };
+
+        let s = context.get_string(pinned.as_ref()).unwrap();
+        assert_eq!(s, "pinned");
+    }
+
+    #[test]
+    fn test_tls_current_context_handle_nested() {
+        let mut ctx = Context::new(1024 * 1024).unwrap();
+
+        assert!(ContextHandle::current().is_none());
+
+        let h1 = ctx.handle();
+        let _g1 = h1.enter_current();
+        let cur1 = ContextHandle::current().unwrap();
+        assert_eq!(cur1.ctx, h1.ctx);
+
+        let h2 = ctx.handle();
+        let _g2 = h2.enter_current();
+        let cur2 = ContextHandle::current().unwrap();
+        assert_eq!(cur2.ctx, h2.ctx);
+
+        drop(_g2);
+        let cur3 = ContextHandle::current().unwrap();
+        assert_eq!(cur3.ctx, h1.ctx);
+
+        drop(_g1);
+        assert!(ContextHandle::current().is_none());
+    }
 
     #[test]
     fn test_create_context() {
@@ -258,10 +294,7 @@ mod tests {
                 mquickjs_ffi::JS_EVAL_RETVAL as i32,
             )
         };
-        let value = Value {
-            value: str_val,
-            _ctx: PhantomData,
-        };
+        let value = ValueRef::new(str_val);
         assert!(value.is_string(&context));
 
         // Test number
@@ -276,10 +309,7 @@ mod tests {
                 mquickjs_ffi::JS_EVAL_RETVAL as i32,
             )
         };
-        let value = Value {
-            value: num_val,
-            _ctx: PhantomData,
-        };
+        let value = ValueRef::new(num_val);
         assert!(value.is_number(&context));
 
         // Test boolean
@@ -294,10 +324,7 @@ mod tests {
                 mquickjs_ffi::JS_EVAL_RETVAL as i32,
             )
         };
-        let value = Value {
-            value: bool_val,
-            _ctx: PhantomData,
-        };
+        let value = ValueRef::new(bool_val);
         assert!(value.is_bool(&context));
 
         // Test null
@@ -312,10 +339,7 @@ mod tests {
                 mquickjs_ffi::JS_EVAL_RETVAL as i32,
             )
         };
-        let value = Value {
-            value: null_val,
-            _ctx: PhantomData,
-        };
+        let value = ValueRef::new(null_val);
         assert!(value.is_null(&context));
 
         // Test undefined
@@ -330,10 +354,7 @@ mod tests {
                 mquickjs_ffi::JS_EVAL_RETVAL as i32,
             )
         };
-        let value = Value {
-            value: undef_val,
-            _ctx: PhantomData,
-        };
+        let value = ValueRef::new(undef_val);
         assert!(value.is_undefined(&context));
     }
 }

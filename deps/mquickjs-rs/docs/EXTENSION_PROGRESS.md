@@ -111,6 +111,8 @@ tests/ridl_tests/
 
 # mquickjs-rs RIDL扩展开发进度
 
+另见：`docs/API.md`（mquickjs-rs 设计与 API 说明：Context/ContextHandle、ValueRef/PinnedValue、TLS current）。
+
 ## RIDL扩展符号管理方案
 
 ### 问题描述
