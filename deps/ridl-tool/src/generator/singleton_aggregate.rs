@@ -18,6 +18,7 @@ struct RustSlotIndicesTemplate {
 #[derive(Template)]
 #[template(path = "rust_context_init_aggregated.rs.j2")]
 struct RustContextInitAggregatedTemplate {
+    #[allow(dead_code)]
     module_inits: Vec<ModuleInit>,
     singleton_inits: Vec<SingletonInit>,
 }
@@ -31,6 +32,7 @@ struct SingletonInit {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct SingletonSlotName {
     singleton_key: String,
     slot_index: u32,
@@ -46,6 +48,7 @@ struct Slot {
 #[derive(Debug, Clone)]
 struct ModuleInit {
     crate_name: String,
+    #[allow(dead_code)]
     fn_name: String,
 }
 

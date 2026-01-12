@@ -119,6 +119,7 @@ pub fn is_readonly_prop(modifiers: &[PropertyModifier]) -> ::askama::Result<bool
 
 // Turn a singleton/interface name into a Rust type identifier suffix.
 // E.g. "console" -> "Console", "my_console" -> "MyConsole".
+#[allow(dead_code)]
 pub fn to_rust_type_ident(name: &str) -> ::askama::Result<String> {
     camelcase(name)
 }

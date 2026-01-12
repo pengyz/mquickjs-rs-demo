@@ -5,6 +5,7 @@ use crate::plan::RidlPlan;
 
 #[derive(Debug, Clone)]
 pub struct TemplateSingletonVTable {
+    #[allow(dead_code)]
     pub singleton_name: String,
     pub vtable_struct_name: String,
     pub field_name: String,

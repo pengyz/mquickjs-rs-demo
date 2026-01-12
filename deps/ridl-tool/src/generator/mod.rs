@@ -2,6 +2,8 @@ use crate::parser::ast::{Function, IDLItem, Interface, Method, Param, Type, IDL}
 use askama::Template;
 use std::path::Path;
 
+// NOTE: kept for potential future use in codegen templates.
+#[allow(dead_code)]
 fn to_rust_type_ident_simple(name: &str) -> String {
     // Minimal PascalCase conversion for RIDL identifiers.
     let mut out = String::new();
@@ -88,6 +90,7 @@ struct RidlContextInitTemplate {
 #[derive(Debug, Clone)]
 struct TemplateInterface {
     name: String,
+    #[allow(dead_code)]
     slot_index: u32,
     methods: Vec<TemplateMethod>,
     properties: Vec<crate::parser::ast::Property>,
