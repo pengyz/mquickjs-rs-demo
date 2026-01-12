@@ -12,5 +12,6 @@
 - After completing a feature, update related docs to keep docs and code consistent. If you detect inconsistency, report it first and wait for user confirmation before making corrective doc changes.
 - For each large module, maintain a `README.md` describing purpose; add design/implementation docs when complexity warrants.
 - Default permission: shell commands are allowed (not limited to git/rmdir; any CLI tool is allowed).
+- Git commit message format: subject/title line < 50 columns; body lines < 88 columns.
 - After finishing a plan’s implementation, do not commit by default; ask the user whether they want a commit.
 - AGENTS.md is the single source of truth for working rules in this repo.
