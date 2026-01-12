@@ -60,7 +60,7 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
         }
         _ => {
             w.push_line("compile_error!(\"v1 glue: unsupported value conversion\");");
-            w.push_line("JS_UNDEFINED");
+            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED");
         }
     }
 
@@ -73,7 +73,10 @@ pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::R
     match return_type {
         Type::Void => {
             w.push_line(format!("let _ = {result_name};", result_name = result_name));
-            w.push_line("JS_UNDEFINED");
+            w.push_line("let _ = ctx;");
+            w.push_line("let _ = argc;");
+            w.push_line("let _ = argv;");
+            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED");
         }
         Type::String => {
             w.push_line(format!(
@@ -105,7 +108,7 @@ pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::R
         }
         _ => {
             w.push_line("compile_error!(\"v1 glue: unsupported return type\");");
-            w.push_line("JS_UNDEFINED");
+            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED");
         }
     }
 
@@ -148,6 +151,10 @@ fn emit_argv_v_expr(idx0_expr: &str) -> String {
     format!("unsafe {{ *argv.add({idx0}) }}", idx0 = idx0_expr)
 }
 
+fn emit_argv_v_let(w: &mut CodeWriter, idx0: usize) {
+    w.push_line(format!("let v = unsafe {{ *argv.add({idx0}) }};", idx0 = idx0));
+}
+
 fn emit_check_is_string_expr(w: &mut CodeWriter, value_expr: &str, err_expr: &str) {
     w.push_line(format!(
         "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, {v}) }} == 0 {{ return js_throw_type_error(ctx, {err}); }}",
@@ -164,13 +171,6 @@ fn emit_check_is_number_expr(w: &mut CodeWriter, value_expr: &str, err_expr: &st
     ));
 }
 
-fn emit_check_is_string(w: &mut CodeWriter, idx0: usize, err: &str) {
-    emit_check_is_string_expr(w, &emit_argv_v(idx0), &format!("\"{}\"", err))
-}
-
-fn emit_check_is_number(w: &mut CodeWriter, idx0: usize, err: &str) {
-    emit_check_is_number_expr(w, &emit_argv_v(idx0), &format!("\"{}\"", err))
-}
 
 fn emit_to_i32_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_expr: &str) {
     w.push_line(format!("let mut {out}: i32 = 0;", out = out_name));
@@ -192,15 +192,9 @@ fn emit_to_f64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     ));
 }
 
-fn emit_to_i32(w: &mut CodeWriter, idx0: usize, out_name: &str, err: &str) {
-    emit_to_i32_expr(w, &emit_argv_v(idx0), out_name, &format!("\"{}\"", err))
-}
-
-fn emit_to_f64(w: &mut CodeWriter, idx0: usize, out_name: &str, err: &str) {
-    emit_to_f64_expr(w, &emit_argv_v(idx0), out_name, &format!("\"{}\"", err))
-}
 
 fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_expr: &str) {
+    w.push_line("use std::os::raw::c_char;");
     w.push_line(format!(
         "let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};",
         name = name
@@ -218,9 +212,6 @@ fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, er
     w.push_line(format!("let {name}: *const c_char = {name}_ptr;", name = name));
 }
 
-fn emit_to_cstring_ptr(w: &mut CodeWriter, idx0: usize, name: &str, err: &str) {
-    emit_to_cstring_ptr_expr(w, &emit_argv_v(idx0), name, &format!("\"{}\"", err))
-}
 
 fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_expr: &str) {
     w.push_line(format!(
@@ -236,9 +227,6 @@ fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_
     w.push_line(format!("let {name}: bool = {name}_v != 3;", name = name));
 }
 
-fn emit_extract_bool(w: &mut CodeWriter, idx0: usize, name: &str, err: &str) {
-    emit_extract_bool_expr(w, &emit_argv_v(idx0), name, &format!("\"{}\"", err))
-}
 
 fn emit_single_param_extract(
     name: &str,
@@ -251,26 +239,32 @@ fn emit_single_param_extract(
     match ty {
         Type::String => {
             emit_missing_arg(&mut w, idx1, name);
+            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid string argument: {name}");
-            emit_check_is_string(&mut w, idx0, &err);
-            emit_to_cstring_ptr(&mut w, idx0, name, &err);
+            emit_check_is_string_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &format!("\"{}\"", err));
+            w.push_line(format!("let {name}: *const c_char = ptr;", name = name));
+            w.push_line(format!("let _ = {name};", name = name));
         }
         Type::Int => {
             emit_missing_arg(&mut w, idx1, name);
+            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid int argument: {name}");
-            emit_check_is_number(&mut w, idx0, &err);
-            emit_to_i32(&mut w, idx0, name, &err);
+            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_i32_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Bool => {
             emit_missing_arg(&mut w, idx1, name);
+            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid bool argument: {name}");
-            emit_extract_bool(&mut w, idx0, name, &err);
+            emit_extract_bool_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Double => {
             emit_missing_arg(&mut w, idx1, name);
+            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid double argument: {name}");
-            emit_check_is_number(&mut w, idx0, &err);
-            emit_to_f64(&mut w, idx0, name, &err);
+            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Any => {
             emit_missing_arg(&mut w, idx1, name);
@@ -291,13 +285,15 @@ fn emit_single_param_extract(
     Ok(w.into_string())
 }
 
-fn emit_varargs_loop_header(w: &mut CodeWriter, start_idx0: usize) {
+fn emit_varargs_loop_header(w: &mut CodeWriter, start_idx0: usize, with_rel: bool) {
     w.push_line(format!(
         "for i in {start}..(argc as usize) {{",
         start = start_idx0
     ));
     w.indent();
-    w.push_line(format!("let rel = i - {start};", start = start_idx0));
+    if with_rel {
+        w.push_line(format!("let rel = i - {start};", start = start_idx0));
+    }
 }
 
 fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::Result<String> {
@@ -309,7 +305,7 @@ fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::R
                 "let mut {name}: Vec<*const c_char> = Vec::new();",
                 name = name
             ));
-            emit_varargs_loop_header(&mut w, start_idx0);
+            emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
@@ -325,7 +321,7 @@ fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::R
         }
         Type::Int => {
             w.push_line(format!("let mut {name}: Vec<i32> = Vec::new();", name = name));
-            emit_varargs_loop_header(&mut w, start_idx0);
+            emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
@@ -341,7 +337,7 @@ fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::R
         }
         Type::Bool => {
             w.push_line(format!("let mut {name}: Vec<bool> = Vec::new();", name = name));
-            emit_varargs_loop_header(&mut w, start_idx0);
+            emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
@@ -356,7 +352,7 @@ fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::R
         }
         Type::Double => {
             w.push_line(format!("let mut {name}: Vec<f64> = Vec::new();", name = name));
-            emit_varargs_loop_header(&mut w, start_idx0);
+            emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
@@ -372,7 +368,7 @@ fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::R
         }
         Type::Any => {
             w.push_line(format!("let mut {name}: Vec<JSValue> = Vec::new();", name = name));
-            emit_varargs_loop_header(&mut w, start_idx0);
+            emit_varargs_loop_header(&mut w, start_idx0, false);
             w.push_line(format!(
                 "{name}.push({v});",
                 name = name,

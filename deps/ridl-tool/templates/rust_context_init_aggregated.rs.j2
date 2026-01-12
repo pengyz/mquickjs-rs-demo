@@ -30,7 +30,7 @@ pub unsafe fn ridl_context_init(ctx: *mut mquickjs_ffi::JSContext) {
         return;
     }
 
-    let mut h = match unsafe { ContextHandle::from_js_ctx(ctx) } {
+    let h = match unsafe { ContextHandle::from_js_ctx(ctx) } {
         Some(h) => h,
         None => return,
     };

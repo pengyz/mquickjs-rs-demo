@@ -1,4 +1,7 @@
 // Generated symbol references for RIDL extensions
+// NOTE: We intentionally avoid `use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue}` here.
+// The only goal is to reference glue entrypoints to keep them linked.
+
 {%- for function in functions %}
 use crate::generated::glue::js_{{ function.name|lower }};
 {%- endfor %}

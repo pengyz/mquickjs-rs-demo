@@ -53,6 +53,7 @@ impl Drop for ContextInner {
 
 pub struct Context {
     pub ctx: *mut mquickjs_ffi::JSContext,
+    #[allow(dead_code)]
     pub(crate) inner: Arc<ContextInner>,
     _memory: Vec<u8>,
 }
@@ -77,7 +78,7 @@ impl ContextHandle {
 
         // user_data holds a raw Arc<ContextInner> pointer (created by Arc::into_raw).
         let inner_ptr = p as *const ContextInner;
-        let inner = unsafe { Arc::increment_strong_count(inner_ptr) };
+        unsafe { Arc::increment_strong_count(inner_ptr) };
         let inner = unsafe { Arc::from_raw(inner_ptr) };
         Some(Self { ctx, inner })
     }

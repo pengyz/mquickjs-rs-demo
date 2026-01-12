@@ -3,8 +3,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::Context;
-
 pub fn collect_js_files(path: &Path) -> Result<Vec<PathBuf>, String> {
     if !path.exists() {
         return Err(format!("path does not exist: {}", path.display()));

@@ -46,8 +46,8 @@ fn f(a: int, b: string, c: double, d: bool, ...rest: any) -> void;
     // With 4 fixed params, varargs starts at idx0=4.
     assert!(glue.contains("let mut rest: Vec<JSValue>"));
     assert!(glue.contains("for i in 4..(argc as usize)"));
-    assert!(glue.contains("let rel = i - 4"));
 
+    // For `any` varargs we no longer emit `rel` (it was only used for error messages).
     // Keep this check flexible: we only care that argv is pushed and the index is `i`.
     assert!(glue.contains("rest.push("));
     assert!(glue.contains("*argv.add(i)"));
