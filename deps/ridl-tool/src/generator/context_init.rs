@@ -5,8 +5,6 @@ use crate::plan::RidlPlan;
 
 #[derive(Debug, Clone)]
 pub struct TemplateSingletonVTable {
-    #[allow(dead_code)]
-    pub singleton_name: String,
     pub vtable_struct_name: String,
     pub field_name: String,
     pub vtable_create_path: String,
@@ -35,7 +33,6 @@ pub fn generate_ridl_context_init(
                 let vtable_create_path = format!("{}::impls::{}", m.crate_name, vtable_fn);
 
                 singletons.push(TemplateSingletonVTable {
-                    singleton_name: s.name,
                     vtable_struct_name,
                     field_name,
                     vtable_create_path,

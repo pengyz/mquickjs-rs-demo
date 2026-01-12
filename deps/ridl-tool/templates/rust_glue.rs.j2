@@ -29,27 +29,12 @@ use crate::impls::*;
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
-    {{ function.glue_param_extract|safe }}
+    {%- for p in function.params %}
+    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {%- endfor %}
 
-    let result = {{ function.name|lower }}({{ function.glue_call_args }});
-    {%- if function.return_kind == "void" %}
-    let _ = result;
-    JS_UNDEFINED
-    {%- else if function.return_kind == "string" %}
-    let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }
-    {%- else if function.return_kind == "int" %}
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
-    {%- else if function.return_kind == "bool" %}
-    mquickjs_rs::mquickjs_ffi::js_mkbool(result)
-    {%- else if function.return_kind == "double" %}
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
-    {%- else if function.return_kind == "any" %}
-    result
-    {%- else %}
-    compile_error!("v1 glue: unsupported return type");
-    JS_UNDEFINED
-    {%- endif %}
+    let result = {{ function.name|lower }}({%- for p in function.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
+    {{ function.return_type|emit_return_convert("result")|safe }}
 }
 {%- endfor %}
 
@@ -59,7 +44,10 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
 {%- for method in s.methods %}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
-    {{ method.glue_param_extract|safe }}
+    let _ = this_val;
+    {%- for p in method.params %}
+    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {%- endfor %}
 
     // v_next (A2): per-JSContext singleton dispatch via ctx user_data -> ContextInner -> ridl_ext.
     let Some(mut h) = (unsafe { mquickjs_rs::context::ContextHandle::from_js_ctx(ctx) }) else {
@@ -119,19 +107,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
     let s = unsafe { &mut *fat };
 
     let result = if s.{{ prop.name|lower }}() { 1 } else { 0 };
-    {%- if prop.property_type|js_conversion_type == "to_bool" %}
-    mquickjs_rs::mquickjs_ffi::js_mkbool(result != 0)
-    {%- else if prop.property_type|js_conversion_type == "to_i32" %}
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
-    {%- else if prop.property_type|js_conversion_type == "to_f64" %}
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
-    {%- else if prop.property_type|js_conversion_type == "to_string" %}
-    let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }
-    {%- else %}
-    compile_error!("v1 glue: unsupported singleton readonly property type");
-    JS_UNDEFINED
-    {%- endif %}
+    {{ prop.property_type|emit_value_to_js("result")|safe }}
 }
 {%- endif %}
 {%- endfor %}
@@ -142,27 +118,12 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
 {%- for method in interface.methods %}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
-    {{ method.glue_param_extract|safe }}
+    {%- for p in method.params %}
+    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {%- endfor %}
 
-    let result = {{ interface.name|lower }}_{{ method.name|lower }}(this_val, {{ method.glue_call_args }});
-    {%- if method.return_kind == "void" %}
-    let _ = result;
-    JS_UNDEFINED
-    {%- else if method.return_kind == "string" %}
-    let cstr = CString::new(result).unwrap_or_else(|_| CString::new("").unwrap());
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }
-    {%- else if method.return_kind == "int" %}
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, result) }
-    {%- else if method.return_kind == "bool" %}
-    mquickjs_rs::mquickjs_ffi::js_mkbool(result)
-    {%- else if method.return_kind == "double" %}
-    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, result) }
-    {%- else if method.return_kind == "any" %}
-    result
-    {%- else %}
-    compile_error!("v1 glue: unsupported return type");
-    JS_UNDEFINED
-    {%- endif %}
+    let result = {{ interface.name|lower }}_{{ method.name|lower }}(this_val, {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
+    {{ method.return_type|emit_return_convert("result")|safe }}
 }
 {%- endfor %}
 {%- endfor %}

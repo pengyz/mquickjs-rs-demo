@@ -27,6 +27,7 @@ fn to_rust_type_ident_simple(name: &str) -> String {
     }
 }
 
+mod code_writer;
 mod context_init;
 mod filters;
 
@@ -56,6 +57,7 @@ struct RustGlueTemplate {
 
 #[derive(Template)]
 #[template(path = "rust_api.rs.j2")]
+#[allow(dead_code)]
 struct RustApiTemplate {
     module_name: String,
     interfaces: Vec<TemplateInterface>,
@@ -100,31 +102,21 @@ struct TemplateInterface {
 struct TemplateMethod {
     name: String,
     params: Vec<TemplateParam>,
-    return_type: Option<String>,
-
-    glue_param_extract: String,
-    glue_call_args: String,
-    return_kind: String,
+    return_type: Type,
 }
 
 #[derive(Debug, Clone)]
-struct TemplateParam {
-    name: String,
-    param_type: String,
-
-    glue_extract: String,
-    glue_arg: String,
+pub(crate) struct TemplateParam {
+    pub(crate) name: String,
+    pub(crate) ty: Type,
+    pub(crate) variadic: bool,
 }
 
 #[derive(Debug, Clone)]
 struct TemplateFunction {
     name: String,
     params: Vec<TemplateParam>,
-    return_type: Option<String>,
-
-    glue_param_extract: String,
-    glue_call_args: String,
-    return_kind: String,
+    return_type: Type,
 }
 
 impl TemplateInterface {
@@ -144,281 +136,42 @@ impl TemplateInterface {
 
 impl TemplateMethod {
     fn from_with_mode(method: Method, file_mode: crate::parser::FileMode) -> Self {
-        let return_type = if matches!(method.return_type, Type::Void) {
-            None
-        } else {
-            Some(rust_type_name_for_codegen(&method.return_type))
-        };
-
         let params: Vec<TemplateParam> = method
             .params
             .into_iter()
             .map(|p| TemplateParam::from_with_mode(p, file_mode))
             .collect();
-        let glue_param_extract = params
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                p.glue_extract
-                    .replace("{IDX}", &(i + 1).to_string())
-                    .replace("{IDX0}", &i.to_string())
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let glue_call_args = params
-            .iter()
-            .map(|p| p.glue_arg.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let return_kind = glue_return_kind(&method.return_type);
 
         Self {
             name: method.name,
             params,
-            return_type,
-            glue_param_extract,
-            glue_call_args,
-            return_kind,
+            return_type: method.return_type,
         }
     }
 }
 
 impl TemplateParam {
-    fn from_with_mode(param: Param, file_mode: crate::parser::FileMode) -> Self {
-        let name = param.name;
-        let ty = param.param_type.clone();
-        let (glue_extract, glue_arg) = glue_param_snippet(&name, &ty, param.variadic, file_mode);
-
+    fn from_with_mode(param: Param, _file_mode: crate::parser::FileMode) -> Self {
         Self {
-            name,
-            param_type: rust_type_name_for_codegen(&ty),
-            glue_extract,
-            glue_arg,
+            name: param.name,
+            ty: param.param_type,
+            variadic: param.variadic,
         }
-    }
-}
-
-fn rust_type_name_for_codegen(ty: &Type) -> String {
-    match ty {
-        Type::Void => "()".to_string(),
-        Type::Bool => "bool".to_string(),
-        Type::Int => "i32".to_string(),
-        Type::Float | Type::Double => "f64".to_string(),
-        Type::String => "*const std::os::raw::c_char".to_string(),
-        Type::Any => "mquickjs_rs::mquickjs_ffi::JSValue".to_string(),
-        _ => ty.to_string(),
-    }
-}
-
-fn glue_param_snippet(
-    name: &str,
-    ty: &Type,
-    variadic: bool,
-    _file_mode: crate::parser::FileMode,
-) -> (String, String) {
-    let idx = "{IDX}";
-    // NOTE: avoid nested format! strings that contain `{name}` because the outer Rust format! will
-    // treat them as placeholders and emit warnings.
-    let vararg_err_name = format!("{}[{}]", name, "{}");
-
-    match ty {
-        Type::String => {
-            if variadic {
-                return (
-                    format!(
-                        "let mut {name}: Vec<*const c_char> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\n    let ptr = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut {name}_buf as *mut _) }};\n    if ptr.is_null() {{ return js_throw_type_error(ctx, &format!(\"invalid string argument: {vararg_err_name}\", rel)); }}\n    {name}.push(ptr);\n}}",
-                        name = name,
-                        idx0 = "{IDX0}",
-                        vararg_err_name = vararg_err_name
-                    ),
-                    name.to_string(),
-                );
-            }
-
-            let check = format!(
-                "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, unsafe {{ *argv.add({idx0}) }}) }} == 0 {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\n",
-                idx0 = "{IDX0}",
-                name = name
-            );
-
-            (
-                format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n{check}let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};\nlet {name}_ptr = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, unsafe {{ *argv.add({idx0}) }}, &mut {name}_buf as *mut _) }};\nif {name}_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid string argument: {name}\"); }}\nlet {name}: *const c_char = {name}_ptr;",
-                    idx = idx,
-                    idx0 = "{IDX0}",
-                    name = name,
-                    check = check
-                ),
-                name.to_string(),
-            )
-        }
-        Type::Int => {
-            if variadic {
-                return (
-                    format!(
-                        "let mut {name}: Vec<i32> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    let mut out: i32 = 0;\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut out as *mut _, v) }} < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid int argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
-                        name = name,
-                        idx0 = "{IDX0}",
-                        vararg_err_name = vararg_err_name
-                    ),
-                    name.to_string(),
-                );
-            }
-
-            (
-                format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: i32 = 0;\n{check}if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) }} < 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}",
-                    idx = idx,
-                    idx0 = "{IDX0}",
-                    name = name,
-                    check = format!(
-                        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) }} == 0 {{ return js_throw_type_error(ctx, \"invalid int argument: {name}\"); }}\n",
-                        idx0 = "{IDX0}",
-                        name = name
-                    )
-                ),
-                name.to_string(),
-            )
-        }
-        Type::Bool => {
-            if variadic {
-                return (
-                    format!(
-                        "let mut {name}: Vec<bool> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let rel = i - {idx0};\n    let v: u32 = unsafe {{ *argv.add(i) }} as u32;\n    if (v & ((1 << mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1)) != 3 {{ return js_throw_type_error(ctx, &format!(\"invalid bool argument: {vararg_err_name}\", rel)); }}\n    {name}.push(v != 3);\n}}",
-                        name = name,
-                        idx0 = "{IDX0}",
-                        vararg_err_name = vararg_err_name
-                    ),
-                    name.to_string(),
-                );
-            }
-
-            (
-                format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
-// Only accept actual booleans in v1.
-// bindings doesn't expose JS_IsBool; detect via NaN-boxed tag (JS_TAG_BOOL = 3).
-let {name}_v: u32 = unsafe {{ *argv.add({idx0}) }} as u32;\n\
-if ({name}_v & ((1 << mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1)) != 3 {{ return js_throw_type_error(ctx, \"invalid bool argument: {name}\"); }}\n\
-let {name}: bool = {name}_v != 3;",
-                    idx = idx,
-                    idx0 = "{IDX0}",
-                    name = name
-                ),
-                name.to_string(),
-            )
-        }
-        Type::Double | Type::Float => {
-            if variadic {
-                return (
-                    format!(
-                        "let mut {name}: Vec<f64> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    let v = unsafe {{ *argv.add(i) }};\n    let rel = i - {idx0};\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    let mut out: f64 = 0.0;\n    if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut out as *mut _, v) }} < 0 {{ return js_throw_type_error(ctx, &format!(\"invalid double argument: {vararg_err_name}\", rel)); }}\n    {name}.push(out);\n}}",
-                        name = name,
-                        idx0 = "{IDX0}",
-                        vararg_err_name = vararg_err_name
-                    ),
-                    name.to_string(),
-                );
-            }
-
-            (
-                format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\nlet mut {name}: f64 = 0.0;\n{check}if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {name} as *mut _, unsafe {{ *argv.add({idx0}) }}) }} < 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}",
-                    idx = idx,
-                    idx0 = "{IDX0}",
-                    name = name,
-                    check = format!(
-                        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, unsafe {{ *argv.add({idx0}) }}) }} == 0 {{ return js_throw_type_error(ctx, \"invalid double argument: {name}\"); }}\n",
-                        idx0 = "{IDX0}",
-                        name = name
-                    )
-                ),
-                name.to_string(),
-            )
-        }
-        Type::Any => {
-            if variadic {
-                return (
-                    format!(
-                        "let mut {name}: Vec<JSValue> = Vec::new();\nfor i in {idx0}..(argc as usize) {{\n    {name}.push(unsafe {{ *argv.add(i) }});\n}}",
-                        name = name,
-                        idx0 = "{IDX0}"
-                    ),
-                    name.to_string(),
-                );
-            }
-
-            (
-                format!(
-                    "if argc < {idx} {{ return js_throw_type_error(ctx, \"missing argument: {name}\"); }}\n\
-let {name}: JSValue = unsafe {{ *argv.add({idx0}) }};",
-                    idx = idx,
-                    idx0 = "{IDX0}",
-                    name = name
-                ),
-                name.to_string(),
-            )
-        }
-        _ => (
-            format!(
-                "compile_error!(\"v1 glue: unsupported param type '{ty}' for {name}\");",
-                ty = ty,
-                name = name
-            ),
-            name.to_string(),
-        ),
-    }
-}
-
-fn glue_return_kind(ty: &Type) -> String {
-    match ty {
-        Type::Void => "void".to_string(),
-        Type::String => "string".to_string(),
-        Type::Int => "int".to_string(),
-        Type::Bool => "bool".to_string(),
-        Type::Double | Type::Float => "double".to_string(),
-        Type::Any => "any".to_string(),
-        _ => "unsupported".to_string(),
     }
 }
 
 impl TemplateFunction {
     fn from_with_mode(function: Function, file_mode: crate::parser::FileMode) -> Self {
-        let return_type = if matches!(function.return_type, Type::Void) {
-            None
-        } else {
-            Some(rust_type_name_for_codegen(&function.return_type))
-        };
-
         let params: Vec<TemplateParam> = function
             .params
             .into_iter()
             .map(|p| TemplateParam::from_with_mode(p, file_mode))
             .collect();
-        let glue_param_extract = params
-            .iter()
-            .enumerate()
-            .map(|(i, p)| {
-                p.glue_extract
-                    .replace("{IDX}", &(i + 1).to_string())
-                    .replace("{IDX0}", &i.to_string())
-            })
-            .collect::<Vec<_>>()
-            .join("\n");
-        let glue_call_args = params
-            .iter()
-            .map(|p| p.glue_arg.clone())
-            .collect::<Vec<_>>()
-            .join(", ");
-        let return_kind = glue_return_kind(&function.return_type);
 
         Self {
             name: function.name,
             params,
-            return_type,
-            glue_param_extract,
-            glue_call_args,
-            return_kind,
+            return_type: function.return_type,
         }
     }
 }
