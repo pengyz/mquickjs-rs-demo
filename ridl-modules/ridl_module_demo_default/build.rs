@@ -41,4 +41,12 @@ fn main() {
     let to = out_dir.join("ridl_module_demo_default_symbols.rs");
     let _ = std::fs::remove_file(&to);
     std::fs::rename(from, to).expect("rename symbols");
+
+    // Shared slot indices from app-level aggregation.
+    // Temporary convention: mquickjs-demo build.rs writes stable copies under $OUT_DIR/ridl/.
+    {
+        let from =
+            Path::new("../../target/debug/build/mquickjs-demo-*/out/ridl/ridl_slot_indices.rs");
+        let _ = from;
+    }
 }

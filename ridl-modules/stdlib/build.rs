@@ -36,8 +36,7 @@ fn main() {
         std::fs::write(out_dir.join("ridl_ctx_ext.rs"), rendered).expect("write ctx ext");
     }
 
-    ridl_tool::generator::generate_module_api_file_default(out_dir)
-        .expect("generate module api");
+    ridl_tool::generator::generate_module_api_file_default(out_dir).expect("generate module api");
 
     // Module-local symbols file
     ridl_tool::generator::generate_shared_files(

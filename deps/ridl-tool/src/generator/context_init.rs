@@ -23,7 +23,9 @@ pub fn generate_ridl_context_init(
             let parsed = crate::parser::parse_ridl_file(&src)?;
 
             for item in parsed.items {
-                let crate::parser::ast::IDLItem::Singleton(s) = item else { continue };
+                let crate::parser::ast::IDLItem::Singleton(s) = item else {
+                    continue;
+                };
                 let field_name = s.name.to_lowercase();
                 let vtable_struct_name = format!("Ridl{}VTable", to_rust_type_ident(&field_name));
 

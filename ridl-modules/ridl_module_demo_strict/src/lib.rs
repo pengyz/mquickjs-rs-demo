@@ -11,6 +11,5 @@ mod __ridl_module_api {
 
 pub use __ridl_module_api::{initialize_module, ridl_module_context_init};
 
-
 // Re-export glue symbols for C side registration / lookup if needed.
 pub use generated::glue::*;

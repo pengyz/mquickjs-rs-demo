@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
 };
 
@@ -56,7 +55,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     .to_string();
 
                 // 生成模块特定文件
-                generator::generate_module_files(&items, parsed.mode, Path::new(output_dir), &module_name)?;
+                generator::generate_module_files(
+                    &items,
+                    parsed.mode,
+                    Path::new(output_dir),
+                    &module_name,
+                )?;
             }
         }
         "aggregate" => {
@@ -101,9 +105,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 std::process::exit(1);
             };
 
-            let out_dir = out_path
-                .parent()
-                .unwrap_or_else(|| Path::new("."));
+            let out_dir = out_path.parent().unwrap_or_else(|| Path::new("."));
             fs::create_dir_all(out_dir)?;
             let plan = ridl_tool::resolve::resolve_from_cargo_toml(&cargo_toml, out_dir)
                 .map_err(|e| format!("resolve failed: {e}"))?;
@@ -164,13 +166,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         .to_str()
                         .ok_or("Invalid UTF-8 in file name")?
                         .to_string();
-                    generator::generate_module_files(&items, parsed.mode, &module_out, &module_name)?;
+                    generator::generate_module_files(
+                        &items,
+                        parsed.mode,
+                        &module_out,
+                        &module_name,
+                    )?;
                 }
-
             }
 
             // aggregate header + symbols
-            generator::generate_shared_files(&ridl_files, out_dir.to_str().ok_or("Invalid out dir")?)?;
+            generator::generate_shared_files(
+                &ridl_files,
+                out_dir.to_str().ok_or("Invalid out dir")?,
+            )?;
 
             // app-side module initialization aggregator (derived from plan.modules crate names)
             let init_path = out_dir.join("ridl_modules_initialize.rs");
@@ -178,7 +187,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             init_rs.push_str("// Generated module initialization for RIDL extensions\n");
             init_rs.push_str("pub fn initialize_modules() {\n");
             for m in &plan.modules {
-                init_rs.push_str(&format!("    {crate_name}::initialize_module();\n", crate_name = m.crate_name));
+                init_rs.push_str(&format!(
+                    "    {crate_name}::initialize_module();\n",
+                    crate_name = m.crate_name
+                ));
             }
             init_rs.push_str("}\n");
             fs::write(&init_path, init_rs)?;

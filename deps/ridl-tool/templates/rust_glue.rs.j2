@@ -54,6 +54,7 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
 {%- endfor %}
 
 // Glue implementations for singletons
+
 {%- for s in singletons %}
 {%- for method in s.methods %}
 #[unsafe(no_mangle)]
@@ -69,7 +70,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
     if ext_ptr.is_null() {
         return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
     }
-    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot(ext_ptr, {{ s.slot_index }}) }) else {
+    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
         return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
     };
     let slot = unsafe { &mut *slot_ptr };
@@ -81,7 +82,9 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
     let fat = unsafe { *holder_ptr };
     let s = unsafe { &mut *fat };
 
-    s.{{ method.name|lower }}(ctx, core::slice::from_raw_parts(argv, argc as usize).to_vec());
+    unsafe {
+        s.{{ method.name|lower }}(ctx, core::slice::from_raw_parts(argv, argc as usize).to_vec());
+    }
     JS_UNDEFINED
 }
 {%- endfor %}
@@ -103,7 +106,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
     if ext_ptr.is_null() {
         return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
     }
-    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot(ext_ptr, {{ s.slot_index }}) }) else {
+    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
         return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
     };
     let slot = unsafe { &mut *slot_ptr };

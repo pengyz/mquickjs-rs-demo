@@ -18,4 +18,3 @@ pub fn include_dir() -> &'static std::path::Path {
 pub fn header_path() -> std::path::PathBuf {
     include_dir().join("mquickjs.h")
 }
-

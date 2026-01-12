@@ -68,7 +68,9 @@ pub fn parse_idl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Er
     Ok(ParsedIDL { mode, items })
 }
 
-fn parse_mode_decl(pair: pest::iterators::Pair<Rule>) -> Result<FileMode, Box<dyn std::error::Error>> {
+fn parse_mode_decl(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<FileMode, Box<dyn std::error::Error>> {
     let mut inner_pairs = pair.into_inner();
     let mode_name_pair = inner_pairs.next().ok_or("Mode declaration has no name")?;
     let name = mode_name_pair.as_str();
@@ -579,7 +581,11 @@ fn parse_param_list(
         if last_variadic_idx != params.len() - 1 {
             return Err("Variadic parameter must be the last parameter".into());
         }
-        if params.iter().skip(last_variadic_idx + 1).any(|p| p.variadic) {
+        if params
+            .iter()
+            .skip(last_variadic_idx + 1)
+            .any(|p| p.variadic)
+        {
             return Err("Only one variadic parameter is allowed".into());
         }
     }

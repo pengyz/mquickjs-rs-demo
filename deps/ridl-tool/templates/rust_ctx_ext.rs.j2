@@ -2,6 +2,7 @@
 
 use mquickjs_rs::ridl_runtime::ErasedSingletonSlot;
 
+
 pub struct CtxExt {
 {%- for s in slots %}
     pub {{ s.name }}: ErasedSingletonSlot,
@@ -10,10 +11,34 @@ pub struct CtxExt {
 
 #[inline]
 pub unsafe extern "C" fn ridl_ctx_ext_get_slot(ext_ptr: *mut core::ffi::c_void, slot_index: u32) -> *mut ErasedSingletonSlot {
-    let ext = &mut *(ext_ptr as *mut CtxExt);
+    let ext = unsafe { &mut *(ext_ptr as *mut CtxExt) };
     match slot_index {
 {%- for s in slots %}
         {{ s.index }} => &mut ext.{{ s.name }} as *mut _,
+{%- endfor %}
+        _ => core::ptr::null_mut(),
+    }
+}
+
+#[inline]
+pub unsafe extern "C" fn ridl_ctx_ext_get_slot_by_name(
+    ext_ptr: *mut core::ffi::c_void,
+    name_ptr: *const u8,
+    name_len: usize,
+) -> *mut ErasedSingletonSlot {
+    if ext_ptr.is_null() || name_ptr.is_null() {
+        return core::ptr::null_mut();
+    }
+
+    let ext = unsafe { &mut *(ext_ptr as *mut CtxExt) };
+    let name_bytes = unsafe { core::slice::from_raw_parts(name_ptr, name_len) };
+    let Ok(name) = core::str::from_utf8(name_bytes) else {
+        return core::ptr::null_mut();
+    };
+
+    match name {
+{%- for s in slots %}
+        "{{ s.name|lower }}" => &mut ext.{{ s.name }} as *mut _,
 {%- endfor %}
         _ => core::ptr::null_mut(),
     }
@@ -31,7 +56,7 @@ impl CtxExt {
     /// Safety: called from JSContext finalizer; MUST NOT call any JS API.
     pub unsafe fn drop_all(&mut self) {
 {%- for s in slots %}
-        self.{{ s.name }}.drop_in_place();
+        unsafe { self.{{ s.name }}.drop_in_place(); }
 {%- endfor %}
     }
 }

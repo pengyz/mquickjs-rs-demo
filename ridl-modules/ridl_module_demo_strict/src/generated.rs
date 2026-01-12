@@ -3,7 +3,10 @@ pub(crate) mod glue {
 }
 
 pub(crate) mod symbols {
-    include!(concat!(env!("OUT_DIR"), "/ridl_module_demo_strict_symbols.rs"));
+    include!(concat!(
+        env!("OUT_DIR"),
+        "/ridl_module_demo_strict_symbols.rs"
+    ));
 }
 
 pub(crate) mod impls {

@@ -97,7 +97,8 @@ impl RidlSlotWriter for RidlCtxExtWriter {
         ptr: *mut c_void,
         drop_fn: unsafe extern "C" fn(*mut c_void),
     ) -> Result<(), RidlSlotSetError> {
-        let Some(slot_ptr) = ridl_ext_access::ridl_get_erased_singleton_slot(self.ext_ptr, slot_index)
+        let Some(slot_ptr) =
+            ridl_ext_access::ridl_get_erased_singleton_slot(self.ext_ptr, slot_index)
         else {
             return Err(RidlSlotSetError::VTableMissing);
         };

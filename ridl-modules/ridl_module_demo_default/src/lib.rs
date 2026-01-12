@@ -26,8 +26,10 @@ unsafe extern "C" fn ridl_demo_singleton_create() -> *mut core::ffi::c_void {
 
 unsafe extern "C" fn ridl_demo_singleton_drop(p: *mut core::ffi::c_void) {
     if !p.is_null() {
-        let holder: Box<Box<dyn impls::DemoSingleton>> = Box::from_raw(p as *mut _);
-        drop(holder);
+        unsafe {
+            let holder: Box<Box<dyn impls::DemoSingleton>> = Box::from_raw(p as *mut _);
+            drop(holder);
+        }
     }
 }
 

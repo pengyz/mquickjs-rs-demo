@@ -1,14 +1,8 @@
 pub mod impls {
     pub use crate::generated::impls::ConsoleSingleton;
 
-    pub use crate::stdlib_impl::create_console_singleton;
-    pub use crate::stdlib_impl::ridl_console_vtable_create;
     pub use crate::stdlib_impl::DefaultConsoleSingleton;
-
-    // v1 glue expects these names in crate::impls::*.
-    pub use crate::stdlib_impl::rust_console_error;
-    pub use crate::stdlib_impl::rust_console_get_enabled;
-    pub use crate::stdlib_impl::rust_console_log;
+    pub use crate::stdlib_impl::create_console_singleton;
 }
 
 // Erased singleton vtables consumed by the app-side aggregated ridl_context_init.
@@ -26,8 +20,10 @@ unsafe extern "C" fn ridl_console_singleton_create() -> *mut core::ffi::c_void {
 
 unsafe extern "C" fn ridl_console_singleton_drop(p: *mut core::ffi::c_void) {
     if !p.is_null() {
-        let holder: Box<Box<dyn impls::ConsoleSingleton>> = Box::from_raw(p as *mut _);
-        drop(holder);
+        unsafe {
+            let holder: Box<Box<dyn impls::ConsoleSingleton>> = Box::from_raw(p as *mut _);
+            drop(holder);
+        }
     }
 }
 

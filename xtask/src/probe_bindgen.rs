@@ -67,7 +67,9 @@ bindgen = "0.72"
         }
     }
 
-    eprintln!("(If none of the probes succeed, we will need to adjust the bindgen version or use a post-processing step.)");
+    eprintln!(
+        "(If none of the probes succeed, we will need to adjust the bindgen version or use a post-processing step.)"
+    );
 }
 
 fn cargo_check(dir: &std::path::Path) -> bool {

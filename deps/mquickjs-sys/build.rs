@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -75,7 +74,8 @@ fn main() {
 
     // Refresh private tool copies in OUT_DIR.
     fs::copy(&ridl_tool_bin_src, &ridl_tool_bin).expect("copy ridl-tool into OUT_DIR");
-    fs::copy(&mquickjs_build_bin_src, &mquickjs_build_bin).expect("copy mquickjs-build into OUT_DIR");
+    fs::copy(&mquickjs_build_bin_src, &mquickjs_build_bin)
+        .expect("copy mquickjs-build into OUT_DIR");
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
@@ -152,7 +152,10 @@ fn main() {
     let build_output_path = build_out_dir.join("mquickjs_build_output.json");
     let build_output = read_build_output(&build_output_path);
     if build_output.schema_version != 1 {
-        panic!("Unsupported mquickjs_build_output schema_version {}", build_output.schema_version);
+        panic!(
+            "Unsupported mquickjs_build_output schema_version {}",
+            build_output.schema_version
+        );
     }
 
     println!("cargo:rerun-if-changed={}", cfg_path.display());
@@ -164,10 +167,16 @@ fn main() {
     // Expose include dir for downstream bindgen consumers.
     // Bindgen is performed in higher-level crates (e.g. mquickjs-rs), to keep this sys crate
     // focused on native build orchestration and linking.
-    println!("cargo:rustc-env=MQUICKJS_INCLUDE_DIR={}", build_output.include_dir.display());
+    println!(
+        "cargo:rustc-env=MQUICKJS_INCLUDE_DIR={}",
+        build_output.include_dir.display()
+    );
 
     // Expose native artifact locations for downstream crates to decide how to link.
-    println!("cargo:rustc-env=MQUICKJS_LIB_DIR={}", build_output.lib_dir.display());
+    println!(
+        "cargo:rustc-env=MQUICKJS_LIB_DIR={}",
+        build_output.lib_dir.display()
+    );
 
     // Do not emit any link directives from this sys crate.
     // mquickjs-rs is the canonical crate that owns native linking.
@@ -176,8 +185,7 @@ fn main() {
 fn read_workspace_cfg(path: &Path) -> WorkspaceBuildConfig {
     let text = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()));
-    toml::from_str(&text)
-        .unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()))
+    toml::from_str(&text).unwrap_or_else(|e| panic!("Failed to parse {}: {e}", path.display()))
 }
 
 fn read_build_output(path: &Path) -> MquickjsBuildOutput {
@@ -188,7 +196,9 @@ fn read_build_output(path: &Path) -> MquickjsBuildOutput {
 }
 
 fn select_profile(cfg: &WorkspaceBuildConfig) -> String {
-    cfg.default.clone().unwrap_or_else(|| "framework".to_string())
+    cfg.default
+        .clone()
+        .unwrap_or_else(|| "framework".to_string())
 }
 
 fn tool_exe_name(base: &str) -> String {
@@ -207,7 +217,10 @@ fn find_mquickjs_build_toml() -> PathBuf {
     if let Ok(p) = env::var("MQUICKJS_BUILD_TOML") {
         let path = PathBuf::from(p);
         if !path.exists() {
-            panic!("MQUICKJS_BUILD_TOML points to a non-existent path: {}", path.display());
+            panic!(
+                "MQUICKJS_BUILD_TOML points to a non-existent path: {}",
+                path.display()
+            );
         }
         return path;
     }
@@ -248,21 +261,19 @@ fn run(mut cmd: Command) {
     // Workaround for sporadic ETXTBSY/EACCES when executing freshly-copied binaries.
     // Retrying is safe here because these tools are deterministic given the same inputs.
     let status = (0..20)
-        .find_map(|i| {
-            match cmd.status() {
-                Ok(s) => Some(s),
-                Err(e)
-                    if (e.kind() == std::io::ErrorKind::PermissionDenied
-                        || e.raw_os_error() == Some(26)) =>
-                {
-                    eprintln!("[mquickjs-sys] exec failed (attempt {}): {}", i + 1, e);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                    None
-                }
-                Err(e) => {
-                    eprintln!("[mquickjs-sys] exec failed: {}", e);
-                    panic!("failed to run command");
-                }
+        .find_map(|i| match cmd.status() {
+            Ok(s) => Some(s),
+            Err(e)
+                if (e.kind() == std::io::ErrorKind::PermissionDenied
+                    || e.raw_os_error() == Some(26)) =>
+            {
+                eprintln!("[mquickjs-sys] exec failed (attempt {}): {}", i + 1, e);
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                None
+            }
+            Err(e) => {
+                eprintln!("[mquickjs-sys] exec failed: {}", e);
+                panic!("failed to run command");
             }
         })
         .expect("failed to run command");

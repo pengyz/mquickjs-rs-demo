@@ -16,11 +16,15 @@ fn main() {
     let items = parsed.items;
     ridl_tool::validator::validate_with_mode(&items, parsed.mode).expect("validate ridl");
 
-    ridl_tool::generator::generate_module_files(&items, parsed.mode, out_dir, "ridl_module_demo_strict")
-        .expect("generate module files");
+    ridl_tool::generator::generate_module_files(
+        &items,
+        parsed.mode,
+        out_dir,
+        "ridl_module_demo_strict",
+    )
+    .expect("generate module files");
 
-    ridl_tool::generator::generate_module_api_file_default(out_dir)
-        .expect("generate module api");
+    ridl_tool::generator::generate_module_api_file_default(out_dir).expect("generate module api");
 
     // Also generate module-local symbols file (we'll include it from OUT_DIR).
     // The current generator doesn't have a dedicated per-module symbols command, so we

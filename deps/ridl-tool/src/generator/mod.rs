@@ -25,8 +25,8 @@ fn to_rust_type_ident_simple(name: &str) -> String {
     }
 }
 
-mod filters;
 mod context_init;
+mod filters;
 
 pub use context_init::generate_ridl_context_init;
 
@@ -357,7 +357,11 @@ let {name}: JSValue = unsafe {{ *argv.add({idx0}) }};",
             )
         }
         _ => (
-            format!("compile_error!(\"v1 glue: unsupported param type '{ty}' for {name}\");", ty = ty, name = name),
+            format!(
+                "compile_error!(\"v1 glue: unsupported param type '{ty}' for {name}\");",
+                ty = ty,
+                name = name
+            ),
             name.to_string(),
         ),
     }
@@ -605,12 +609,10 @@ pub fn generate_shared_files(
                 crate::parser::ast::IDLItem::Function(f) => {
                     functions.push(TemplateFunction::from_with_mode(f, parsed.mode))
                 }
-                crate::parser::ast::IDLItem::Interface(i) => {
-                    interfaces.push(TemplateInterface::from_with_mode(i, crate::parser::FileMode::Default))
-                }
-                crate::parser::ast::IDLItem::Singleton(s) => {
-                    singletons.push(s)
-                }
+                crate::parser::ast::IDLItem::Interface(i) => interfaces.push(
+                    TemplateInterface::from_with_mode(i, crate::parser::FileMode::Default),
+                ),
+                crate::parser::ast::IDLItem::Singleton(s) => singletons.push(s),
                 // 其他类型暂不处理
                 _ => {}
             }

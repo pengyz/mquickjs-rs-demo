@@ -36,9 +36,18 @@ fn main() {
         .arg(&out_dir));
 
     // Work around Cargo build-script fingerprinting: make sure app rebuilds when ridl-tool changes.
-    println!("cargo:rerun-if-changed={}", workspace_root.join("deps/ridl-tool").display());
-    println!("cargo:rerun-if-changed={}", workspace_root.join("Cargo.toml").display());
-    println!("cargo:rerun-if-changed={}", workspace_root.join("ridl-modules").display());
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("deps/ridl-tool").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("Cargo.toml").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("ridl-modules").display()
+    );
 }
 
 fn tool_exe_name(base: &str) -> String {
@@ -50,7 +59,9 @@ fn tool_exe_name(base: &str) -> String {
 }
 
 fn run(cmd: &mut Command) {
-    let status = cmd.status().unwrap_or_else(|e| panic!("failed to spawn: {e}"));
+    let status = cmd
+        .status()
+        .unwrap_or_else(|e| panic!("failed to spawn: {e}"));
     if !status.success() {
         panic!("command failed: {cmd:?}");
     }

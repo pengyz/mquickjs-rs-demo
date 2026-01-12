@@ -8,7 +8,13 @@ use crate::ridl_runtime::ErasedSingletonSlot;
 /// matching the concrete `CtxExt` layout.
 #[repr(C)]
 pub struct RidlCtxExtVTable {
-    pub get_slot: unsafe extern "C" fn(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedSingletonSlot,
+    pub get_slot:
+        unsafe extern "C" fn(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedSingletonSlot,
+    pub get_slot_by_name: unsafe extern "C" fn(
+        ext_ptr: *mut c_void,
+        name_ptr: *const u8,
+        name_len: usize,
+    ) -> *mut ErasedSingletonSlot,
 }
 
 static mut RIDL_CTX_EXT_VTABLE: *const RidlCtxExtVTable = core::ptr::null();
@@ -33,6 +39,30 @@ pub unsafe fn ridl_get_erased_singleton_slot(
         return None;
     }
     let p = ((*vt).get_slot)(ext_ptr, slot_index);
+    if p.is_null() {
+        None
+    } else {
+        Some(p)
+    }
+}
+
+/// Get a mutable pointer to an erased singleton slot by singleton name.
+///
+/// Safety:
+/// - `ext_ptr` must point to the app's `CtxExt` instance.
+/// - `name_ptr..name_ptr+name_len` must be valid for reads.
+#[inline]
+pub unsafe fn ridl_get_erased_singleton_slot_by_name(
+    ext_ptr: *mut c_void,
+    name_ptr: *const u8,
+    name_len: usize,
+) -> Option<*mut ErasedSingletonSlot> {
+    let vt = RIDL_CTX_EXT_VTABLE;
+    if vt.is_null() {
+        return None;
+    }
+
+    let p = ((*vt).get_slot_by_name)(ext_ptr, name_ptr, name_len);
     if p.is_null() {
         None
     } else {

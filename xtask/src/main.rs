@@ -39,7 +39,11 @@ fn build_tools() {
 
     // Print their expected locations for convenience.
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let bin_dir = if profile == "release" { "target/release" } else { "target/debug" };
+    let bin_dir = if profile == "release" {
+        "target/release"
+    } else {
+        "target/debug"
+    };
     eprintln!("Built tools under {bin_dir}/ (ridl-tool, mquickjs-build)");
 }
 

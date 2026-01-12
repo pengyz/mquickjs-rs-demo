@@ -24,7 +24,11 @@ pub mod mquickjs_ffi {
 
     #[inline]
     pub const fn js_mkbool(v: bool) -> JSValue {
-        if v { JS_TRUE } else { JS_FALSE }
+        if v {
+            JS_TRUE
+        } else {
+            JS_FALSE
+        }
     }
 
     #[inline]
@@ -77,7 +81,6 @@ macro_rules! ridl_initialize {
 pub fn register_all_ridl_modules() {
     register_extensions();
 }
-
 
 #[cfg(test)]
 mod tests {

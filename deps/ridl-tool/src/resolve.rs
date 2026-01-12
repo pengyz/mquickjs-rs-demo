@@ -115,7 +115,9 @@ fn find_ridl_files(src_dir: &Path) -> Vec<PathBuf> {
         return out;
     }
 
-    let Ok(rd) = std::fs::read_dir(src_dir) else { return out };
+    let Ok(rd) = std::fs::read_dir(src_dir) else {
+        return out;
+    };
     for e in rd.flatten() {
         let p = e.path();
         if p.extension().and_then(|s| s.to_str()) == Some("ridl") {

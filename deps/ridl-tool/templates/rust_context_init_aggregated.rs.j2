@@ -16,10 +16,13 @@ pub use ridl_ctx_ext::CtxExt;
 static RIDL_CTX_EXT_VT: ::mquickjs_rs::ridl_ext_access::RidlCtxExtVTable =
     ::mquickjs_rs::ridl_ext_access::RidlCtxExtVTable {
         get_slot: ridl_ctx_ext::ridl_ctx_ext_get_slot,
+        get_slot_by_name: ridl_ctx_ext::ridl_ctx_ext_get_slot_by_name,
     };
 
 unsafe fn drop_ctx_ext(p: *mut c_void) {
-    drop(Box::from_raw(p as *mut CtxExt));
+    unsafe {
+        drop(Box::from_raw(p as *mut CtxExt));
+    }
 }
 
 pub unsafe fn ridl_context_init(ctx: *mut mquickjs_ffi::JSContext) {

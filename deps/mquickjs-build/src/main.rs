@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Path, PathBuf},
     process::{Command, Stdio},
 };
@@ -32,7 +31,9 @@ struct BuildOutput {
 fn main() {
     let mut args = env::args().skip(1);
     let Some(cmd) = args.next() else {
-        eprintln!("Usage: mquickjs-build build --mquickjs-dir <dir> --plan <ridl_plan.json> --out <out-dir>");
+        eprintln!(
+            "Usage: mquickjs-build build --mquickjs-dir <dir> --plan <ridl_plan.json> --out <out-dir>"
+        );
         std::process::exit(2);
     };
 
@@ -71,19 +72,22 @@ fn build_cmd(argv: Vec<String>) {
     let plan: RidlPlan = if let Some(plan_path) = plan_path {
         let plan_text = fs::read_to_string(&plan_path)
             .unwrap_or_else(|e| die(&format!("Failed to read plan {}: {e}", plan_path.display())));
-        serde_json::from_str(&plan_text).unwrap_or_else(|e| die(&format!("Failed to parse plan JSON: {e}")))
+        serde_json::from_str(&plan_text)
+            .unwrap_or_else(|e| die(&format!("Failed to parse plan JSON: {e}")))
     } else {
         RidlPlan { generated: None }
     };
 
     let include_dir = out_dir.join("include");
     let lib_dir = out_dir.join("lib");
-    fs::create_dir_all(&include_dir).unwrap_or_else(|e| die(&format!("Failed to create include dir: {e}")));
+    fs::create_dir_all(&include_dir)
+        .unwrap_or_else(|e| die(&format!("Failed to create include dir: {e}")));
     fs::create_dir_all(&lib_dir).unwrap_or_else(|e| die(&format!("Failed to create lib dir: {e}")));
 
     // Keep all compilation outputs isolated from the submodule directory.
     let build_dir = out_dir.join("build");
-    fs::create_dir_all(&build_dir).unwrap_or_else(|e| die(&format!("Failed to create build dir: {e}")));
+    fs::create_dir_all(&build_dir)
+        .unwrap_or_else(|e| die(&format!("Failed to create build dir: {e}")));
 
     // Copy ridl register header into include dir (so we never write into deps/mquickjs).
     let ridl_h_dst = include_dir.join("mquickjs_ridl_register.h");
@@ -100,7 +104,10 @@ fn build_cmd(argv: Vec<String>) {
     }
 
     // Copy primary public header for bindgen/consumers.
-    copy_file(&mquickjs_dir.join("mquickjs.h"), &include_dir.join("mquickjs.h"));
+    copy_file(
+        &mquickjs_dir.join("mquickjs.h"),
+        &include_dir.join("mquickjs.h"),
+    );
 
     // 1) Build host object for tool compilation.
     let mut gcc = Command::new("gcc");
@@ -230,7 +237,9 @@ fn build_cmd(argv: Vec<String>) {
 fn run(mut cmd: Command) {
     cmd.stdout(Stdio::inherit());
     cmd.stderr(Stdio::inherit());
-    let status = cmd.status().unwrap_or_else(|e| die(&format!("Failed to run command: {e}")));
+    let status = cmd
+        .status()
+        .unwrap_or_else(|e| die(&format!("Failed to run command: {e}")));
     if !status.success() {
         die(&format!("Command failed with status {status}"));
     }
@@ -251,8 +260,13 @@ fn run_capture(mut cmd: Command) -> Vec<u8> {
 }
 
 fn copy_file(src: &Path, dst: &Path) {
-    fs::copy(src, dst)
-        .unwrap_or_else(|e| die(&format!("Failed to copy {} -> {}: {e}", src.display(), dst.display())));
+    fs::copy(src, dst).unwrap_or_else(|e| {
+        die(&format!(
+            "Failed to copy {} -> {}: {e}",
+            src.display(),
+            dst.display()
+        ))
+    });
 }
 
 fn die(msg: &str) -> ! {

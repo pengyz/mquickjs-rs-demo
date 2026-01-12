@@ -10,6 +10,12 @@ struct RustCtxExtTemplate {
 }
 
 #[derive(Template)]
+#[template(path = "rust_slot_indices.rs.j2")]
+struct RustSlotIndicesTemplate {
+    slots: Vec<Slot>,
+}
+
+#[derive(Template)]
 #[template(path = "rust_context_init_aggregated.rs.j2")]
 struct RustContextInitAggregatedTemplate {
     module_inits: Vec<ModuleInit>,
@@ -69,7 +75,10 @@ pub fn generate_ctx_ext_and_context_init(
 
                 let name = sanitize_ident(&s.name);
                 if !slots.iter().any(|x| x.name == name) {
-                    slots.push(Slot { name: name.clone(), index: 0 });
+                    slots.push(Slot {
+                        name: name.clone(),
+                        index: 0,
+                    });
                 }
 
                 // We'll resolve slot_index after global sorting.
@@ -96,17 +105,35 @@ pub fn generate_ctx_ext_and_context_init(
             s.slot_index = *idx;
         }
     }
-    singleton_inits.sort_by(|a, b| (a.crate_name.as_str(), a.slot_index).cmp(&(b.crate_name.as_str(), b.slot_index)));
+    singleton_inits.sort_by(|a, b| {
+        (a.crate_name.as_str(), a.slot_index).cmp(&(b.crate_name.as_str(), b.slot_index))
+    });
 
     // Only initialize singletons that are required for current smoke tests.
     // This prevents calling into placeholder singletons that `panic!()`.
     singleton_inits.retain(|s| s.singleton_key == "console");
 
-    let ctx_ext = RustCtxExtTemplate { slots: slots.clone() };
+    // ctx-ext struct + slot indices must be generated from the same `slots` list to avoid divergence.
+    let slot_indices = RustSlotIndicesTemplate {
+        slots: slots.clone(),
+    };
+    std::fs::write(out_dir.join("ridl_slot_indices.rs"), slot_indices.render()?)?;
+
+    let ctx_ext = RustCtxExtTemplate {
+        slots: slots.clone(),
+    };
     std::fs::write(out_dir.join("ridl_ctx_ext.rs"), ctx_ext.render()?)?;
-    // Also keep a stable copy under out/ridl/ so module crates can include it without depending on app crate.
+
+    // Also keep stable copies under out/ridl/ so module crates can include them without depending on app crate.
     // This is a temporary convention to keep compilation simple across crates.
-    std::fs::write(out_dir.join("ridl").join("ridl_ctx_ext.rs"), ctx_ext.render()?)?;
+    std::fs::write(
+        out_dir.join("ridl").join("ridl_slot_indices.rs"),
+        slot_indices.render()?,
+    )?;
+    std::fs::write(
+        out_dir.join("ridl").join("ridl_ctx_ext.rs"),
+        ctx_ext.render()?,
+    )?;
 
     let init = RustContextInitAggregatedTemplate {
         module_inits,
@@ -120,7 +147,9 @@ pub fn generate_ctx_ext_and_context_init(
     Ok(())
 }
 
-pub fn render_ctx_ext_only(singleton_names: &[String]) -> Result<String, Box<dyn std::error::Error>> {
+pub fn render_ctx_ext_only(
+    singleton_names: &[String],
+) -> Result<String, Box<dyn std::error::Error>> {
     let mut slots: Vec<Slot> = singleton_names
         .iter()
         .map(|s| Slot {
