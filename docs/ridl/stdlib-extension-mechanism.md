@@ -4,11 +4,27 @@
 
 本项目通过修改 mquickjs 的标准库注册机制，将 RIDL（Rust Interface Description Language）定义的接口注册到 JS 环境中。
 
-关键约束：**注册必须发生在编译期**。C 侧 stdlib 表在编译时包含 `mquickjs_ridl_register.h` 并展开 `JS_RIDL_EXTENSIONS`，因此无法在运行时动态注册。
+关键约束：**注册必须发生在编译期**。C 侧 stdlib 表在编译时包含 `mquickjs_ridl_register.h` 并展开 RIDL 注入宏，因此无法在运行时动态注册。
 
 ## 核心原理
 
 mquickjs 通过 C 语言的结构体数组定义标准库函数和对象。其核心实现依赖于 `JSPropDef` 结构体数组，该数组定义了所有全局对象、函数和属性。通过构建时代码生成，将 RIDL 定义转换为相应的 C 结构体数组，从而实现接口的静态注册。
+
+### 为什么需要“多 Hook”而不是单宏
+
+对于全局 singleton（例如 `globalThis.console`），完整注册需要同时具备：
+
+1. **文件作用域定义**：属性表、对象定义（例如 `static const JSPropDef ...`、`JS_OBJECT_DEF(...)`）。
+2. **全局表注入项**：插入到 `js_global_object[]` 的条目（例如 `JS_PROP_CLASS_DEF("console", &js_console_obj)`）。
+
+因此 `mquickjs_ridl_register.h` 会提供两个注入点：
+
+- `JS_RIDL_DECLS`：用于“文件作用域”的声明/定义（必须在 `js_global_object[]` 定义之前展开）。
+- `JS_RIDL_GLOBAL_PROPS`：用于插入 `js_global_object[]` 的条目。
+
+同时，为兼容旧写法，头文件仍提供：
+
+- `JS_RIDL_EXTENSIONS`：目前等价于 `JS_RIDL_GLOBAL_PROPS`（向后兼容别名）。
 
 ## 详细流程
 
@@ -17,14 +33,33 @@ mquickjs 通过 C 语言的结构体数组定义标准库函数和对象。其�
 - 通过 `ridl-tool` 解析 RIDL 文件，生成对应的 Rust 胶水代码（例如 `<module>_glue.rs`）
 - 开发者根据RIDL定义手动实现具体功能（`module_name_impl.rs`）
 
-### 2. 模板文件生成
-- 以 `mqjs_stdlib.c` 为基础创建 `mqjs_stdlib_template.c`
-- 在模板文件中预留 `JS_RIDL_EXTENSIONS` 宏位置
-- 保留 mquickjs 原有的标准库功能，仅添加 RIDL 扩展点
+### 2. 模板文件集成（C 侧）
 
-### 3. RIDL 扩展定义
+以 `deps/mquickjs-rs/mqjs_stdlib_template.c` 的模式为例：
+
+```c
+#include "mquickjs.h"
+#include "mquickjs_ridl_register.h"
+
+/* 1) 文件作用域：RIDL 扩展所需的 props/object defs */
+JS_RIDL_DECLS;
+
+static const JSPropDef js_global_object[] = {
+    /* ... base stdlib entries ... */
+
+    /* 2) 注入到 js_global_object[] 的条目 */
+    JS_RIDL_EXTENSIONS
+    /* 或者显式使用：JS_RIDL_GLOBAL_PROPS */
+
+    JS_PROP_END,
+};
+```
+
+> 备注：这里 `JS_RIDL_EXTENSIONS` 仍可用，是因为当前它只是 `JS_RIDL_GLOBAL_PROPS` 的兼容别名。
+
+### 3. RIDL 扩展定义（生成头文件）
 - `ridl-tool` 生成 `mquickjs_ridl_register.h` 头文件
-- 该文件定义了 `JS_RIDL_EXTENSIONS` 宏，包含所有 RIDL 定义的接口
+- 该头文件提供 `JS_RIDL_DECLS` / `JS_RIDL_GLOBAL_PROPS`（以及兼容别名 `JS_RIDL_EXTENSIONS`）用于静态注入
 
 #### 聚合输入来源（App manifest 驱动 / SoT）
 
@@ -33,7 +68,7 @@ mquickjs 通过 C 语言的结构体数组定义标准库函数和对象。其�
 
 - **RIDL modules 由 App manifest（根 `Cargo.toml` 的 `[dependencies]`）决定**：只有当依赖 crate 的 `src/` 下至少存在 1 个 `*.ridl` 文件时，该 crate 才会被视为 RIDL module。
 - **App `build.rs` 负责生成聚合产物**（通过 `ridl-tool`）：
-  - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开 `JS_RIDL_EXTENSIONS`
+  - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开注入宏（`JS_RIDL_DECLS` / `JS_RIDL_GLOBAL_PROPS` / `JS_RIDL_EXTENSIONS`）
   - `$OUT_DIR/ridl_initialize.rs`：供 Rust 侧集中初始化（`mquickjs_rs::ridl_initialize!()`）
 - **mquickjs-sys `build.rs`** 在启用 feature `ridl-extensions` 时，将上面的 `mquickjs_ridl_register.h` 纳入 QuickJS stdlib 编译，从而把扩展项静态编进 `libmquickjs.a`。
 
