@@ -1,0 +1,28 @@
+// Auto-generated Rust API (traits/types) for RIDL module: {{ module_name }}
+//
+// IMPORTANT:
+// - This file is generated into OUT_DIR and is not meant to be edited.
+// - User implementations should live in the module crate sources (e.g. src/impls.rs or ../<module>_impl.rs).
+// - This file must remain free of JSValue conversion glue. Keep it as pure Rust declarations.
+
+{%- for s in singletons %}
+// Singleton {{ s.name }}
+pub trait {{ s.name|capitalize }}Singleton {
+    {%- for method in s.methods %}
+    fn {{ method.name|lower }}(
+        &mut self,
+        ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+        args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
+    );
+    {%- endfor %}
+
+    {%- for prop in s.properties %}
+    {%- if prop.modifiers|is_readonly_prop %}
+    fn {{ prop.name|lower }}(&self) -> {{ prop.property_type|rust_type_from_idl }};
+    {%- endif %}
+    {%- endfor %}
+}
+{%- endfor %}
+
+// TODO(complex-types): future struct/enum/type alias declarations generated from RIDL.
+// Current policy: complex types are mapped to `any(JSValue)` in v1 and are passed through.

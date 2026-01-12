@@ -8,7 +8,7 @@ use std::ffi::CStr;
 
 use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
 
-use crate::generated::impls::ConsoleSingleton;
+use crate::generated::api::ConsoleSingleton;
 
 fn print_js_values(ctx: *mut JSContext, args: &[JSValue], is_err: bool) {
     for (i, v) in args.iter().copied().enumerate() {

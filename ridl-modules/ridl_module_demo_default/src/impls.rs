@@ -3,8 +3,8 @@ mod ridl_module_demo_default_impl;
 
 pub use ridl_module_demo_default_impl::*;
 
-// Re-export generated singleton traits so glue can use stable paths: crate::impls::<Name>Singleton.
-pub use crate::generated::impls::DemoSingleton;
+// Re-export generated singleton traits so glue can use stable paths.
+pub use crate::generated::api::DemoSingleton;
 
 struct DefaultDemoSingleton;
 

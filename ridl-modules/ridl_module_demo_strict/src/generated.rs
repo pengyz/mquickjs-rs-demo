@@ -9,6 +9,6 @@ pub(crate) mod symbols {
     ));
 }
 
-pub(crate) mod impls {
-    include!(concat!(env!("OUT_DIR"), "/ridl_module_demo_strict_impl.rs"));
+pub(crate) mod api {
+    include!(concat!(env!("OUT_DIR"), "/ridl_module_demo_strict_api.rs"));
 }

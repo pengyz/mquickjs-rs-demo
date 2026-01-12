@@ -55,8 +55,8 @@ struct RustGlueTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "rust_impl.rs.j2")]
-struct RustImplTemplate {
+#[template(path = "rust_api.rs.j2")]
+struct RustApiTemplate {
     module_name: String,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
@@ -528,20 +528,21 @@ pub fn generate_module_files(
         rust_glue_code,
     )?;
 
-    // 生成Rust实现骨架
-    let rust_impl_template = RustImplTemplate {
+    // 生成 Rust API（trait/类型声明），供用户 impl 层与 glue 层共享引用。
+    // 注意：这里不生成任何 `todo!()` 实现骨架，避免误导用户编辑 OUT_DIR 生成物。
+    let rust_api_template = RustApiTemplate {
         module_name: module_name.to_string(),
         interfaces: interfaces.clone(),
         functions: functions.clone(),
         singletons: rust_glue_template.singletons.clone(),
     };
-    let rust_impl_code = rust_impl_template.render()?;
+    let rust_api_code = rust_api_template.render()?;
     std::fs::write(
-        output_path.join(format!("{}_impl.rs", module_name)),
-        rust_impl_code,
+        output_path.join(format!("{}_api.rs", module_name)),
+        rust_api_code,
     )?;
 
-    // 注意：模块命令只生成Rust胶水代码和实现骨架，其他文件在aggregate命令中生成
+    // 注意：模块命令只生成 Rust glue 与 API，其他文件在 aggregate 命令中生成
 
     Ok(())
 }

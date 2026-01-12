@@ -78,7 +78,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
         return js_throw_type_error(ctx, "singleton not initialized");
     }
 
-    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::impls::{{ s.name|capitalize }}Singleton);
+    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::generated::api::{{ s.name|capitalize }}Singleton);
     let fat = unsafe { *holder_ptr };
     let s = unsafe { &mut *fat };
 
@@ -114,7 +114,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
         return js_throw_type_error(ctx, "singleton not initialized");
     }
 
-    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::impls::{{ s.name|capitalize }}Singleton);
+    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::generated::api::{{ s.name|capitalize }}Singleton);
     let fat = unsafe { *holder_ptr };
     let s = unsafe { &mut *fat };
 
