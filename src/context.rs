@@ -28,6 +28,6 @@ impl Context {
 
 impl Default for Context {
     fn default() -> Self {
-        Self::default()
+        Self::new(1024 * 1024).expect("failed to create JSContext")
     }
 }

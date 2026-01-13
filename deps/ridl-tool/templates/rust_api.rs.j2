@@ -26,3 +26,5 @@ pub trait {{ s.name|capitalize }}Singleton {
 
 // TODO(complex-types): future struct/enum/type alias declarations generated from RIDL.
 // Current policy: complex types are mapped to `any(JSValue)` in v1 and are passed through.
+
+{% include "rust_class_api.rs.j2" %}

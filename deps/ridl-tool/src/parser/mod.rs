@@ -236,6 +236,16 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                 let member_pair = inner_pairs.next().unwrap();
 
                 match member_pair.as_rule() {
+                    Rule::proto_readwrite_prop => {
+                        let mut prop = parse_readwrite_property(member_pair)?;
+                        prop.modifiers.insert(0, PropertyModifier::Proto);
+                        properties.push(prop);
+                    }
+                    Rule::proto_readonly_prop => {
+                        let mut prop = parse_readonly_property(member_pair)?;
+                        prop.modifiers.insert(0, PropertyModifier::Proto);
+                        properties.push(prop);
+                    }
                     Rule::readwrite_prop => {
                         let prop = parse_readwrite_property(member_pair)?;
                         properties.push(prop);

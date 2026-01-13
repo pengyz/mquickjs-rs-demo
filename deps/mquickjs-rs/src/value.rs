@@ -91,38 +91,40 @@ impl<'ctx> ValueRef<'ctx> {
 /// underlying Context.
 pub struct PinnedValue<'ctx> {
     ctx: *mut mquickjs_ffi::JSContext,
-    gc_ref: UnsafeCell<mquickjs_ffi::JSGCRef>,
+    /// Safety: this cell holds a JSGCRef that is linked into the JSContext list
+    /// via JS_AddGCRef and unlinked via JS_DeleteGCRef.
+    gc_ref: std::pin::Pin<Box<UnsafeCell<mquickjs_ffi::JSGCRef>>>,
     _ctx: PhantomData<&'ctx Context>,
 }
 
 impl<'ctx> PinnedValue<'ctx> {
     pub fn new(ctx: &'ctx Context, value: mquickjs_ffi::JSValue) -> Self {
-        let p = Self {
-            ctx: ctx.ctx,
-            gc_ref: UnsafeCell::new(mquickjs_ffi::JSGCRef {
-                val: mquickjs_ffi::JS_UNDEFINED,
-                prev: std::ptr::null_mut(),
-            }),
-            _ctx: PhantomData,
-        };
+        let gc_ref = Box::pin(UnsafeCell::new(mquickjs_ffi::JSGCRef {
+            val: mquickjs_ffi::JS_UNDEFINED,
+            prev: std::ptr::null_mut(),
+        }));
 
-        // Safety: gc_ref lives as long as self; ctx is alive for 'ctx.
+        // Safety: gc_ref address is stable (pinned); ctx is alive for 'ctx.
         unsafe {
-            let slot = mquickjs_ffi::JS_AddGCRef(ctx.ctx, p.gc_ref.get());
+            let slot = mquickjs_ffi::JS_AddGCRef(ctx.ctx, gc_ref.as_ref().get_ref().get());
             *slot = value;
         }
 
-        p
+        Self {
+            ctx: ctx.ctx,
+            gc_ref,
+            _ctx: PhantomData,
+        }
     }
 
     pub fn as_ref(&self) -> ValueRef<'ctx> {
         // Safety: gc_ref is pinned and owned by self.
-        let v = unsafe { (*self.gc_ref.get()).val };
+        let v = unsafe { (*self.gc_ref.as_ref().get_ref().get()).val };
         ValueRef::new(v)
     }
 
     pub fn as_raw(&self) -> mquickjs_ffi::JSValue {
-        unsafe { (*self.gc_ref.get()).val }
+        unsafe { (*self.gc_ref.as_ref().get_ref().get()).val }
     }
 }
 
@@ -130,7 +132,10 @@ impl Drop for PinnedValue<'_> {
     fn drop(&mut self) {
         // Safety: ctx is the one used in new(); gc_ref was added to ctx list.
         unsafe {
-            mquickjs_ffi::JS_DeleteGCRef(self.ctx, self.gc_ref.get());
+            // mquickjs expects the referenced value to be cleared before deletion.
+            let r = self.gc_ref.as_ref().get_ref().get();
+            (*r).val = mquickjs_ffi::JS_UNDEFINED;
+            mquickjs_ffi::JS_DeleteGCRef(self.ctx, r);
         }
     }
 }

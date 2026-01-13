@@ -11,7 +11,7 @@
 unsafe extern "C" {
     fn js_{{ function.name|lower }}(
         ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+        this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
         argc: i32,
         argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     ) -> mquickjs_rs::mquickjs_ffi::JSValue;
@@ -23,7 +23,7 @@ unsafe extern "C" {
 unsafe extern "C" {
     fn js_{{ interface.name|lower }}_{{ method.name|lower }}(
         ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+        this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
         argc: i32,
         argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     ) -> mquickjs_rs::mquickjs_ffi::JSValue;
@@ -31,11 +31,17 @@ unsafe extern "C" {
 {%- endfor %}
 {%- endfor %}
 
+{%- for class in classes %}
+unsafe extern "C" {
+    fn js_{{ class.name|lower }}_class();
+}
+{%- endfor %}
+
 pub fn ensure_symbols() {
 {%- for function in functions %}
     let _ = js_{{ function.name|lower }} as unsafe extern "C" fn(
         *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        mquickjs_rs::mquickjs_ffi::JSValue,
+        *mut mquickjs_rs::mquickjs_ffi::JSValue,
         i32,
         *mut mquickjs_rs::mquickjs_ffi::JSValue,
     ) -> mquickjs_rs::mquickjs_ffi::JSValue;
@@ -44,10 +50,13 @@ pub fn ensure_symbols() {
 {%- for method in interface.methods %}
     let _ = js_{{ interface.name|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(
         *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        mquickjs_rs::mquickjs_ffi::JSValue,
+        *mut mquickjs_rs::mquickjs_ffi::JSValue,
         i32,
         *mut mquickjs_rs::mquickjs_ffi::JSValue,
     ) -> mquickjs_rs::mquickjs_ffi::JSValue;
 {%- endfor %}
+{%- endfor %}
+{%- for class in classes %}
+    let _ = js_{{ class.name|lower }}_class as unsafe extern "C" fn();
 {%- endfor %}
 }

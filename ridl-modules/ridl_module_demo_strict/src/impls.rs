@@ -6,7 +6,7 @@ pub fn strict_sum_i32(nums: Vec<i32>) -> i32 {
     nums.into_iter().sum()
 }
 
-pub fn strict_count_args(args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>) -> i32 {
+pub fn strict_count_args(args: Vec<mquickjs_rs::ValueRef<'_>>) -> i32 {
     args.len() as i32
 }
 

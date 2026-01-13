@@ -47,10 +47,17 @@ pub use function::Function;
 pub use object::Object;
 pub use value::{PinnedValue, Value, ValueRef};
 
+pub use class::{ClassId, ClassObject, Opaque};
+
+pub mod ridl_class_id {
+    include!(concat!(env!("OUT_DIR"), "/ridl_class_id.rs"));
+}
+
 pub mod context;
 pub mod function;
 pub mod object;
 pub mod value;
+pub mod class;
 
 // Note: ridl_modules are generated/aggregated by the app crate build and included there.
 
@@ -86,6 +93,8 @@ pub fn register_all_ridl_modules() {
 mod tests {
     use super::*;
     use std::ffi::CString;
+
+    use crate::context::ContextHandle;
 
     #[test]
     fn test_pinned_value_survives_gc() {

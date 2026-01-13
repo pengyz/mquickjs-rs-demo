@@ -11,8 +11,10 @@
     clippy::all
 )]
 
-pub fn include_dir() -> &'static std::path::Path {
-    std::path::Path::new(env!("MQUICKJS_INCLUDE_DIR"))
+pub fn include_dir() -> std::path::PathBuf {
+    // Exported by deps/mquickjs-sys/build.rs as an absolute path.
+    // Use an owned PathBuf so downstream crates can rely on it regardless of their cwd.
+    std::path::PathBuf::from(env!("MQUICKJS_INCLUDE_DIR"))
 }
 
 pub fn header_path() -> std::path::PathBuf {

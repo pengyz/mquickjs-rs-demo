@@ -1,6 +1,7 @@
 use crate::generator::code_writer::CodeWriter;
 use crate::generator::TemplateParam;
 use crate::parser::ast::{PropertyModifier, Type};
+use crate::parser::FileMode;
 
 // Generator template filters.
 //
@@ -119,15 +120,16 @@ pub fn is_readonly_prop(modifiers: &[PropertyModifier]) -> ::askama::Result<bool
     Ok(modifiers.contains(&PropertyModifier::ReadOnly))
 }
 
+
 pub fn emit_param_extract(
     param: &TemplateParam,
     idx0: &usize,
     idx1: &usize,
 ) -> ::askama::Result<String> {
     if param.variadic {
-        emit_varargs_collect(&param.name, &param.ty, *idx0)
+        emit_varargs_collect(&param.name, &param.ty, param.file_mode, *idx0)
     } else {
-        emit_single_param_extract(&param.name, &param.ty, *idx0, *idx1)
+        emit_single_param_extract(&param.name, &param.ty, param.file_mode, *idx0, *idx1)
     }
 }
 
@@ -231,6 +233,7 @@ fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_
 fn emit_single_param_extract(
     name: &str,
     ty: &Type,
+    file_mode: FileMode,
     idx0: usize,
     idx1: usize,
 ) -> ::askama::Result<String> {
@@ -268,11 +271,22 @@ fn emit_single_param_extract(
         }
         Type::Any => {
             emit_missing_arg(&mut w, idx1, name);
-            w.push_line(format!(
-                "let {name}: JSValue = {v};",
-                name = name,
-                v = emit_argv_v(idx0)
-            ));
+            match file_mode {
+                FileMode::Default => {
+                    w.push_line(format!(
+                        "let {name}: JSValue = {v};",
+                        name = name,
+                        v = emit_argv_v(idx0)
+                    ));
+                }
+                FileMode::Strict => {
+                    w.push_line(format!(
+                        "let {name}: mquickjs_rs::ValueRef<'_> = mquickjs_rs::ValueRef::new({v});",
+                        name = name,
+                        v = emit_argv_v(idx0)
+                    ));
+                }
+            }
         }
         _ => {
             w.push_line(format!(
@@ -296,7 +310,12 @@ fn emit_varargs_loop_header(w: &mut CodeWriter, start_idx0: usize, with_rel: boo
     }
 }
 
-fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::Result<String> {
+fn emit_varargs_collect(
+    name: &str,
+    ty: &Type,
+    file_mode: FileMode,
+    start_idx0: usize,
+) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
     match ty {
@@ -367,15 +386,33 @@ fn emit_varargs_collect(name: &str, ty: &Type, start_idx0: usize) -> ::askama::R
             w.push_line("}");
         }
         Type::Any => {
-            w.push_line(format!("let mut {name}: Vec<JSValue> = Vec::new();", name = name));
-            emit_varargs_loop_header(&mut w, start_idx0, false);
-            w.push_line(format!(
-                "{name}.push({v});",
-                name = name,
-                v = emit_argv_v_expr("i")
-            ));
-            w.dedent();
-            w.push_line("}");
+            match file_mode {
+                FileMode::Default => {
+                    w.push_line(format!("let mut {name}: Vec<JSValue> = Vec::new();", name = name));
+                    emit_varargs_loop_header(&mut w, start_idx0, false);
+                    w.push_line(format!(
+                        "{name}.push({v});",
+                        name = name,
+                        v = emit_argv_v_expr("i")
+                    ));
+                    w.dedent();
+                    w.push_line("}");
+                }
+                FileMode::Strict => {
+                    w.push_line(format!(
+                        "let mut {name}: Vec<mquickjs_rs::ValueRef<'_>> = Vec::new();",
+                        name = name
+                    ));
+                    emit_varargs_loop_header(&mut w, start_idx0, false);
+                    w.push_line(format!(
+                        "{name}.push(mquickjs_rs::ValueRef::new({v}));",
+                        name = name,
+                        v = emit_argv_v_expr("i")
+                    ));
+                    w.dedent();
+                    w.push_line("}");
+                }
+            }
         }
         _ => {
             w.push_line(format!(

@@ -1,0 +1,11 @@
+// Auto-generated Rust API (traits/types) for RIDL classes in module: {{ module_name }}
+
+{%- for class in classes %}
+
+pub trait {{ class.name|capitalize }}Class {
+{%- for method in class.methods %}
+    fn {{ method.name|lower }}(&mut self, ctx: &mquickjs_rs::Context, {%- for p in method.params %}{{ p.name|lower }}: {{ p.ty|rust_type_from_idl }}{%- if p.variadic %} {# not supported in classes yet #}{%- endif %}{%- if !loop.last %}, {% endif %}{%- endfor %}) -> {{ method.return_type|rust_type_from_idl }};
+{%- endfor %}
+}
+
+{%- endfor %}

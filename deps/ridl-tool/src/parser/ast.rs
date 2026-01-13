@@ -103,6 +103,7 @@ pub enum PropertyModifier {
     ReadOnly,
     ReadWrite,
     Const,
+    Proto,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

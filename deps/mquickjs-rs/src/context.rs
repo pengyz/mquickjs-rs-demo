@@ -139,13 +139,12 @@ impl Context {
         extern "C" {
             static js_stdlib: mquickjs_ffi::JSSTDLibraryDef;
         }
-        let stdlib_def = unsafe { js_stdlib };
 
         let ctx = unsafe {
             mquickjs_ffi::JS_NewContext(
                 memory.as_mut_ptr() as *mut c_void,
                 memory.len(),
-                &stdlib_def,
+                &js_stdlib,
             )
         };
 

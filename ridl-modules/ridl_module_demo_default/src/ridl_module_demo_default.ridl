@@ -1,4 +1,4 @@
-// v1 glue coverage demo
+
 
 fn default_echo_str(s: string) -> string;
 fn default_add_i32(a: int, b: int) -> int;
@@ -11,3 +11,6 @@ fn default_void_ok();
 singleton demo {
   fn ping(s: string);
 }
+
+// NOTE: class/proto support is under active development.
+// Keep this module buildable for end-to-end workflow validation.
