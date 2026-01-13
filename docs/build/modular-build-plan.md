@@ -78,7 +78,7 @@ mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
 
 ## 注意事项
 
--   直接运行某个历史工具/二进制来生成头文件并不可取；建议使用 App 的 `cargo run -p xtask -- build-tools` + `cargo build` 触发完整构建流程，确保 `build.rs` 生成的 `$OUT_DIR` 产物与当前依赖图一致。
+-   直接运行某个历史工具/二进制来生成头文件并不可取；建议使用 App 的 `cargo run -p ridl-builder -- build-tools` + `cargo build` 触发完整构建流程，确保 `build.rs` 生成的 `$OUT_DIR` 产物与当前依赖图一致。
 -   头文件路径应使用绝对路径或基于 crate 根目录的相对路径，避免路径解析错误。
 
 ## RIDL 工具集成

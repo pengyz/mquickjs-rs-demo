@@ -1,44 +1,35 @@
-use std::{env, path::PathBuf, process::Command};
+use std::{env, path::{Path, PathBuf}};
 
 fn main() {
-    // Thin RIDL invoker: delegate all RIDL aggregation/generation to ridl-tool.
+    // Thin RIDL invoker: copy app-level aggregate outputs prepared by ridl-builder
+    // into this crate's OUT_DIR so `include!(concat!(env!("OUT_DIR"), ...))` works.
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
 
-    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
     let workspace_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let aggregate_dir = workspace_root.join("target").join("ridl").join("aggregate");
 
-    let tool = workspace_root
-        .join("target")
-        .join(&profile)
-        .join(tool_exe_name("ridl-tool"));
-
-    if !tool.exists() {
+    if !aggregate_dir.exists() {
         panic!(
-            "Missing tool binary. Run: cargo run -p xtask -- build-tools\nExpected: {}",
-            tool.display()
+            "Missing RIDL aggregate outputs. Run: cargo run -p ridl-builder -- prepare --profile framework\nExpected directory: {}",
+            aggregate_dir.display()
         );
     }
 
-    let plan_path = out_dir.join("ridl_plan.json");
+    copy_required(&aggregate_dir, &out_dir, "ridl_symbols.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_slot_indices.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_ctx_ext.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_context_init.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_modules_initialize.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_initialize.rs");
 
-    run(Command::new(&tool)
-        .arg("resolve")
-        .arg("--cargo-toml")
-        .arg(workspace_root.join("Cargo.toml"))
-        .arg("--out")
-        .arg(&plan_path));
-
-    run(Command::new(&tool)
-        .arg("generate")
-        .arg("--plan")
-        .arg(&plan_path)
-        .arg("--out")
-        .arg(&out_dir));
-
-    // Work around Cargo build-script fingerprinting: make sure app rebuilds when ridl-tool changes.
+    // Work around Cargo build-script fingerprinting: make sure app rebuilds when inputs change.
     println!(
         "cargo:rerun-if-changed={}",
         workspace_root.join("deps/ridl-tool").display()
+    );
+    println!(
+        "cargo:rerun-if-changed={}",
+        workspace_root.join("ridl-builder").display()
     );
     println!(
         "cargo:rerun-if-changed={}",
@@ -48,21 +39,20 @@ fn main() {
         "cargo:rerun-if-changed={}",
         workspace_root.join("ridl-modules").display()
     );
+    println!(
+        "cargo:rerun-if-changed={}",
+        aggregate_dir.display()
+    );
 }
 
-fn tool_exe_name(base: &str) -> String {
-    if cfg!(windows) {
-        format!("{base}.exe")
-    } else {
-        base.to_string()
+fn copy_required(from_dir: &Path, to_dir: &Path, file_name: &str) {
+    let from = from_dir.join(file_name);
+    if !from.exists() {
+        panic!("Missing required RIDL file: {}", from.display());
     }
+
+    let to = to_dir.join(file_name);
+    std::fs::copy(&from, &to)
+        .unwrap_or_else(|e| panic!("failed to copy {} -> {}: {e}", from.display(), to.display()));
 }
 
-fn run(cmd: &mut Command) {
-    let status = cmd
-        .status()
-        .unwrap_or_else(|e| panic!("failed to spawn: {e}"));
-    if !status.success() {
-        panic!("command failed: {cmd:?}");
-    }
-}

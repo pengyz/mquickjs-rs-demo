@@ -73,7 +73,7 @@ your_module = { path = "../your_module" }
 
 ```bash
 # 先构建 build.rs 依赖的工具（ridl-tool / mquickjs-build）
-cargo run -p xtask -- build-tools
+cargo run -p ridl-builder -- build-tools
 
 # 再编译（会执行 App build.rs 并生成 OUT_DIR 产物）
 cargo build
@@ -167,15 +167,17 @@ RIDL 定义的类型会自动映射到 Rust 类型：
 运行以下命令构建项目：
 
 ```bash
-cargo run -p xtask -- build-tools
+cargo run -p ridl-builder -- build-tools
+cargo run -p ridl-builder -- build-mquickjs
 cargo build
 ```
 
 此命令将：
 1. 构建 build.rs 依赖的工具（`ridl-tool` / `mquickjs-build`）
-2. 执行 App `build.rs`（生成 `$OUT_DIR/ridl_initialize.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`）
-3. 按 feature 配置编译 QuickJS（`mquickjs-sys`）与 Rust 封装层（`mquickjs-rs`）
-4. 链接最终的可执行文件
+2. 预构建 QuickJS 产物与头文件（`mquickjs-build` 输出到 `target/mquickjs-build/...`）
+3. 执行 App `build.rs`（生成 `$OUT_DIR/ridl_initialize.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`）
+4. 编译 QuickJS（`mquickjs-sys`）与 Rust 封装层（`mquickjs-rs`）
+5. 链接最终的可执行文件
 
 ## 调试技巧
 

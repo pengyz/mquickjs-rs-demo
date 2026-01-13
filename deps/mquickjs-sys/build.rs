@@ -1,7 +1,6 @@
 use std::{
     env, fs,
     path::{Path, PathBuf},
-    process::{Command, Stdio},
 };
 
 use serde::Deserialize;
@@ -37,90 +36,25 @@ fn main() {
     let cfg = read_workspace_cfg(&cfg_path);
 
     let profile = select_profile(&cfg);
-    let app_manifest = cfg
+    let _app_manifest = cfg
         .profiles
         .get(&profile)
         .unwrap_or_else(|| panic!("profile '{profile}' not found in mquickjs.build.toml"))
         .app_manifest
         .clone();
 
-    let app_manifest = workspace_root.join(app_manifest);
+    let _app_manifest = workspace_root.join(_app_manifest);
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
     let ridl_out = out_dir.join("ridl");
     fs::create_dir_all(&ridl_out).expect("create ridl out dir");
 
-    // Resolve tool binaries (must be built via `cargo run -p xtask -- build-tools`).
-    // NOTE: On some systems we occasionally hit `ETXTBSY`/`EACCES` when executing binaries
-    // directly from `target/debug/` while Cargo/rust-analyzer may rebuild or inspect them.
-    // To make the build more robust, we copy the tools into this crate's OUT_DIR and execute
-    // the private copies.
-    let tools_dir = workspace_root
-        .join("target")
-        .join(env::var("PROFILE").unwrap_or_else(|_| "debug".to_string()));
-    let ridl_tool_bin_src = tools_dir.join(tool_exe_name("ridl-tool"));
-    let mquickjs_build_bin_src = tools_dir.join(tool_exe_name("mquickjs-build"));
+    // NOTE: mquickjs-sys build.rs does NOT run tool binaries.
+    // Tools are executed via ridl-builder to keep builds fast and avoid ETXTBSY.
 
-    let ridl_tool_bin = out_dir.join(tool_exe_name("ridl-tool"));
-    let mquickjs_build_bin = out_dir.join(tool_exe_name("mquickjs-build"));
+    let _ridl_extensions_enabled = env::var_os("CARGO_FEATURE_RIDL_EXTENSIONS").is_some();
 
-    if !ridl_tool_bin_src.exists() || !mquickjs_build_bin_src.exists() {
-        panic!(
-            "Missing tool binaries. Run: cargo run -p xtask -- build-tools\nExpected: {} and {}",
-            ridl_tool_bin_src.display(),
-            mquickjs_build_bin_src.display()
-        );
-    }
-
-    // Refresh private tool copies in OUT_DIR.
-    fs::copy(&ridl_tool_bin_src, &ridl_tool_bin).expect("copy ridl-tool into OUT_DIR");
-    fs::copy(&mquickjs_build_bin_src, &mquickjs_build_bin)
-        .expect("copy mquickjs-build into OUT_DIR");
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&ridl_tool_bin, fs::Permissions::from_mode(0o755))
-            .expect("chmod ridl-tool");
-        fs::set_permissions(&mquickjs_build_bin, fs::Permissions::from_mode(0o755))
-            .expect("chmod mquickjs-build");
-    }
-
-    // When RIDL extensions are disabled (default), build a base QuickJS library.
-    // This keeps `cargo test -p mquickjs-rs` working without pulling any app-selected RIDL modules.
-    let ridl_extensions_enabled = env::var_os("CARGO_FEATURE_RIDL_EXTENSIONS").is_some();
-
-    // 1) ridl-tool resolve/generate (only when extensions enabled)
-    let plan_path = ridl_out.join("ridl_plan.json");
-    if ridl_extensions_enabled {
-        // IMPORTANT: resolve against the profile-selected app manifest.
-        // The sys crate itself must remain agnostic of RIDL modules (single-point module selection).
-        let mut cmd = Command::new(&ridl_tool_bin);
-        cmd.arg("resolve")
-            .arg("--cargo-toml")
-            .arg(&app_manifest)
-            .arg("--out")
-            .arg(&plan_path);
-        run(cmd);
-
-        let mut cmd = Command::new(&ridl_tool_bin);
-        cmd.arg("generate")
-            .arg("--plan")
-            .arg(&plan_path)
-            .arg("--out")
-            .arg(&ridl_out);
-        run(cmd);
-
-        println!("cargo:rerun-if-changed={}", plan_path.display());
-    } else {
-        // Still emit a file at the expected path for stable inputs/debugging.
-        fs::write(
-            &plan_path,
-            "{\n  \"schema_version\": 1,\n  \"modules\": [],\n  \"generated\": {\n    \"out_dir\": \"\",\n    \"mquickjs_ridl_register_h\": \"\"\n  },\n  \"inputs\": []\n}\n",
-        )
-        .expect("write empty ridl_plan.json");
-    }
-
-    // 3) mquickjs-build build
+    // Resolve build output directory (must be produced by ridl-builder).
     let target_dir = workspace_root.join("target");
     let target_triple = env::var("TARGET").expect("TARGET not set");
     let is_release = env::var("PROFILE").map(|p| p == "release").unwrap_or(false);
@@ -132,24 +66,14 @@ fn main() {
         .join(&target_triple)
         .join(mode);
 
-    fs::create_dir_all(&build_out_dir).expect("create build out dir");
-
-    let mquickjs_dir = workspace_root.join("deps/mquickjs");
-
-    let mut cmd = Command::new(&mquickjs_build_bin);
-    cmd.arg("build")
-        .arg("--mquickjs-dir")
-        .arg(&mquickjs_dir)
-        .arg("--out")
-        .arg(&build_out_dir);
-
-    if ridl_extensions_enabled {
-        cmd.arg("--plan").arg(&plan_path);
+    let build_output_path = build_out_dir.join("mquickjs_build_output.json");
+    if !build_output_path.exists() {
+        panic!(
+            "Missing mquickjs build outputs. Run: cargo run -p ridl-builder -- build-tools && cargo run -p ridl-builder -- build-mquickjs\nExpected: {}",
+            build_output_path.display()
+        );
     }
 
-    run(cmd);
-
-    let build_output_path = build_out_dir.join("mquickjs_build_output.json");
     let build_output = read_build_output(&build_output_path);
     if build_output.schema_version != 1 {
         panic!(
@@ -201,13 +125,6 @@ fn select_profile(cfg: &WorkspaceBuildConfig) -> String {
         .unwrap_or_else(|| "framework".to_string())
 }
 
-fn tool_exe_name(base: &str) -> String {
-    if cfg!(windows) {
-        format!("{base}.exe")
-    } else {
-        base.to_string()
-    }
-}
 
 fn find_mquickjs_build_toml() -> PathBuf {
     // External override. Note: this must be provided by the outer environment (shell, CI, or
@@ -252,32 +169,3 @@ or ensure this crate is built within a workspace root that contains mquickjs.bui
     );
 }
 
-fn run(mut cmd: Command) {
-    cmd.stdout(Stdio::inherit());
-    cmd.stderr(Stdio::inherit());
-
-    eprintln!("[mquickjs-sys] run: {:?}", cmd);
-
-    // Workaround for sporadic ETXTBSY/EACCES when executing freshly-copied binaries.
-    // Retrying is safe here because these tools are deterministic given the same inputs.
-    let status = (0..20)
-        .find_map(|i| match cmd.status() {
-            Ok(s) => Some(s),
-            Err(e)
-                if (e.kind() == std::io::ErrorKind::PermissionDenied
-                    || e.raw_os_error() == Some(26)) =>
-            {
-                eprintln!("[mquickjs-sys] exec failed (attempt {}): {}", i + 1, e);
-                std::thread::sleep(std::time::Duration::from_millis(250));
-                None
-            }
-            Err(e) => {
-                eprintln!("[mquickjs-sys] exec failed: {}", e);
-                panic!("failed to run command");
-            }
-        })
-        .expect("failed to run command");
-    if !status.success() {
-        panic!("command failed: {status}");
-    }
-}

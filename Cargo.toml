@@ -6,7 +6,7 @@ members = [
     "ridl-modules/stdlib",
     "ridl-modules/ridl_module_demo_default",
     "ridl-modules/ridl_module_demo_strict",
-    ".", "deps/mquickjs-build", "xtask",
+    ".", "deps/mquickjs-build", "ridl-builder",
 ]
 
 [package]
