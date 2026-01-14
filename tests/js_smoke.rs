@@ -17,6 +17,10 @@ fn js_smoke_tests() {
         test_dir.display()
     );
 
+    // Ensure process-level RIDL initialization happens before running any scripts.
+    // This matches src/main.rs behavior.
+    mquickjs_rs::ridl_initialize!();
+
     let total = files.len();
 
     let mut failures: Vec<(PathBuf, String)> = Vec::new();

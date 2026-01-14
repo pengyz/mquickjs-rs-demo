@@ -16,10 +16,11 @@ pub struct AggregateOutput {
     pub ridl_register_h: PathBuf,
 }
 
-pub fn default_out_dir(workspace_root: &Path) -> PathBuf {
-    workspace_root
-        .join("target")
+pub fn default_out_dir(target_dir: &Path, app_id: &str) -> PathBuf {
+    target_dir
         .join("ridl")
+        .join("apps")
+        .join(app_id)
         .join("aggregate")
 }
 
@@ -170,8 +171,8 @@ pub mod ridl_initialize {\n\
     Ok(path)
 }
 
-pub fn aggregate(workspace_root: &Path, modules: &[Module]) -> std::io::Result<AggregateOutput> {
-    let out_dir = default_out_dir(workspace_root);
+pub fn aggregate(target_dir: &Path, app_id: &str, modules: &[Module]) -> std::io::Result<AggregateOutput> {
+    let out_dir = default_out_dir(target_dir, app_id);
 
     let manifest_path = write_manifest(&out_dir, modules)?;
 

@@ -4,6 +4,7 @@
 - User will close VSCode and work directly in terminal for this repo/session (to reduce concurrent cargo/rust-analyzer build conflicts like ETXTBSY).
 - 禁止做“简化硬编码”：任何聚合/注册/初始化逻辑不得通过硬编码 singleton 名称（例如 "console"）或模块白名单来实现，必须走标准、可扩展的通用机制（新增模块仅放入 ridl-modules/ 即可生效）。
 - In this repo, the build orchestrator crate currently named xtask should be renamed to ridl-builder, and the aggregated module selection snapshot should be named ridl-manifest.json (instead of ridl-plan.json).
+- For multi-app support: app-id normalization should replace any non [A-Za-z0-9_] characters with '_' (including '-' -> '_'), and select the app package by matching cargo metadata package.manifest_path exactly to the provided --cargo-toml (most stable rule).
 
 ## Working Conventions
 - For any requirement, think deeply first and produce a concrete plan. Store plans under `doc/planning/` (one plan per requirement) and mark the plan as completed when done.

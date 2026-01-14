@@ -3,46 +3,31 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::aggregate::Module;
+use crate::{aggregate::Module, AggregateOpts, CargoMetadata, Intent};
 
-pub fn discover_ridl_modules(app_manifest: &Path) -> Vec<Module> {
-    let base_dir = app_manifest
-        .parent()
-        .unwrap_or_else(|| panic!("app_manifest has no parent: {}", app_manifest.display()));
+pub fn discover_ridl_modules(opts: &AggregateOpts) -> Vec<Module> {
+    let meta = crate::cargo_metadata(&opts.cargo_toml);
+    let app_pkg = crate::select_app_package(&meta, &opts.cargo_toml);
 
-    let content = fs::read_to_string(app_manifest)
-        .unwrap_or_else(|e| panic!("Failed to read {}: {e}", app_manifest.display()));
+    let direct = if let Some(sc) = opts.cargo_subcommand {
+        crate::unit_graph::direct_deps_from_unit_graph(
+            &opts.cargo_toml,
+            &meta,
+            app_pkg,
+            sc,
+            &opts.cargo_args,
+        )
+    } else {
+        direct_deps_from_metadata(&meta, app_pkg, opts.intent)
+    };
 
-    let mut in_deps = false;
     let mut modules = Vec::new();
-
-    for raw in content.lines() {
-        let line = raw.trim();
-        if line.starts_with('[') && line.ends_with(']') {
-            in_deps = line == "[dependencies]";
-            continue;
-        }
-        if !in_deps || line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-
-        // Very small TOML subset parser: `name = { path = "..." }`
-        let Some((name, rhs)) = line.split_once('=') else {
-            continue;
-        };
-        let crate_name = name.trim().to_string();
-        let rhs = rhs.trim();
-        if !rhs.starts_with('{') {
-            continue;
-        }
-
-        let path_val = extract_inline_table_string(rhs, "path")
-            .map(|p| base_dir.join(p))
-            .filter(|p| p.exists());
-
-        let Some(crate_dir) = path_val else {
-            continue;
-        };
+    for pkg in direct {
+        let crate_dir = pkg
+            .manifest_path
+            .parent()
+            .unwrap_or_else(|| panic!("package.manifest_path has no parent: {}", pkg.manifest_path.display()))
+            .to_path_buf();
 
         let ridl_files = find_ridl_files(&crate_dir.join("src"));
         if ridl_files.is_empty() {
@@ -50,7 +35,7 @@ pub fn discover_ridl_modules(app_manifest: &Path) -> Vec<Module> {
         }
 
         modules.push(Module {
-            crate_name,
+            crate_name: pkg.name.clone(),
             crate_dir,
             ridl_files,
         });
@@ -58,6 +43,64 @@ pub fn discover_ridl_modules(app_manifest: &Path) -> Vec<Module> {
 
     modules
 }
+
+fn direct_deps_from_metadata<'a>(
+    meta: &'a CargoMetadata,
+    app_pkg: &'a crate::CargoPackage,
+    intent: Intent,
+) -> Vec<&'a crate::CargoPackage> {
+    let node = meta
+        .resolve
+        .nodes
+        .iter()
+        .find(|n| n.id == app_pkg.id)
+        .unwrap_or_else(|| panic!("resolve node not found for app pkg id: {}", app_pkg.id));
+
+    let mut out = Vec::new();
+    for dep in &node.deps {
+        if !dep_kind_allowed(dep, intent) {
+            continue;
+        }
+
+        let Some(pkg) = meta.packages.iter().find(|p| p.id == dep.pkg) else {
+            continue;
+        };
+
+        // Only accept dependencies with local sources (path/git checkout). For registry crates,
+        // scanning their src/ for *.ridl is not part of our module story.
+        if !pkg.manifest_path.exists() {
+            continue;
+        }
+
+        out.push(pkg);
+    }
+
+    out
+}
+
+fn dep_kind_allowed(dep: &crate::CargoDep, intent: Intent) -> bool {
+    // cargo metadata dep_kinds.kind:
+    // - None => normal dependency
+    // - Some("dev") => dev-dependency
+    // - Some("build") => build-dependency
+    // We only care about normal/dev as SoT.
+    let mut has_normal = false;
+    let mut has_dev = false;
+
+    for k in &dep.dep_kinds {
+        match k.kind.as_deref() {
+            None => has_normal = true,
+            Some("dev") => has_dev = true,
+            Some(_) => {}
+        }
+    }
+
+    match intent {
+        Intent::Build => has_normal,
+        Intent::Test => has_normal || has_dev,
+    }
+}
+
 
 fn find_ridl_files(src_dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
@@ -74,30 +117,3 @@ fn find_ridl_files(src_dir: &Path) -> Vec<PathBuf> {
     out
 }
 
-fn extract_inline_table_string(rhs: &str, key: &str) -> Option<String> {
-    // expects something like `{ path = "ridl-modules/stdlib" }`
-    let needle = format!("{key}");
-    let idx = rhs.find(&needle)?;
-    let rest = &rhs[idx + needle.len()..];
-    let eq = rest.find('=')?;
-    let mut v = rest[eq + 1..].trim();
-    // strip leading ',' or '{'
-    if v.starts_with(',') {
-        v = v[1..].trim();
-    }
-    // value ends at ',' or '}'
-    let end = v
-        .find(|c| c == ',' || c == '}')
-        .unwrap_or_else(|| v.len());
-    let v = v[..end].trim();
-    Some(unquote(v))
-}
-
-fn unquote(v: &str) -> String {
-    let v = v.trim();
-    if (v.starts_with('"') && v.ends_with('"')) || (v.starts_with('\'') && v.ends_with('\'')) {
-        v[1..v.len() - 1].to_string()
-    } else {
-        v.to_string()
-    }
-}
