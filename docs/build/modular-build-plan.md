@@ -60,13 +60,13 @@ mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
 1. App 通过 `[dependencies]` 选择 RIDL modules（只有当依赖 crate 的 `src/` 下存在 `*.ridl` 时才视为 RIDL module）。
 2. App `build.rs` 调用 `ridl-tool`：
    - `resolve`：解析依赖图并生成 ridl plan
-   - `generate`：基于 plan 生成 `$OUT_DIR/ridl_initialize.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`（以及模块侧 glue/symbols 等中间产物）
+   - `generate`：基于 plan 生成 `$OUT_DIR/ridl_bootstrap.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`（以及模块侧 glue/symbols 等中间产物）
 3. `mquickjs-sys` 使用 `mquickjs-build` 编译并产出 `libmquickjs.a`：
    - 默认构建产出“基础 QuickJS”库（不包含任何 `js_*` 扩展符号），用于 core/tests 等场景
    - 启用 feature `ridl-extensions` 时，会把 `$OUT_DIR/mquickjs_ridl_register.h` 纳入 C 编译，编译期展开 `JS_RIDL_EXTENSIONS`
-4. `mquickjs-rs` 负责 bindgen + 链接 `libmquickjs.a`，并提供 `ridl_initialize!()` 宏引用 `$OUT_DIR/ridl_initialize.rs`。
+4. `mquickjs-rs` 负责 bindgen + 链接 `libmquickjs.a`，并提供 `ridl_bootstrap!()` 宏引用 `$OUT_DIR/ridl_bootstrap.rs`。
 5. 最终 App 进行链接与运行时初始化：
-   - Rust 侧通过 `ridl_initialize!()` 集中调用各模块 initialize
+   - Rust 侧通过 `ridl_bootstrap!()` 集中调用各模块 initialize
    - C 侧 stdlib 在编译期已包含扩展表，运行时无需动态注册
 
 ## 架构原则

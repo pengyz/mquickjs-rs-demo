@@ -1,20 +1,7 @@
-pub(crate) mod glue {
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/ridl_module_demo_default_glue.rs"
-    ));
+pub mod api {
+    include!(concat!(env!("OUT_DIR"), "/api.rs"));
 }
 
-pub(crate) mod symbols {
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/ridl_module_demo_default_symbols.rs"
-    ));
-}
-
-pub(crate) mod api {
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/ridl_module_demo_default_api.rs"
-    ));
+pub mod glue {
+    include!(concat!(env!("OUT_DIR"), "/glue.rs"));
 }

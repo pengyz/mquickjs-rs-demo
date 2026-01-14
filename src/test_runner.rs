@@ -41,9 +41,8 @@ pub fn run_one_js_file(path: &Path) -> Result<(), String> {
     let script =
         fs::read_to_string(path).map_err(|e| format!("failed to read {}: {e}", path.display()))?;
 
-    // Make sure process-level RIDL registration (symbols + modules) is done.
-    // This is idempotent and required for scripts relying on RIDL extensions.
-    crate::ridl_initialize::ridl_initialize::initialize();
+    // Process-level RIDL initialization is owned by the application entrypoint.
+    // Unit tests for this crate may run without ridl-extensions.
 
     // Each JS file runs in an isolated context. Use the local Context wrapper so
     // ridl_context_init() is applied and singleton slots are filled.

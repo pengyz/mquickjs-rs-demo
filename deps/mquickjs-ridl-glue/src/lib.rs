@@ -60,11 +60,8 @@ pub fn emit() {
     }
 
     copy_required(&aggregate_dir, &out_dir, "ridl_symbols.rs");
-    copy_required(&aggregate_dir, &out_dir, "ridl_slot_indices.rs");
-    copy_required(&aggregate_dir, &out_dir, "ridl_ctx_ext.rs");
-    copy_required(&aggregate_dir, &out_dir, "ridl_context_init.rs");
-    copy_required(&aggregate_dir, &out_dir, "ridl_modules_initialize.rs");
-    copy_required(&aggregate_dir, &out_dir, "ridl_initialize.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_runtime_support.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_bootstrap.rs");
 
     println!("cargo:rerun-if-changed={}", cargo_toml.display());
     if let Some(cfg) = cfg {

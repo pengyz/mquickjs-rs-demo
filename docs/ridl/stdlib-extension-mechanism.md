@@ -69,7 +69,7 @@ static const JSPropDef js_global_object[] = {
 - **RIDL modules 由 App manifest（根 `Cargo.toml` 的 `[dependencies]`）决定**：只有当依赖 crate 的 `src/` 下至少存在 1 个 `*.ridl` 文件时，该 crate 才会被视为 RIDL module。
 - **App `build.rs` 负责生成聚合产物**（通过 `ridl-tool`）：
   - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开注入宏（`JS_RIDL_DECLS` / `JS_RIDL_GLOBAL_PROPS` / `JS_RIDL_EXTENSIONS`）
-  - `$OUT_DIR/ridl_initialize.rs`：供 Rust 侧集中初始化（`mquickjs_rs::ridl_initialize!()`）
+  - `$OUT_DIR/ridl_bootstrap.rs`：供 Rust 侧集中初始化（`mquickjs_rs::ridl_bootstrap!()`）
 - **mquickjs-sys `build.rs`** 在启用 feature `ridl-extensions` 时，将上面的 `mquickjs_ridl_register.h` 纳入 QuickJS stdlib 编译，从而把扩展项静态编进 `libmquickjs.a`。
 
 因此新增模块时，不需要修改 mquickjs-sys/mquickjs-rs 的 build.rs；只需要在最终 App 的 `Cargo.toml` 添加对应模块依赖即可。

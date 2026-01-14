@@ -131,16 +131,11 @@ Rules:
 
 ### App crate (aggregated; generated into app `OUT_DIR`)
 
-- `ridl_ctx_ext.rs`
+- `ridl_runtime_support.rs`
   - defines `CtxExt` with `ErasedSingletonSlot` fields
   - defines `ridl_ctx_ext_get_slot_by_name(ext_ptr, name_ptr, name_len)` used via `RidlCtxExtVTable`
   - defines `CtxExt::drop_all()`
-
-- (removed) `ridl_slot_indices.rs`
-  - slot indices were brittle across crates; we now use singleton name-key lookup.
-
-- `ridl_context_init.rs`
-  - per-context initialization entrypoint
+  - provides `ridl_context_init(ctx)` entrypoint
   - installs the ctx-ext vtable once per process
   - allocates ctx-ext and initializes singleton slots
   - ensures ctx finalizer calls `CtxExt::drop_all()`

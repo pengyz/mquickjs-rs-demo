@@ -104,7 +104,7 @@ RIDL module 判定规则（保持一致）：
 4. `ridl_ctx_ext.rs`（ctx-ext；ridl-tool singleton_aggregate 生成）
 5. `ridl_context_init.rs`（per-context init；ridl-tool singleton_aggregate 生成）
 6. `ridl_modules_initialize.rs`（process-level modules init；ridl-builder 生成，后续可模板化）
-7. `ridl_initialize.rs`（统一入口；ridl-builder 生成，保持 `crate::ridl_initialize::ridl_initialize::initialize()` 兼容）
+7. `ridl_bootstrap.rs`（统一入口；ridl-builder 生成，保持 `crate::ridl_bootstrap::ridl_bootstrap::initialize()` 兼容）
 8. `ridl-manifest.json`（审计快照；ridl-builder 生成）
 
 ## 6. 标志性 crate：mquickjs-app（避免 app 自写 build.rs）
@@ -134,7 +134,7 @@ RIDL module 判定规则（保持一致）：
    - `ridl_ctx_ext.rs`
    - `ridl_context_init.rs`
    - `ridl_modules_initialize.rs`
-   - `ridl_initialize.rs`
+   - `ridl_bootstrap.rs`
 5. 若聚合目录或任一必需文件缺失：**直接 panic**，提示用户先运行：
    - `cargo run -p ridl-builder -- prepare --cargo-toml <app/Cargo.toml>`
 
@@ -142,12 +142,12 @@ RIDL module 判定规则（保持一致）：
 
 `mquickjs-app/src/lib.rs`：
 
-- `include!(concat!(env!("OUT_DIR"), "/ridl_initialize.rs"))`
+- `include!(concat!(env!("OUT_DIR"), "/ridl_bootstrap.rs"))`
 - `include!(concat!(env!("OUT_DIR"), "/ridl_context_init.rs"))`
 
 并封装：
 
-- `pub fn initialize_process()` -> 调用 ridl_initialize
+- `pub fn initialize_process()` -> 调用 ridl_bootstrap
 - `pub fn initialize_context(ctx: *mut JSContext)` -> 调用 ridl_context_init
 
 （细节以现有 mquickjs-rs/context API 为准）

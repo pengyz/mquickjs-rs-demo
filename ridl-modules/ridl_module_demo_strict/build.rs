@@ -23,22 +23,4 @@ fn main() {
         "ridl_module_demo_strict",
     )
     .expect("generate module files");
-
-    ridl_tool::generator::generate_module_api_file_default(out_dir).expect("generate module api");
-
-    // Also generate module-local symbols file (we'll include it from OUT_DIR).
-    // The current generator doesn't have a dedicated per-module symbols command, so we
-    // reuse shared-file generation on a single ridl.
-    ridl_tool::generator::generate_shared_files(
-        &[ridl_path.to_string_lossy().to_string()],
-        &out_dir.to_string_lossy(),
-    )
-    .expect("generate symbols");
-
-    // We want the symbols file name to be module-specific to avoid collisions.
-    // generate_shared_files writes ridl_symbols.rs; rename it.
-    let from = out_dir.join("ridl_symbols.rs");
-    let to = out_dir.join("ridl_module_demo_strict_symbols.rs");
-    let _ = std::fs::remove_file(&to);
-    std::fs::rename(from, to).expect("rename symbols");
 }

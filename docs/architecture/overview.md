@@ -47,7 +47,7 @@ mquickjs-rs 采用模块化设计，每个功能模块都作为独立的 Rust cr
 2. **Rust 代码**（`src/lib.rs` / `src/impls.rs` 等）：提供 Rust 侧实现与初始化入口
 3. **构建配置**（`Cargo.toml`）：模块的 Cargo 配置
 
-生成产物不再落在仓库内固定目录；由 **App `build.rs`** 在构建时生成到 `$OUT_DIR/`（例如 `ridl_initialize.rs`、`mquickjs_ridl_register.h`），并由 `mquickjs-sys`/`mquickjs-rs` 在编译期引用。
+生成产物不再落在仓库内固定目录；由 **App `build.rs`** 在构建时生成到 `$OUT_DIR/`（例如 `ridl_bootstrap.rs`、`mquickjs_ridl_register.h`），并由 `mquickjs-sys`/`mquickjs-rs` 在编译期引用。
 
 ### Rust胶水代码与实现代码职责分离
 

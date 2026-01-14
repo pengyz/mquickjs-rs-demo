@@ -18,7 +18,7 @@
 ```
 mquickjs-demo/
 ├── Cargo.toml              # App manifest（RIDL 模块选择单一事实源 / SoT）
-├── build.rs                # App 构建脚本：调用 ridl-tool 生成 app OUT_DIR 下的 ridl_initialize.rs 等
+├── build.rs                # App 构建脚本：调用 ridl-tool 生成 app OUT_DIR 下的 ridl_bootstrap.rs 等
 ├── src/
 │   └── main.rs             # 主程序入口
 ├── ridl-modules/           # RIDL 模块 crate（每个模块是一个独立 Rust crate）
@@ -28,7 +28,7 @@ mquickjs-demo/
 ├── deps/
 │   ├── mquickjs/           # QuickJS 源码
 │   ├── mquickjs-sys/       # 原生构建编排（负责产出 libmquickjs.a；不暴露 Rust API）
-│   ├── mquickjs-rs/        # Rust 封装层（负责 bindgen + 链接 libmquickjs.a；提供 ridl_initialize! 宏）
+│   ├── mquickjs-rs/        # Rust 封装层（负责 bindgen + 链接 libmquickjs.a；提供 ridl_bootstrap! 宏）
 │   └── ridl-tool/          # RIDL 解析/校验/生成 CLI（crate: ridl-tool；bin: ridl-tool）
 ├── docs/                   # 项目文档
 └── doc/planning/           # 需求计划文档（每个需求一份计划）
@@ -82,7 +82,7 @@ cargo build
 构建时（当前实现）：
 - **App `build.rs`** 解析 App manifest（根 `Cargo.toml` 的 `[dependencies]`），筛选出 `src/` 下包含 `*.ridl` 的依赖 crate 作为 RIDL modules。
 - App `build.rs` 通过 `ridl-tool` 生成：
-  - `$OUT_DIR/ridl_initialize.rs`：聚合初始化入口（由 `mquickjs_rs::ridl_initialize!()` 引用）
+  - `$OUT_DIR/ridl_bootstrap.rs`：聚合初始化入口（由 `mquickjs_rs::ridl_bootstrap!()` 引用）
   - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开 `JS_RIDL_EXTENSIONS`
 - **mquickjs-sys `build.rs`** 使用 `mquickjs-build` 产出 `libmquickjs.a`；当启用 feature `ridl-extensions` 时，会把上面的 `mquickjs_ridl_register.h` 纳入编译。
 
@@ -175,7 +175,7 @@ cargo build
 此命令将：
 1. 构建 build.rs 依赖的工具（`ridl-tool` / `mquickjs-build`）
 2. 预构建 QuickJS 产物与头文件（`mquickjs-build` 输出到 `target/mquickjs-build/...`）
-3. 执行 App `build.rs`（生成 `$OUT_DIR/ridl_initialize.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`）
+3. 执行 App `build.rs`（生成 `$OUT_DIR/ridl_bootstrap.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`）
 4. 编译 QuickJS（`mquickjs-sys`）与 Rust 封装层（`mquickjs-rs`）
 5. 链接最终的可执行文件
 

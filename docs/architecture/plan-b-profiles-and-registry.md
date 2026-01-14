@@ -49,8 +49,8 @@
 2) 调用 `ridl-tool resolve --manifest-path <app_manifest>`：
    - 解析依赖图
    - 仅保留 path deps 且其 `<dep>/src` 含 `*.ridl` 的 crate
-   - 生成 `ridl_plan.json`
-3) 调用 `ridl-tool generate --plan <ridl_plan.json> --out <outdir>`：
+   - 生成 `ridl-manifest.json`
+3) 由 `ridl-builder prepare` 调用 ridl-tool 进行聚合输出（3 个 Rust 大文件 + 1 个 C 头）：
    - 生成 per-module 产物（Rust glue、symbols 等）
    - 生成聚合头 `mquickjs_ridl_register.h`（含 `JS_RIDL_EXTENSIONS`）
 4) 调用 `mquickjs-build`：

@@ -1,6 +1,6 @@
 
 // Re-export generated singleton traits so glue can use stable paths.
-pub use crate::generated::api::DemoSingleton;
+pub use crate::api::DemoSingleton;
 
 struct DefaultDemoSingleton;
 

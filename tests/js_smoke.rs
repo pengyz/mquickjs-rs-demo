@@ -19,7 +19,10 @@ fn js_smoke_tests() {
 
     // Ensure process-level RIDL initialization happens before running any scripts.
     // This matches src/main.rs behavior.
-    mquickjs_rs::ridl_initialize!();
+    #[cfg(feature = "ridl-extensions")]
+    {
+        mquickjs_rs::ridl_bootstrap!();
+    }
 
     let total = files.len();
 

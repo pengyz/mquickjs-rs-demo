@@ -96,11 +96,7 @@ JSValue js_{{ s.name|lower }}_get_{{ prop.name|lower }}(JSContext *ctx, JSValue 
     JS_PROP_CLASS_DEF("{{ s.name }}", &js_{{ s.name|lower }}_obj), \
 {%- endfor %}
 
-#define JS_RIDL_GLOBAL_PROPS \
-    JS_STDLIB_EXTENSIONS_{{ module_name|upper }}
-
-// Backward-compat hook (to be migrated out of templates)
 #define JS_RIDL_EXTENSIONS \
-    JS_RIDL_GLOBAL_PROPS
+    JS_STDLIB_EXTENSIONS_{{ module_name|upper }}
 
 #endif // MJS_RIDL_REGISTER_H

@@ -34,7 +34,7 @@
 **输出**：聚合级（aggregate）产物
 
 - `mquickjs_ridl_register.h`（聚合头：`JS_RIDL_DECLS/JS_RIDL_GLOBAL_PROPS`）
-- `ridl_initialize.rs`（Rust 侧集中入口：确保模块 symbols/glue 被拉入）
+- `ridl_bootstrap.rs`（Rust 侧集中入口：确保模块 symbols/glue 被拉入）
 - `ridl_context_init.rs` / `ridl_ctx_ext.rs` / `ridl_slot_indices.rs`（ctx-ext 相关聚合）
 - `ridl-manifest.json`（用于记录本次构建收集到的 RIDL modules 列表；作为可复现的集合快照，不要求下游工具读取它）
 
@@ -74,7 +74,7 @@
 
 - `ridl-builder ridl-generate`：
   - 调用 ridl-tool 生成各模块产物到稳定目录（不落到 OUT_DIR）
-  - 生成聚合产物（`mquickjs_ridl_register.h`、`ridl_initialize.rs`、ctx-ext 文件）
+  - 生成聚合产物（`mquickjs_ridl_register.h`、`ridl_bootstrap.rs`、ctx-ext 文件）
 
 - `ridl-builder build-mquickjs`：
   - 调用 `mquickjs-build build --ridl-register-h <stable_ridl_dir>/mquickjs_ridl_register.h --out <stable_out_dir>`（mquickjs-build 不强依赖 manifest）
@@ -99,7 +99,7 @@
 - xtask 产出：
   - `target/mquickjs-build/<profile>/ridl/plan.json`
   - `target/mquickjs-build/<profile>/ridl/mquickjs_ridl_register.h`
-  - `target/mquickjs-build/<profile>/ridl/ridl_initialize.rs` 等
+  - `target/mquickjs-build/<profile>/ridl/ridl_bootstrap.rs` 等
 
 - mquickjs-build 产出：
   - `target/mquickjs-build/<profile>/<target>/<mode>/{include,lib,build,...}`
@@ -126,7 +126,7 @@
 ## 5. 符号保活（必须保持策略不变）
 
 方案B不改变符号导入策略：
-- 仍由“Rust 聚合产物（ridl_initialize.rs / aggregated_symbols.rs / ensure_symbols）”负责把 RIDL 模块的 glue/symbols 强制拉入最终链接闭包。
+- 仍由“Rust 聚合产物（ridl_bootstrap.rs / aggregated_symbols.rs / ensure_symbols）”负责把 RIDL 模块的 glue/symbols 强制拉入最终链接闭包。
 - C stdlib ROM 表只负责把扩展项以编译期方式固化到 `js_stdlib`。
 
 关键是：聚合层产物必须与 C build 使用的 register.h 同源、同版本、同集合。

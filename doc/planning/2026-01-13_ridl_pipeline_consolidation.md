@@ -24,7 +24,7 @@
 
 - `deps/mquickjs-rs`
   - Rust 安全封装（Context/ProcessHandle 等）。
-  - 提供对“聚合产物”的消费入口（例如 `ridl_initialize!()` 宏），但**不负责**模块发现/聚合。
+  - 提供对“聚合产物”的消费入口（例如 `ridl_bootstrap!()` 宏），但**不负责**模块发现/聚合。
 
 ### 2) Codegen 层（生成工具；严禁在 build.rs 里构建/运行）
 
@@ -79,7 +79,7 @@
 - `ridl_ctx_ext.rs`
 - `ridl_context_init.rs`
 - `ridl_modules_initialize.rs`
-- `ridl_initialize.rs`
+- `ridl_bootstrap.rs`
 
 ## 一次性配置文件（推荐）
 

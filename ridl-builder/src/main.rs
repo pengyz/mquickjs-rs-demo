@@ -461,7 +461,7 @@ fn build_mquickjs(args: Vec<String>) {
         let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
         let mode = if profile == "release" { "release" } else { "debug" };
 
-        let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}");
+        let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/base");
 
         cmd.arg("build")
             .arg("--mquickjs-dir")
@@ -503,7 +503,7 @@ fn prepare_cmd(args: Vec<String>) {
     let mode = if cargo_profile == "release" { "release" } else { "debug" };
 
     // TODO: this profile directory will be made app-id aware as we formalize multi-app mquickjs-build outputs.
-    let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}");
+    let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/ridl");
 
     // 3) build mquickjs using the aggregated register header
     let mut cmd = Command::new("cargo");

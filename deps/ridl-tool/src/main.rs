@@ -12,7 +12,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         eprintln!("Usage: {} <command> [args...]", args[0]);
         eprintln!("Commands:");
         eprintln!("  module <ridl-files...> <output-dir> - Generate module-specific files");
-        eprintln!("  aggregate <ridl-files...> <output-dir> - Generate shared aggregation files");
         std::process::exit(1);
     }
 
@@ -60,23 +59,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                     &module_name,
                 )?;
             }
-        }
-        "aggregate" => {
-            if remaining_args.len() < 2 {
-                eprintln!("Usage: {} aggregate <ridl-files...> <output-dir>", args[0]);
-                std::process::exit(1);
-            }
-
-            // 最后一个参数是输出目录
-            let output_dir = remaining_args.last().unwrap();
-            // 其余参数是ridl文件
-            let ridl_files: Vec<String> = remaining_args[..remaining_args.len() - 1]
-                .iter()
-                .map(|s| (*s).clone())
-                .collect();
-
-            // 生成共享聚合文件
-            generator::generate_shared_files(&ridl_files, output_dir)?;
         }
         _ => {
             eprintln!("Unknown command: {}", command);

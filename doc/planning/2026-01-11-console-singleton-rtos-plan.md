@@ -80,7 +80,7 @@ pub struct CtxExt {
 做法：把扩展初始化内聚为一个“聚合初始化函数”，并由 `Context::new()` 固定调用一次。
 
 - 创建 JSContext（`JS_NewContext`）
-- 调用聚合初始化：`ridl_initialize(ctx)`
+- 调用聚合初始化：`ridl_bootstrap(ctx)`
   - 该函数由 build.rs + ridl-tool 在构建期聚合生成
   - 在内部创建 `CtxExt` 并调用 `JS_SetContextUserData(ctx, ext_ptr, finalizer)`
 

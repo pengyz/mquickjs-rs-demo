@@ -7,6 +7,68 @@ use std::os::raw::c_int;
 #[allow(unused_imports)]
 use crate::impls::*;
 
+// Module initializer API
+pub fn initialize_module() {
+    __ridl_symbols::ensure_symbols();
+}
+
+// Fill per-context RIDL extension slots for this module.
+// Called by the app-level aggregated ridl_context_init.
+//
+// This API must not reference any app crate types.
+pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotWriter) {
+    let _ = w;
+}
+
+mod __ridl_symbols {
+    use super::*;
+
+    // Keep glue symbols linked.
+    // NOTE: we intentionally use `extern` + function pointers here to avoid depending on
+    // any generated module layout (`crate::generated::...`).
+    unsafe extern "C" {
+{%- for function in functions %}
+        fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+{%- endfor %}
+{%- for interface in interfaces %}
+{%- for method in interface.methods %}
+        fn js_{{ interface.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+{%- endfor %}
+{%- endfor %}
+{%- for s in singletons %}
+{%- for method in s.methods %}
+        fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+{%- endfor %}
+{%- for prop in s.properties %}
+{%- if prop.modifiers|is_readonly_prop %}
+        fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+    }
+
+    pub fn ensure_symbols() {
+{%- for function in functions %}
+        let _ = js_{{ function.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+{%- endfor %}
+{%- for interface in interfaces %}
+{%- for method in interface.methods %}
+        let _ = js_{{ interface.name|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+{%- endfor %}
+{%- endfor %}
+{%- for s in singletons %}
+{%- for method in s.methods %}
+        let _ = js_{{ s.name|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+{%- endfor %}
+{%- for prop in s.properties %}
+{%- if prop.modifiers|is_readonly_prop %}
+        let _ = js_{{ s.name|lower }}_get_{{ prop.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+    }
+}
+
 #[inline]
 fn js_throw_type_error(ctx: *mut JSContext, msg: &str) -> JSValue {
     let cstr = CString::new(msg).unwrap_or_else(|_| CString::new("TypeError").unwrap());
@@ -66,7 +128,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
         return js_throw_type_error(ctx, "singleton not initialized");
     }
 
-    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::generated::api::{{ s.name|capitalize }}Singleton);
+    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::api::{{ s.name|capitalize }}Singleton);
     let fat = unsafe { *holder_ptr };
     let s = unsafe { &mut *fat };
 
@@ -102,7 +164,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
         return js_throw_type_error(ctx, "singleton not initialized");
     }
 
-    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::generated::api::{{ s.name|capitalize }}Singleton);
+    let holder_ptr = slot.ptr() as *mut *mut (dyn crate::api::{{ s.name|capitalize }}Singleton);
     let fat = unsafe { *holder_ptr };
     let s = unsafe { &mut *fat };
 

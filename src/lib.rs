@@ -1,13 +1,9 @@
 pub mod context;
+#[cfg(feature = "ridl-extensions")]
 pub mod ridl_context_init;
 pub mod test_runner;
 
-pub mod ctx_ext {
-    include!(concat!(env!("OUT_DIR"), "/ridl_ctx_ext.rs"));
-}
-
-pub mod ridl_initialize {
-    include!(concat!(env!("OUT_DIR"), "/ridl_initialize.rs"));
-}
+#[cfg(feature = "ridl-extensions")]
+pub use ridl_context_init::ridl_runtime_support;
 
 pub use context::Context;

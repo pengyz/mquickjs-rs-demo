@@ -31,7 +31,7 @@ fn ok(...args: any) -> void;
     let parsed = parse_ridl_file(&fs::read_to_string(&ridl_path).unwrap()).unwrap();
     generate_module_files(&parsed.items, parsed.mode, &out_dir, "m").unwrap();
 
-    let glue = fs::read_to_string(out_dir.join("m_glue.rs")).unwrap();
+    let glue = fs::read_to_string(out_dir.join("glue.rs")).unwrap();
 
     // In strict mode, varargs(any) should be collected as Vec<ValueRef<'_>>.
     assert!(

@@ -367,6 +367,10 @@ static const JSPropDef js_global_object[] = {
     /* Note: null is expanded as the global object in js_global_object[] */
     JS_PROP_NULL_DEF("globalThis", 0 ),
 
+#ifndef JS_RIDL_EXTENSIONS
+#define JS_RIDL_EXTENSIONS
+#endif
+
     JS_RIDL_EXTENSIONS
     JS_PROP_END,
 };

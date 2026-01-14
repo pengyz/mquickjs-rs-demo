@@ -15,7 +15,7 @@ fn h(...rest_b: bool) -> void;
     ridl_tool::generator::generate_module_files(&parsed.items, parsed.mode, tmp.path(), "demo")
         .expect("generate module files");
 
-    let glue = fs::read_to_string(tmp.path().join("demo_glue.rs")).expect("read glue");
+    let glue = fs::read_to_string(tmp.path().join("glue.rs")).expect("read glue");
 
     // Each varargs loop should compute rel.
     assert!(glue.contains("let rel = i - 0"));

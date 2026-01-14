@@ -59,6 +59,8 @@ pub mod object;
 pub mod value;
 pub mod class;
 
+pub mod ridl_include;
+
 // Note: ridl_modules are generated/aggregated by the app crate build and included there.
 
 #[cfg(feature = "ridl-extensions")]
@@ -73,14 +75,15 @@ pub fn register_extensions() {
     // selecting RIDL modules and linking their symbols.
 }
 
+#[cfg(feature = "ridl-extensions")]
 #[macro_export]
-macro_rules! ridl_initialize {
+macro_rules! ridl_bootstrap {
     () => {{
-        mod __mquickjs_ridl_initialize {
-            include!(concat!(env!("OUT_DIR"), "/ridl_initialize.rs"));
+        mod __mquickjs_ridl_bootstrap {
+            include!(concat!(env!("OUT_DIR"), "/ridl_bootstrap.rs"));
         }
 
-        __mquickjs_ridl_initialize::ridl_initialize::initialize();
+        __mquickjs_ridl_bootstrap::ridl_initialize::initialize();
     }};
 }
 

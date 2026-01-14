@@ -3,7 +3,10 @@ use std::{env, path::Path, process};
 use mquickjs_demo::test_runner;
 
 fn main() {
-    mquickjs_rs::ridl_initialize!();
+    #[cfg(feature = "ridl-extensions")]
+    {
+        mquickjs_rs::ridl_bootstrap!();
+    }
 
     let args: Vec<String> = env::args().collect();
 

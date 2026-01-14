@@ -64,7 +64,8 @@ fn main() {
         .join("mquickjs-build")
         .join(&profile)
         .join(&target_triple)
-        .join(mode);
+        .join(mode)
+        .join(if _ridl_extensions_enabled { "ridl" } else { "base" });
 
     let build_output_path = build_out_dir.join("mquickjs_build_output.json");
     if !build_output_path.exists() {
