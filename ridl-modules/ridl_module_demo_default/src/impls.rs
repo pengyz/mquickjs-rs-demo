@@ -19,6 +19,10 @@ pub fn create_demo_singleton() -> Box<dyn DemoSingleton> {
     Box::new(DefaultDemoSingleton)
 }
 
+pub fn ridl_create_demo_singleton() -> Box<dyn crate::api::DemoSingleton> {
+    create_demo_singleton()
+}
+
 // --- Default-mode function demos ---
 
 pub fn default_echo_str(s: *const std::os::raw::c_char) -> String {

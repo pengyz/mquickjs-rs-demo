@@ -167,7 +167,10 @@ RIDL 定义的类型会自动映射到 Rust 类型：
 运行以下命令构建项目：
 
 ```bash
-cargo run -p ridl-builder -- prepare --cargo-toml /home/peng/workspace/mquickjs-demo/Cargo.toml --intent build
+# prepare 默认：
+# - 从当前目录向上查找最近的 mquickjs.ridl.toml，并用其同目录的 Cargo.toml 作为 app（无法定位则报错）
+# - 尝试使用 cargo unit-graph（需要 nightly），不可用时会回退到 metadata 方案
+cargo run -p ridl-builder -- prepare
 cargo build
 ```
 

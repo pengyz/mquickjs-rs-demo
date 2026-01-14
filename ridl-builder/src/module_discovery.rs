@@ -5,6 +5,8 @@ use std::{
 
 use crate::{aggregate::Module, AggregateOpts, CargoMetadata, Intent};
 
+const DEFAULT_FALLBACK_INTENT: Intent = Intent::Build;
+
 pub fn discover_ridl_modules(opts: &AggregateOpts) -> Vec<Module> {
     let meta = crate::cargo_metadata(&opts.cargo_toml);
     let app_pkg = crate::select_app_package(&meta, &opts.cargo_toml);
@@ -17,8 +19,15 @@ pub fn discover_ridl_modules(opts: &AggregateOpts) -> Vec<Module> {
             sc,
             &opts.cargo_args,
         )
+    } else if opts.intent.is_some() {
+        direct_deps_from_metadata(&meta, app_pkg, opts.intent.unwrap_or(DEFAULT_FALLBACK_INTENT))
     } else {
-        direct_deps_from_metadata(&meta, app_pkg, opts.intent)
+        // Default path: try unit-graph without requiring extra flags.
+        // If unit-graph isn't available (e.g. stable toolchain), fallback to metadata with default intent.
+        match crate::unit_graph::direct_deps_auto_detect(&opts.cargo_toml, &meta, app_pkg, &opts.cargo_args) {
+            Ok(direct) => direct,
+            Err(_) => direct_deps_from_metadata(&meta, app_pkg, DEFAULT_FALLBACK_INTENT),
+        }
     };
 
     let mut modules = Vec::new();

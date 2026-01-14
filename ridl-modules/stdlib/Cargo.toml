@@ -9,6 +9,3 @@ crate-type = ["rlib", "staticlib"]
 [dependencies]
 mquickjs-rs = { path = "../../deps/mquickjs-rs", features = ["ridl-extensions"] }
 libc = "0.2"
-
-[build-dependencies]
-ridl-tool = { path = "../../deps/ridl-tool" }

@@ -2,3 +2,4 @@
 Cargo.lock
 target/
 .vscode/
+.cargo/config.toml

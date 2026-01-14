@@ -359,7 +359,8 @@ pub fn generate_module_files(
 
     // 生成Rust胶水代码
     // NOTE: singletons are modelled as interface-like shapes for method glue generation.
-    // Properties are handled separately.
+    // We keep the original singleton name (`s.name`) so templates can generate stable VT symbol
+    // names (RIDL_<NAME>_SINGLETON_VT) and enforce the `ridl_create_<name>_singleton` contract.
     let mut singletons = Vec::new();
     for item in items {
         if let crate::parser::ast::IDLItem::Singleton(s) = item {

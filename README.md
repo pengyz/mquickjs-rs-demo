@@ -6,7 +6,10 @@ QuickJS + Rust + RIDL demo
 
 ```bash
 # 1) prepare: build tools + generate RIDL aggregates + build QuickJS base/ridl outputs
-cargo run -p ridl-builder -- prepare --cargo-toml /home/peng/workspace/mquickjs-demo/Cargo.toml --intent build
+# Default behavior:
+# - auto-detect Cargo.toml from nearest mquickjs.ridl.toml (otherwise error)
+# - try cargo unit-graph if available (nightly), otherwise fallback
+cargo run -p ridl-builder -- prepare
 
 # 2) build app
 cargo build
@@ -37,5 +40,5 @@ cargo run -- tests
   Run prepare first:
 
   ```bash
-  cargo run -p ridl-builder -- prepare --cargo-toml /home/peng/workspace/mquickjs-demo/Cargo.toml --intent build
+  cargo run -p ridl-builder -- prepare
   ```

@@ -79,6 +79,6 @@ impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
     }
 }
 
-pub fn create_console_singleton() -> Box<dyn crate::impls::ConsoleSingleton> {
+pub fn ridl_create_console_singleton() -> Box<dyn crate::api::ConsoleSingleton> {
     Box::new(DefaultConsoleSingleton::default())
 }

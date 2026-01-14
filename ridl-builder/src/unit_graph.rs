@@ -18,6 +18,19 @@ pub fn direct_deps_from_unit_graph<'a>(
     direct_deps_from_unit_graph_raw(meta, app_pkg, subcommand, &raw)
 }
 
+pub fn direct_deps_auto_detect<'a>(
+    cargo_toml: &std::path::Path,
+    meta: &'a CargoMetadata,
+    app_pkg: &'a CargoPackage,
+    cargo_args: &[String],
+) -> Result<Vec<&'a CargoPackage>, String> {
+    // Prefer build-mode graph for module discovery in default path.
+    // If users want dev-deps, they can pass `--intent test` explicitly.
+    let sc = CargoSubcommand::Build;
+    let raw = try_run_unit_graph(cargo_toml, sc, cargo_args)?;
+    Ok(direct_deps_from_unit_graph_raw(meta, app_pkg, sc, &raw))
+}
+
 pub fn direct_deps_from_unit_graph_raw<'a>(
     meta: &'a CargoMetadata,
     app_pkg: &'a CargoPackage,
@@ -85,6 +98,14 @@ pub fn direct_deps_from_unit_graph_raw<'a>(
 }
 
 pub fn run_unit_graph(cargo_toml: &std::path::Path, subcommand: CargoSubcommand, cargo_args: &[String]) -> Vec<u8> {
+    try_run_unit_graph(cargo_toml, subcommand, cargo_args).unwrap_or_else(|e| panic!("{e}"))
+}
+
+pub fn try_run_unit_graph(
+    cargo_toml: &std::path::Path,
+    subcommand: CargoSubcommand,
+    cargo_args: &[String],
+) -> Result<Vec<u8>, String> {
     let mut cmd = Command::new("cargo");
     match subcommand {
         CargoSubcommand::Build => {
@@ -102,18 +123,16 @@ pub fn run_unit_graph(cargo_toml: &std::path::Path, subcommand: CargoSubcommand,
         .arg(cargo_toml)
         .args(cargo_args);
 
-    let out = cmd.output().expect("failed to run cargo --unit-graph");
+    let out = cmd.output().map_err(|e| format!("failed to run cargo --unit-graph: {e}"))?;
     if !out.status.success() {
-        // NOTE: we intentionally fail-fast here.
-        // Users can either use nightly, or fall back to legacy selection via --intent.
-        panic!(
+        return Err(format!(
             "cargo --unit-graph failed (exit={:?}). Hint: this requires nightly cargo (try `cargo +nightly ... -Z unstable-options --unit-graph`). stderr:\n{}",
             out.status.code(),
             String::from_utf8_lossy(&out.stderr)
-        );
+        ));
     }
 
-    out.stdout
+    Ok(out.stdout)
 }
 
 fn is_entry_unit(subcommand: CargoSubcommand, u: &Unit) -> bool {

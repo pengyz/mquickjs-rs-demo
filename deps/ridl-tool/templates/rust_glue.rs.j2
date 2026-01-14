@@ -20,6 +20,32 @@ pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotW
     let _ = w;
 }
 
+// Erased singleton vtables consumed by the app-side aggregated ridl_context_init.
+{%- for s in singletons %}
+pub static RIDL_{{ s.name|upper }}_SINGLETON_VT: ::mquickjs_rs::ridl_runtime::RidlErasedSingletonVTable =
+    ::mquickjs_rs::ridl_runtime::RidlErasedSingletonVTable {
+        create: ridl_{{ s.name|lower }}_singleton_create,
+        drop: ridl_{{ s.name|lower }}_singleton_drop,
+    };
+
+unsafe extern "C" fn ridl_{{ s.name|lower }}_singleton_create() -> *mut core::ffi::c_void {
+    // Contract: module crate must provide `crate::ridl_create_{{ s.name|lower }}_singleton()`.
+    // If missing, this fails at compile time with a clear error.
+    let b: Box<dyn crate::api::{{ s.name|capitalize }}Singleton> = crate::ridl_create_{{ s.name|lower }}_singleton();
+    // Store a pointer to the Box (thin pointer), so it can round-trip through c_void safely.
+    Box::into_raw(Box::new(b)) as *mut core::ffi::c_void
+}
+
+unsafe extern "C" fn ridl_{{ s.name|lower }}_singleton_drop(p: *mut core::ffi::c_void) {
+    if !p.is_null() {
+        unsafe {
+            let holder: Box<Box<dyn crate::api::{{ s.name|capitalize }}Singleton>> = Box::from_raw(p as *mut _);
+            drop(holder);
+        }
+    }
+}
+{%- endfor %}
+
 mod __ridl_symbols {
     use super::*;
 

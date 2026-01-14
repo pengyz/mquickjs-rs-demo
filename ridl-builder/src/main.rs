@@ -48,11 +48,11 @@ fn usage() {
     eprintln!("  export-deps        Export parsed direct deps snapshot as ridl-deps.json (debugging only)");
     eprintln!("");
     eprintln!("aggregate/prepare options:");
-    eprintln!("  --cargo-toml <path>   App Cargo.toml (required)");
+    eprintln!("  --cargo-toml <path>   App Cargo.toml (optional; default from nearest mquickjs.ridl.toml)");
     eprintln!("  --app-id <id>         Override app id (optional)");
     eprintln!("  --cargo-subcommand build|test  Use cargo unit-graph to derive direct deps (preferred)");
     eprintln!("  --cargo-args <args>            Extra args forwarded to cargo (features/target/profile), e.g. --cargo-args \"--features foo\"");
-    eprintln!("  --intent build|test            Legacy fallback if --cargo-subcommand is not provided (default: build)");
+    eprintln!("  --intent build|test            Force fallback intent when not using unit-graph (default: build)");
     eprintln!("");
     eprintln!("export-unit-graph/export-deps options:");
     eprintln!("  --cargo-toml <path>   App Cargo.toml (required, absolute)");
@@ -154,7 +154,7 @@ impl CargoSubcommand {
 struct AggregateOpts {
     cargo_toml: PathBuf,
     app_id: String,
-    intent: Intent,
+    intent: Option<Intent>,
     cargo_subcommand: Option<CargoSubcommand>,
     cargo_args: Vec<String>,
     target_dir: PathBuf,
@@ -162,8 +162,9 @@ struct AggregateOpts {
 
 fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
     let cargo_toml = parse_opt(args, "--cargo-toml")
-        .unwrap_or_else(|| panic!("--cargo-toml is required"));
-    let cargo_toml = PathBuf::from(cargo_toml);
+        .map(PathBuf::from)
+        .unwrap_or_else(|| default_cargo_toml_from_nearest_ridl_toml());
+
     if !cargo_toml.is_absolute() {
         // Keep things explicit/stable across different cwd.
         panic!("--cargo-toml must be an absolute path: {}", cargo_toml.display());
@@ -174,12 +175,9 @@ fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
         .map(CargoSubcommand::parse);
 
     let intent = if let Some(sc) = cargo_subcommand {
-        sc.implied_intent()
+        Some(sc.implied_intent())
     } else {
-        parse_opt(args, "--intent")
-            .as_deref()
-            .map(Intent::parse)
-            .unwrap_or(Intent::Build)
+        parse_opt(args, "--intent").as_deref().map(Intent::parse)
     };
 
     let cargo_args = parse_opt(args, "--cargo-args")
@@ -205,6 +203,40 @@ fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
         cargo_args,
         target_dir,
     }
+}
+
+fn default_cargo_toml_from_nearest_ridl_toml() -> PathBuf {
+    // Default rule (no ambiguity): find the nearest `mquickjs.ridl.toml` when walking up from cwd,
+    // then use the `Cargo.toml` in the same directory. If this cannot be resolved, require users to
+    // pass `--cargo-toml` explicitly.
+    let cwd = env::current_dir().unwrap_or_else(|e| panic!("failed to get cwd: {e}"));
+
+    let mut cur = cwd.as_path();
+    loop {
+        let ridl = cur.join("mquickjs.ridl.toml");
+        if ridl.exists() {
+            let cargo_toml = cur.join("Cargo.toml");
+            if cargo_toml.exists() {
+                return cargo_toml;
+            }
+
+            panic!(
+                "Found '{}' but '{}' is missing. Please pass --cargo-toml explicitly.",
+                ridl.display(),
+                cargo_toml.display()
+            );
+        }
+
+        let Some(parent) = cur.parent() else {
+            break;
+        };
+        cur = parent;
+    }
+
+    panic!(
+        "Unable to locate mquickjs.ridl.toml from cwd='{}'. Please pass --cargo-toml explicitly.",
+        cwd.display()
+    );
 }
 
 fn split_shell_words(s: &str) -> Vec<String> {
@@ -437,14 +469,43 @@ fn build_tools() {
         .arg("mquickjs-build");
     run(cmd);
 
-    // Print their expected locations for convenience.
     let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
     let bin_dir = if profile == "release" {
         "target/release"
     } else {
         "target/debug"
     };
+
+    // Write env injection so build.rs can find ridl-tool without custom scripts.
+    write_cargo_env_config(bin_dir);
+
     eprintln!("Built tools under {bin_dir}/ (ridl-tool, mquickjs-build)");
+}
+
+fn write_cargo_env_config(bin_dir: &str) {
+    let workspace_root = env::current_dir().unwrap_or_else(|e| panic!("failed to get cwd: {e}"));
+    let cargo_dir = workspace_root.join(".cargo");
+    let config_path = cargo_dir.join("config.toml");
+
+    std::fs::create_dir_all(&cargo_dir)
+        .unwrap_or_else(|e| panic!("failed to create {}: {e}", cargo_dir.display()));
+
+    let ridl_tool = workspace_root
+        .join(bin_dir)
+        .join(if cfg!(windows) { "ridl-tool.exe" } else { "ridl-tool" });
+
+    let ridl_tool = ridl_tool
+        .canonicalize()
+        .unwrap_or_else(|e| panic!("failed to canonicalize {}: {e}", ridl_tool.display()));
+
+    // Minimal config: we only manage one env var.
+    let content = format!(
+        "[env]\nMQUICKJS_RIDL_TOOL = {{ value = \"{}\", force = true }}\n",
+        ridl_tool.display()
+    );
+
+    std::fs::write(&config_path, content)
+        .unwrap_or_else(|e| panic!("failed to write {}: {e}", config_path.display()));
 }
 
 fn build_mquickjs(args: Vec<String>) {
