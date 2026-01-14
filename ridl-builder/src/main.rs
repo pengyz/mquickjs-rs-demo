@@ -481,7 +481,11 @@ fn prepare_cmd(args: Vec<String>) {
     // 1) build tool binaries
     build_tools();
 
-    // 2) aggregate ridl modules into stable outputs
+    // 2) always build base QuickJS outputs first (no RIDL extensions)
+    //    so downstream crates/tests can link without requiring any js_* extension symbols.
+    build_mquickjs(Vec::new());
+
+    // 3) aggregate ridl modules into stable outputs
     let modules = module_discovery::discover_ridl_modules(&opts);
     let out = aggregate::aggregate(&opts.target_dir, &opts.app_id, &modules)
         .unwrap_or_else(|e| panic!("aggregate failed: {e}"));
@@ -505,7 +509,7 @@ fn prepare_cmd(args: Vec<String>) {
     // TODO: this profile directory will be made app-id aware as we formalize multi-app mquickjs-build outputs.
     let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/ridl");
 
-    // 3) build mquickjs using the aggregated register header
+    // 4) build RIDL-enabled mquickjs using the aggregated register header
     let mut cmd = Command::new("cargo");
     cmd.arg("run")
         .arg("-p")

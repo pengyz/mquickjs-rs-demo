@@ -2,34 +2,40 @@
 
 #[allow(non_snake_case)]
 mod __ridl_agg_symbols {
-    use core::ffi::c_void;
+    // NOTE: use a function pointer type so the keepalive table is `Sync`.
+    type JsCFunction = unsafe extern "C" fn(
+        ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+        this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+        argc: i32,
+        argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+    ) -> mquickjs_rs::mquickjs_ffi::JSValue;
 
     // externs for all js_* functions
 {%- for f in functions %}
-    extern "C" {
-        pub fn js_{{ f.name|lower }}(ctx: *mut mquickjs_ffi::JSContext, this_val: mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_ffi::JSValue) -> mquickjs_ffi::JSValue;
+    unsafe extern "C" {
+        pub fn js_{{ f.name|lower }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
     }
 {%- endfor %}
 
 {%- for i in interfaces %}
 {%- for m in i.methods %}
-    extern "C" {
-        pub fn js_{{ i.name|lower }}_{{ m.name|lower }}(ctx: *mut mquickjs_ffi::JSContext, this_val: mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_ffi::JSValue) -> mquickjs_ffi::JSValue;
+    unsafe extern "C" {
+        pub fn js_{{ i.name|lower }}_{{ m.name|lower }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
     }
 {%- endfor %}
 {%- endfor %}
 
 {%- for c in classes %}
 {%- for m in c.methods %}
-    extern "C" {
-        pub fn js_{{ c.name|lower }}_{{ m.name|lower }}(ctx: *mut mquickjs_ffi::JSContext, this_val: mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_ffi::JSValue) -> mquickjs_ffi::JSValue;
+    unsafe extern "C" {
+        pub fn js_{{ c.name|lower }}_{{ m.name|lower }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
     }
 {%- endfor %}
 {%- endfor %}
 
     #[used]
     #[allow(non_upper_case_globals)]
-    static __ridl_keepalive_ptrs: [*const c_void; {{ functions|length }}
+    pub static __ridl_keepalive_ptrs: [JsCFunction; {{ functions|length }}
 {%- set methods_total = 0 -%}
 {%- for i in interfaces -%}
 {%- set methods_total = methods_total + (i.methods|length) -%}
@@ -39,16 +45,16 @@ mod __ridl_agg_symbols {
 {%- endfor -%}
 + {{ methods_total }}] = [
 {%- for f in functions %}
-        js_{{ f.name|lower }} as *const c_void,
+        js_{{ f.name|lower }},
 {%- endfor %}
 {%- for i in interfaces %}
 {%- for m in i.methods %}
-        js_{{ i.name|lower }}_{{ m.name|lower }} as *const c_void,
+        js_{{ i.name|lower }}_{{ m.name|lower }},
 {%- endfor %}
 {%- endfor %}
 {%- for c in classes %}
 {%- for m in c.methods %}
-        js_{{ c.name|lower }}_{{ m.name|lower }} as *const c_void,
+        js_{{ c.name|lower }}_{{ m.name|lower }},
 {%- endfor %}
 {%- endfor %}
     ];
@@ -57,5 +63,5 @@ mod __ridl_agg_symbols {
 #[inline(always)]
 pub fn ensure_symbols() {
     // Force reference to keepalive table so the linker keeps referenced symbols.
-    let _ = __ridl_agg_symbols::__ridl_keepalive_ptrs.as_ptr();
+    let _ = unsafe { __ridl_agg_symbols::__ridl_keepalive_ptrs.as_ptr() };
 }

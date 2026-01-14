@@ -167,23 +167,22 @@ RIDL 定义的类型会自动映射到 Rust 类型：
 运行以下命令构建项目：
 
 ```bash
-cargo run -p ridl-builder -- build-tools
-cargo run -p ridl-builder -- build-mquickjs
+cargo run -p ridl-builder -- prepare --cargo-toml /home/peng/workspace/mquickjs-demo/Cargo.toml --intent build
 cargo build
 ```
 
-此命令将：
-1. 构建 build.rs 依赖的工具（`ridl-tool` / `mquickjs-build`）
-2. 预构建 QuickJS 产物与头文件（`mquickjs-build` 输出到 `target/mquickjs-build/...`）
-3. 执行 App `build.rs`（生成 `$OUT_DIR/ridl_bootstrap.rs` 与 `$OUT_DIR/mquickjs_ridl_register.h`）
-4. 编译 QuickJS（`mquickjs-sys`）与 Rust 封装层（`mquickjs-rs`）
-5. 链接最终的可执行文件
+此流程将：
+1. 构建工具（`ridl-tool` / `mquickjs-build`）
+2. 预构建 QuickJS base 产物（不含 RIDL extensions；供 core/单测链接）
+3. 生成 RIDL 聚合产物（`ridl_bootstrap.rs` / `ridl_runtime_support.rs` / `ridl_symbols.rs` / `mquickjs_ridl_register.h` 等）
+4. 预构建 QuickJS ridl 产物（包含 RIDL extensions；供 App/集成用例运行）
+5. 执行 App `build.rs` 并完成最终编译链接
 
 ## 调试技巧
 
 ### 调试 RIDL 生成的代码
 
-1. 检查生成的 `<module>_glue.rs` 文件内容
+1. 检查生成的 `glue.rs` 文件内容
 2. 确认函数签名是否正确
 3. 验证参数转换逻辑
 
