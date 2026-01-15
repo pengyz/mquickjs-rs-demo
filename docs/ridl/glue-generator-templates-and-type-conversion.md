@@ -250,8 +250,23 @@ mquickjs 的字符串转换走 `JS_ToCString(ctx, v, &mut JSCStringBuf)` 这套 
 
 #### class_id 的生成与初始化
 
-建议：
-- 每个 module 的 `initialize_module()` 负责注册 class 并初始化 class_id（存到 module 内 static）。
+约定（v1 固化）：
+- C 侧 user class id 使用 `JS_CLASS_USER + i` 的编译期常量宏（类似 mquickjs example.c），并生成独立头文件 `mqjs_ridl_user_class_ids.h`。
+- Rust 侧同源生成 `ridl_class_id.rs`（供 `mquickjs_rs::ridl_class_id` include）。
+- 排序规则采用与 `ridl-manifest.json` 相同的稳定排序（便于审计），但 `ridl-manifest.json` 本身不作为输入。
+
+命名规范：
+- module name：
+  - 全局注册：固定为 `GLOBAL`（C 符号中使用 `global`）。
+  - 有 module 声明：使用 module path normalize（非 `[A-Za-z0-9_]` 替换为 `_`，含 `-` -> `_`）。
+- class id 宏：`JS_CLASS_{GLOBAL|MODULE}_{CLASS}`（全大写）。
+- C 侧符号命名域（统一 normalize + 小写，避免与全局函数/其他符号冲突）：
+  - class：`js_<module>_class_<class>_...`
+  - singleton：`js_<module>_singleton_<singleton>_...`
+  - 全局函数：`js_<module>_fn_<function>_...`
+
+初始化：
+- 每个 module 的 `initialize_module()` 负责注册 class 并在 JS 侧导出符号（global 或 require 返回对象）。
 - 聚合路径保证在 JS 侧使用 class 前已经执行 initialize。
 
 #### 析构

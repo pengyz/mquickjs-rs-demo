@@ -1,6 +1,8 @@
 //! RIDL语义验证器模块
 //! 提供对解析后的RIDL AST的语义验证功能
 
+mod normalize;
+
 use crate::parser::ast::*;
 use std::collections::HashMap;
 
@@ -400,6 +402,10 @@ pub fn validate_with_mode(
             IDLItem::Singleton(singleton) => idl.singletons.push(singleton.clone()),
         }
     }
+
+    // 归一化：对未声明 ctor 的 class 补默认无参 constructor()
+    // 这样全局/模块下的导出 class 行为一致，JS 侧可 `new`。
+    normalize::ensure_default_constructors(&mut idl);
 
     // 创建验证器并验证
     let mut validator = SemanticValidator::new("unknown.ridl".to_string());

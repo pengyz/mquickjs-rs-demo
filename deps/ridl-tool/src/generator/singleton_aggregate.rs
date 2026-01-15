@@ -8,15 +8,15 @@ use std::path::Path;
 #[template(path = "ridl_runtime_support.rs.j2")]
 struct RidlRuntimeSupportTemplate {
     slots: Vec<Slot>,
-    singleton_inits: Vec<SingletonInit>,
+    slot_inits: Vec<SlotInit>,
 }
 
 #[derive(Debug, Clone)]
-struct SingletonInit {
+struct SlotInit {
     crate_name: String,
     slot_index: u32,
     vt_ident: String,
-    singleton_key: String,
+    slot_key: String,
 }
 
 
@@ -27,16 +27,15 @@ struct Slot {
     index: u32,
 }
 
-
-
 pub fn generate_ridl_runtime_support(
     plan: &RidlPlan,
     out_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // We share the same slot ordering and singleton init ordering with the legacy generator.
     let mut slots: Vec<Slot> = Vec::new();
-    let mut singleton_inits: Vec<SingletonInit> = Vec::new();
+    let mut slot_inits: Vec<SlotInit> = Vec::new();
     let mut slot_map: BTreeMap<String, u32> = BTreeMap::new();
+    let mut proto_keys: BTreeMap<String, String> = BTreeMap::new();
 
     for m in &plan.modules {
         for ridl_file in &m.ridl_files {
@@ -44,47 +43,114 @@ pub fn generate_ridl_runtime_support(
             let parsed = crate::parser::parse_ridl_file(&src)?;
 
             for item in parsed.items {
-                let crate::parser::ast::IDLItem::Singleton(s) = item else {
-                    continue;
-                };
+                match item {
+                    crate::parser::ast::IDLItem::Singleton(s) => {
+                        let name = sanitize_ident(&s.name);
+                        if !slots.iter().any(|x| x.name == name) {
+                            slots.push(Slot {
+                                name: name.clone(),
+                                index: 0,
+                            });
+                        }
 
-                let name = sanitize_ident(&s.name);
-                if !slots.iter().any(|x| x.name == name) {
-                    slots.push(Slot {
-                        name: name.clone(),
-                        index: 0,
-                    });
+                        slot_inits.push(SlotInit {
+                            crate_name: m.crate_name.clone(),
+                            slot_index: 0,
+                            vt_ident: format!("RIDL_{}_CTX_SLOT_VT", name.to_uppercase()),
+                            slot_key: name.to_lowercase(),
+                        });
+                    }
+                    crate::parser::ast::IDLItem::Class(c) => {
+                        // Only generate proto backing when the class has at least one proto property.
+                        let has_proto = c
+                            .properties
+                            .iter()
+                            .any(|p| p.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto));
+                        if !has_proto {
+                            continue;
+                        }
+
+                        // module_ns: prefer RIDL module declaration; fallback to crate name.
+                        let module_ns = parsed
+                            .module
+                            .as_ref()
+                            .map(|m| m.module_path.as_str())
+                            .unwrap_or_else(|| m.crate_name.as_str());
+
+                        let crate_ns_norm = sanitize_ns(module_ns);
+                        let key = format!("proto:{}::{}", crate_ns_norm, c.name);
+
+                        // Avoid duplicate proto keys across modules.
+                        // Even though proto state is now a generic ctx slot, the same semantic
+                        // (proto:<module>::<class>) should not be defined twice.
+                        if let Some(prev) = proto_keys.get(&key) {
+                            return Err(format!(
+                                "duplicate proto key {key}: {prev} vs {}",
+                                ridl_file.display()
+                            )
+                            .into());
+                        }
+                        proto_keys.insert(key.clone(), ridl_file.display().to_string());
+
+                        let field_name = format!(
+                            "proto_{}_{}",
+                            sanitize_ident(&crate_ns_norm.replace('.', "_")),
+                            sanitize_ident(&c.name)
+                        );
+
+                        // Proto backings are stored as ctx-ext slots (same mechanism as singletons).
+                        // We reserve a dedicated slot index using the field_name.
+                        let slot_index = *slot_map.entry(field_name.to_lowercase()).or_insert_with(|| {
+                            let next = slots.len() as u32;
+                            slots.push(Slot {
+                                name: field_name.clone(),
+                                index: next,
+                            });
+                            next
+                        });
+
+                        // Proto backing is just another ctx slot init.
+                        let module_name = c
+                            .module
+                            .as_ref()
+                            .map(|m| sanitize_ident(&m.module_path).to_uppercase())
+                            .unwrap_or_else(|| "GLOBAL".to_string());
+
+                        slot_inits.push(SlotInit {
+                            crate_name: m.crate_name.clone(),
+                            slot_index,
+                            vt_ident: format!(
+                                "RIDL_{}_{}_PROTO_CTX_SLOT_VT",
+                                module_name,
+                                sanitize_ident(&c.name).to_uppercase()
+                            ),
+                            slot_key: field_name.to_lowercase(),
+                        });
+                    }
+                    _ => {}
                 }
-
-                singleton_inits.push(SingletonInit {
-                    crate_name: m.crate_name.clone(),
-                    slot_index: 0,
-                    vt_ident: format!("RIDL_{}_SINGLETON_VT", name.to_uppercase()),
-                    singleton_key: name.to_lowercase(),
-                });
             }
         }
     }
 
     slots.sort_by(|a, b| a.name.cmp(&b.name));
+    slot_map.clear();
     for (i, s) in slots.iter_mut().enumerate() {
         s.index = i as u32;
         slot_map.insert(s.name.to_lowercase(), s.index);
     }
 
-    for s in singleton_inits.iter_mut() {
-        if let Some(idx) = slot_map.get(&s.singleton_key) {
-            s.slot_index = *idx;
-        }
-    }
-    singleton_inits.sort_by(|a, b| {
+    slot_inits.sort_by(|a, b| {
         (a.crate_name.as_str(), a.slot_index).cmp(&(b.crate_name.as_str(), b.slot_index))
     });
 
-    let t = RidlRuntimeSupportTemplate {
-        slots,
-        singleton_inits,
-    };
+    for init in slot_inits.iter_mut() {
+        if let Some(idx) = slot_map.get(&init.slot_key.to_lowercase()) {
+            init.slot_index = *idx;
+        }
+    }
+
+    let t = RidlRuntimeSupportTemplate { slots, slot_inits };
     std::fs::write(out_dir.join("ridl_runtime_support.rs"), t.render()?)?;
     Ok(())
 }
@@ -103,7 +169,7 @@ fn sanitize_ident(name: &str) -> String {
         out.push(if ok { ch } else { '_' });
     }
     if out.is_empty() {
-        out.push_str("singleton");
+        out.push_str("ident");
     }
 
     // Avoid keywords we care about.
@@ -111,4 +177,19 @@ fn sanitize_ident(name: &str) -> String {
         "type" | "match" | "mod" | "crate" | "self" | "super" => format!("{out}_"),
         _ => out,
     }
+}
+
+fn sanitize_ns(module_ns: &str) -> String {
+    // Key namespace is restricted to ASCII: [0-9A-Za-z_:.]
+    // Replace any other char with '_'.
+    module_ns
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' || ch == '.' || ch == ':' {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
 }

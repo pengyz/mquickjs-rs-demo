@@ -49,3 +49,62 @@ pub fn default_id_any(v: mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mqu
 }
 
 pub fn default_void_ok() {}
+
+// --- Class demo: Counter ---
+
+pub struct Counter {
+    value: i32,
+}
+
+impl crate::api::CounterClass for Counter {
+    fn inc(&mut self, delta: i32) -> i32 {
+        self.value += delta;
+        self.value
+    }
+
+    fn get_value(&mut self) -> i32 {
+        self.value
+    }
+
+    fn set_value(&mut self, v: i32) {
+        self.value = v;
+    }
+}
+
+pub fn counter_constructor() -> Box<dyn crate::api::CounterClass> {
+    Box::new(Counter { value: 0 })
+}
+
+// Per-context proto state (erased)
+#[repr(C)]
+struct CounterProto {
+    token: std::ffi::CString,
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ridl_create_proto_counter() -> *mut crate::api::CounterProtoState {
+    let st = CounterProto {
+        token: std::ffi::CString::new("").unwrap(),
+    };
+    Box::into_raw(Box::new(st)) as *mut crate::api::CounterProtoState
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ridl_drop_proto_counter(p: *mut crate::api::CounterProtoState) {
+    if !p.is_null() {
+        unsafe {
+            drop(Box::from_raw(p as *mut CounterProto));
+        }
+    }
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ridl_proto_get_counter_token(
+    proto: *mut crate::api::CounterProtoState,
+) -> *const core::ffi::c_char {
+    if proto.is_null() {
+        return core::ptr::null();
+    }
+    let st = unsafe { &mut *(proto as *mut CounterProto) };
+    st.token.as_ptr()
+}

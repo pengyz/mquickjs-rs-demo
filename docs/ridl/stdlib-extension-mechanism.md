@@ -145,7 +145,9 @@ interface DeviceInfo {
 - **无`module`声明**：全局注册到global对象
   - 函数直接注册到global中
   - 单例对象作为属性注册到global上（如global.console）
-- **有`module`声明**：通过`require("module.name")`访问
+- **有`module`声明**：通过`require("module.name")`访问（返回“模块实例对象”，不可 `new`）
+  - 模块内允许声明 `class`，它们作为该模块实例对象的导出成员，例如：`new require("system.network").Connect()`
+  - 约束：模块实例本身禁止构造（无 `constructor` 概念）；导出类允许/可省略 `constructor`（省略时等价于 `constructor();`）
 - **module声明作用域**：应用于整个RIDL文件，一个文件只能有一个module声明
 - **module声明位置**：必须位于文件开头，在任何接口、类或其他定义之前
 - **版本号格式**：module声明中的版本号格式为`主版本号.次版本号`（如`1.0`）或仅包含主版本号（如`1`），不允许超过两个部分的版本号（如`1.0.2.5`无效）

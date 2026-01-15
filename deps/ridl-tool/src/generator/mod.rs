@@ -53,58 +53,76 @@ fn generate_register_h_and_symbols(
         return Ok(());
     }
 
-    // Aggregate all RIDL items across modules.
-    let mut all_functions: Vec<TemplateFunction> = Vec::new();
-    let mut all_interfaces: Vec<TemplateInterface> = Vec::new();
-    let mut all_classes: Vec<TemplateClass> = Vec::new();
-    let mut all_singletons: Vec<crate::parser::ast::Singleton> = Vec::new();
+    // Parse ridl files as modules (1 file = 1 module). Module name defaults to GLOBAL.
+    let mut modules: Vec<TemplateModule> = Vec::new();
 
     for ridl_file in ridl_files {
         let content = std::fs::read_to_string(ridl_file)?;
         let parsed = crate::parser::parse_ridl_file(&content)?;
 
+        let module_name = parsed
+            .module
+            .as_ref()
+            .map(|m| m.module_path.clone())
+            .unwrap_or_else(|| "GLOBAL".to_string());
+
+        let mut functions: Vec<TemplateFunction> = Vec::new();
+        let mut interfaces: Vec<TemplateInterface> = Vec::new();
+        let mut classes: Vec<TemplateClass> = Vec::new();
+        let mut singletons: Vec<crate::parser::ast::Singleton> = Vec::new();
+
         for item in parsed.items {
             match item {
                 crate::parser::ast::IDLItem::Function(f) => {
-                    all_functions.push(TemplateFunction::from_with_mode(f, parsed.mode))
+                    functions.push(TemplateFunction::from_with_mode(f, parsed.mode))
                 }
                 crate::parser::ast::IDLItem::Interface(i) => {
-                    all_interfaces.push(TemplateInterface::from_with_mode(i, parsed.mode))
+                    interfaces.push(TemplateInterface::from_with_mode(i, parsed.mode))
                 }
-                crate::parser::ast::IDLItem::Singleton(s) => all_singletons.push(s),
+                crate::parser::ast::IDLItem::Singleton(s) => singletons.push(s),
                 crate::parser::ast::IDLItem::Class(c) => {
-                    all_classes.push(TemplateClass::from_with_mode(c, parsed.mode))
+                    classes.push(TemplateClass::from_with_mode(
+                        module_name.clone(),
+                        c,
+                        parsed.mode,
+                    ))
                 }
                 _ => {}
             }
         }
+
+        modules.push(TemplateModule {
+            module_name,
+            module_decl: parsed.module,
+            file_mode: parsed.mode,
+            interfaces,
+            functions,
+            singletons,
+            classes,
+        });
     }
 
     let class_defs = {
-        let t = MquickjsRidlClassDefsTemplate {
-            module_name: "mquickjs_ridl".to_string(),
-            classes: all_classes.clone(),
-        };
+        let t = MquickjsRidlClassDefsTemplate { modules: modules.clone() };
         t.render()?
     };
 
+    // NOTE: Per-class JS class ids are allocated by the app aggregate (build-time),
+    // and modules must not assume a global/shared JS_CLASS_* namespace.
+
+    let classes: Vec<TemplateClass> = modules.iter().flat_map(|m| m.classes.iter().cloned()).collect();
+
     let ridl_register_h = MquickjsRidlRegisterHeaderTemplate {
-        module_name: "mquickjs_ridl".to_string(),
-        interfaces: all_interfaces.clone(),
-        functions: all_functions.clone(),
-        singletons: all_singletons,
-        classes: all_classes.clone(),
+        module_name: "global".to_string(),
+        modules: modules.clone(),
+        classes,
         class_defs,
     };
 
     std::fs::write(out_dir.join("mquickjs_ridl_register.h"), ridl_register_h.render()?)?;
 
     // Aggregated symbols (extern declarations + keep-alive references).
-    let agg_symbols = AggSymbolsTemplate {
-        interfaces: all_interfaces,
-        functions: all_functions,
-        classes: all_classes,
-    };
+    let agg_symbols = AggSymbolsTemplate { modules };
 
     std::fs::write(out_dir.join("ridl_symbols.rs"), agg_symbols.render()?)?;
 
@@ -118,10 +136,10 @@ pub mod singleton_aggregate;
 #[derive(Template)]
 #[template(path = "mquickjs_ridl_register_h.rs.j2", escape = "none")]
 struct MquickjsRidlRegisterHeaderTemplate {
+    // Used only for stdlib macro namespace (JS_STDLIB_EXTENSIONS_<...>).
     module_name: String,
-    interfaces: Vec<TemplateInterface>,
-    functions: Vec<TemplateFunction>,
-    singletons: Vec<crate::parser::ast::Singleton>,
+    modules: Vec<TemplateModule>,
+    // Flattened classes for templates that need global counts.
     classes: Vec<TemplateClass>,
     class_defs: String,
 }
@@ -129,8 +147,7 @@ struct MquickjsRidlRegisterHeaderTemplate {
 #[derive(Template)]
 #[template(path = "mquickjs_ridl_class_defs.h.j2", escape = "none")]
 struct MquickjsRidlClassDefsTemplate {
-    module_name: String,
-    classes: Vec<TemplateClass>,
+    modules: Vec<TemplateModule>,
 }
 
 #[derive(Template)]
@@ -138,6 +155,8 @@ struct MquickjsRidlClassDefsTemplate {
 struct RustGlueTemplate {
     #[allow(dead_code)]
     module_name: String,
+    #[allow(dead_code)]
+    module_decl: Option<crate::parser::ast::ModuleDeclaration>,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
     singletons: Vec<TemplateInterface>,
@@ -149,6 +168,7 @@ struct RustGlueTemplate {
 #[allow(dead_code)]
 struct RustApiTemplate {
     module_name: String,
+    module_decl: Option<crate::parser::ast::ModuleDeclaration>,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
     singletons: Vec<TemplateInterface>,
@@ -160,11 +180,21 @@ struct RustApiTemplate {
 #[template(path = "aggregated_symbols.rs.j2")]
 #[allow(dead_code)]
 struct AggSymbolsTemplate {
-    interfaces: Vec<TemplateInterface>,
-    functions: Vec<TemplateFunction>,
-    classes: Vec<TemplateClass>,
+    modules: Vec<TemplateModule>,
 }
 
+
+#[derive(Debug, Clone)]
+struct TemplateModule {
+    module_name: String,
+    module_decl: Option<crate::parser::ast::ModuleDeclaration>,
+    file_mode: crate::parser::FileMode,
+
+    interfaces: Vec<TemplateInterface>,
+    functions: Vec<TemplateFunction>,
+    singletons: Vec<crate::parser::ast::Singleton>,
+    classes: Vec<TemplateClass>,
+}
 
 #[derive(Debug, Clone)]
 struct TemplateInterface {
@@ -178,7 +208,8 @@ struct TemplateInterface {
 #[derive(Debug, Clone)]
 struct TemplateClass {
     name: String,
-    constructor: Option<Function>,
+    module_name: String,
+    constructor: Option<TemplateFunction>,
     methods: Vec<TemplateMethod>,
     properties: Vec<crate::parser::ast::Property>,
 }
@@ -264,10 +295,17 @@ impl TemplateFunction {
 }
 
 impl TemplateClass {
-    fn from_with_mode(class: Class, file_mode: crate::parser::FileMode) -> Self {
+    fn from_with_mode(
+        module_name: String,
+        class: Class,
+        file_mode: crate::parser::FileMode,
+    ) -> Self {
         Self {
+            module_name,
             name: class.name,
-            constructor: class.constructor,
+            constructor: class
+                .constructor
+                .map(|c| TemplateFunction::from_with_mode(c, file_mode)),
             methods: class
                 .methods
                 .into_iter()
@@ -333,6 +371,7 @@ pub fn collect_definitions(ridl_files: &[String]) -> Result<Vec<IDL>, Box<dyn st
 
 pub fn generate_module_files(
     items: &[IDLItem],
+    module_decl: Option<crate::parser::ast::ModuleDeclaration>,
     file_mode: crate::parser::FileMode,
     output_path: &Path,
     module_name: &str,
@@ -350,7 +389,15 @@ pub fn generate_module_files(
                 interfaces.push(TemplateInterface::from_with_mode(i.clone(), file_mode))
             }
             crate::parser::ast::IDLItem::Class(c) => {
-                classes.push(TemplateClass::from_with_mode(c.clone(), file_mode))
+                let ridl_module_name = module_decl
+                    .as_ref()
+                    .map(|m| m.module_path.as_str())
+                    .unwrap_or("GLOBAL");
+                classes.push(TemplateClass::from_with_mode(
+                    ridl_module_name.to_string(),
+                    c.clone(),
+                    file_mode,
+                ))
             }
             // 其他类型暂不处理，可根据需要添加
             _ => {}
@@ -360,7 +407,7 @@ pub fn generate_module_files(
     // 生成Rust胶水代码
     // NOTE: singletons are modelled as interface-like shapes for method glue generation.
     // We keep the original singleton name (`s.name`) so templates can generate stable VT symbol
-    // names (RIDL_<NAME>_SINGLETON_VT) and enforce the `ridl_create_<name>_singleton` contract.
+    // names (RIDL_<NAME>_CTX_SLOT_VT) and enforce the `ridl_create_<name>_singleton` contract.
     let mut singletons = Vec::new();
     for item in items {
         if let crate::parser::ast::IDLItem::Singleton(s) = item {
@@ -378,6 +425,7 @@ pub fn generate_module_files(
 
     let rust_glue_template = RustGlueTemplate {
         module_name: module_name.to_string(),
+        module_decl,
         interfaces: interfaces.clone(),
         functions: functions.clone(),
         singletons,
@@ -390,6 +438,7 @@ pub fn generate_module_files(
     // 注意：这里不生成任何 `todo!()` 实现骨架，避免误导用户编辑 OUT_DIR 生成物。
     let rust_api_template = RustApiTemplate {
         module_name: module_name.to_string(),
+        module_decl: rust_glue_template.module_decl.clone(),
         interfaces: interfaces.clone(),
         functions: functions.clone(),
         singletons: rust_glue_template.singletons.clone(),

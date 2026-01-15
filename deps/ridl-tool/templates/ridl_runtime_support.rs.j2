@@ -18,16 +18,16 @@ pub mod slot_indices {
 {%- endfor %}
 }
 
-use mquickjs_rs::ridl_runtime::ErasedSingletonSlot;
+use mquickjs_rs::ridl_runtime::ErasedCtxSlot;
 
 pub struct CtxExt {
 {%- for s in slots %}
-    pub {{ s.name }}: ErasedSingletonSlot,
+    pub {{ s.name }}: ErasedCtxSlot,
 {%- endfor %}
 }
 
 #[inline]
-pub unsafe extern "C" fn ridl_ctx_ext_get_slot(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedSingletonSlot {
+pub unsafe extern "C" fn ridl_ctx_ext_get_slot(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedCtxSlot {
     let ext = unsafe { &mut *(ext_ptr as *mut CtxExt) };
     match slot_index {
 {%- for s in slots %}
@@ -42,7 +42,7 @@ pub unsafe extern "C" fn ridl_ctx_ext_get_slot_by_name(
     ext_ptr: *mut c_void,
     name_ptr: *const u8,
     name_len: usize,
-) -> *mut ErasedSingletonSlot {
+) -> *mut ErasedCtxSlot {
     if ext_ptr.is_null() || name_ptr.is_null() {
         return core::ptr::null_mut();
     }
@@ -61,11 +61,12 @@ pub unsafe extern "C" fn ridl_ctx_ext_get_slot_by_name(
     }
 }
 
+
 impl CtxExt {
     pub const fn new() -> Self {
         Self {
 {%- for s in slots %}
-            {{ s.name }}: ErasedSingletonSlot::empty(),
+            {{ s.name }}: ErasedCtxSlot::empty(),
 {%- endfor %}
         }
     }
@@ -79,7 +80,10 @@ static RIDL_CTX_EXT_VT: ::mquickjs_rs::ridl_ext_access::RidlCtxExtVTable =
 
 unsafe fn drop_ctx_ext(p: *mut c_void) {
     unsafe {
-        drop(Box::from_raw(p as *mut CtxExt));
+        let mut ext = Box::from_raw(p as *mut CtxExt);
+
+
+        drop(ext);
     }
 }
 
@@ -104,16 +108,19 @@ pub unsafe fn ridl_context_init(ctx: *mut mquickjs_ffi::JSContext) {
 
     // Allocate CtxExt first to get a stable pointer, then let modules fill slots through
     // the runtime writer abstraction (modules must not name the app-owned CtxExt type).
-    let ptr = Box::into_raw(Box::new(CtxExt::new())) as *mut c_void;
+    let ext = Box::new(CtxExt::new());
+    let ptr = Box::into_raw(ext) as *mut c_void;
     unsafe {
         h.inner.set_ridl_ext(ptr, drop_ctx_ext);
     }
 
     let mut w = unsafe { ::mquickjs_rs::ridl_runtime::RidlCtxExtWriter::new(ptr) };
 
-{%- for s in singleton_inits %}
+    // Initialize ctx slots (singletons, class proto state, etc).
+    // All shared state is modeled as an erased ctx slot; no JS prototype opaque binding.
+{%- for s in slot_inits %}
     unsafe {
-        let vt: &::mquickjs_rs::ridl_runtime::RidlErasedSingletonVTable = &{{ s.crate_name }}::{{ s.vt_ident }};
+        let vt: &::mquickjs_rs::ridl_runtime::RidlErasedSlotVTable = &{{ s.crate_name }}::{{ s.vt_ident }};
         let p = (vt.create)();
         if !p.is_null() {
             let _ = w.set_slot({{ s.slot_index }}u32, p, vt.drop);

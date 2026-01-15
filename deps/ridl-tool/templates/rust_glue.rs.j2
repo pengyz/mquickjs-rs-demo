@@ -20,19 +20,19 @@ pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotW
     let _ = w;
 }
 
-// Erased singleton vtables consumed by the app-side aggregated ridl_context_init.
+// Erased ctx slot vtables consumed by the app-side aggregated ridl_context_init.
+//
+// - singleton slots: module provides `crate::ridl_create_<name>_singleton()` (to be renamed later)
+// - class proto slots: module provides `crate::ridl_create_proto_<class>() -> <Impl as Class>::Proto`
 {%- for s in singletons %}
-pub static RIDL_{{ s.name|upper }}_SINGLETON_VT: ::mquickjs_rs::ridl_runtime::RidlErasedSingletonVTable =
-    ::mquickjs_rs::ridl_runtime::RidlErasedSingletonVTable {
+pub static RIDL_{{ s.name|upper }}_CTX_SLOT_VT: ::mquickjs_rs::ridl_runtime::RidlErasedSlotVTable =
+    ::mquickjs_rs::ridl_runtime::RidlErasedSlotVTable {
         create: ridl_{{ s.name|lower }}_singleton_create,
         drop: ridl_{{ s.name|lower }}_singleton_drop,
     };
 
 unsafe extern "C" fn ridl_{{ s.name|lower }}_singleton_create() -> *mut core::ffi::c_void {
-    // Contract: module crate must provide `crate::ridl_create_{{ s.name|lower }}_singleton()`.
-    // If missing, this fails at compile time with a clear error.
     let b: Box<dyn crate::api::{{ s.name|capitalize }}Singleton> = crate::ridl_create_{{ s.name|lower }}_singleton();
-    // Store a pointer to the Box (thin pointer), so it can round-trip through c_void safely.
     Box::into_raw(Box::new(b)) as *mut core::ffi::c_void
 }
 
@@ -44,6 +44,30 @@ unsafe extern "C" fn ridl_{{ s.name|lower }}_singleton_drop(p: *mut core::ffi::c
         }
     }
 }
+{%- endfor %}
+
+{%- for c in classes %}
+{%- if c.properties|any_proto_props %}
+
+pub static RIDL_{{ c.module_name|normalize_ident|upper }}_{{ c.name|normalize_ident|upper }}_PROTO_CTX_SLOT_VT: ::mquickjs_rs::ridl_runtime::RidlErasedSlotVTable =
+    ::mquickjs_rs::ridl_runtime::RidlErasedSlotVTable {
+        create: ridl_proto_{{ c.name|normalize_ident|lower }}_create,
+        drop: ridl_proto_{{ c.name|normalize_ident|lower }}_drop,
+    };
+
+unsafe extern "C" fn ridl_proto_{{ c.name|normalize_ident|lower }}_create() -> *mut core::ffi::c_void {
+    // Contract: module crate must provide `crate::ridl_create_proto_{{ c.name|normalize_ident|lower }}()`.
+    crate::ridl_create_proto_{{ c.name|normalize_ident|lower }}() as *mut core::ffi::c_void
+}
+
+unsafe extern "C" fn ridl_proto_{{ c.name|normalize_ident|lower }}_drop(p: *mut core::ffi::c_void) {
+    if !p.is_null() {
+        unsafe {
+            crate::ridl_drop_proto_{{ c.name|normalize_ident|lower }}(p as *mut crate::api::{{ c.name|capitalize }}ProtoState);
+        }
+    }
+}
+{%- endif %}
 {%- endfor %}
 
 mod __ridl_symbols {
@@ -146,7 +170,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
     if ext_ptr.is_null() {
         return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
     }
-    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
+    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
         return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
     };
     let slot = unsafe { &mut *slot_ptr };
@@ -182,7 +206,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
     if ext_ptr.is_null() {
         return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
     }
-    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_singleton_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
+    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
         return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
     };
     let slot = unsafe { &mut *slot_ptr };
@@ -216,4 +240,284 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
 {%- endfor %}
 {%- endfor %}
 
-{% include "rust_class_glue.rs.j2" %}
+// -----------------------------------------------------------------------------
+// RIDL class glue (constructors/finalizers/methods/properties/proto properties)
+// -----------------------------------------------------------------------------
+
+{%- for class in classes %}
+
+// Store a pointer to a Box<dyn Trait> (thin pointer), so it can round-trip through c_void safely.
+// Contract: JSValue receiver must be validated via JS_GetClassID prior to dereferencing.
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let _ = this_val;
+
+    {%- if class.constructor.is_some() %}
+    {%- for p in class.constructor.as_ref().unwrap().params %}
+    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {%- endfor %}
+    {%- else %}
+    let _ = argc;
+    let _ = argv;
+    {%- endif %}
+
+    // Create JS object of the RIDL class.
+    let obj = unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
+            ctx,
+            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32,
+        )
+    };
+    if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
+        == (mquickjs_rs::mquickjs_ffi::JS_TAG_EXCEPTION as u32)
+    {
+        return obj;
+    }
+
+    // Contract: module crate provides `crate::impls::{{ class.name|lower }}_constructor(...)`.
+    let inst: Box<dyn crate::api::{{ class.name|capitalize }}Class> =
+        {%- if class.constructor.is_some() %}
+        crate::impls::{{ class.name|lower }}_constructor({%- for p in class.constructor.as_ref().unwrap().params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %})
+        {%- else %}
+        crate::impls::{{ class.name|lower }}_constructor()
+        {%- endif %}
+        ;
+
+    let holder: Box<Box<dyn crate::api::{{ class.name|capitalize }}Class>> = Box::new(inst);
+    let holder_ptr: *mut Box<dyn crate::api::{{ class.name|capitalize }}Class> = Box::into_raw(holder);
+
+    unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_SetOpaque(ctx, obj, holder_ptr as *mut core::ffi::c_void);
+    }
+
+    obj
+}
+
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    val: mquickjs_rs::mquickjs_ffi::JSValue,
+) {
+    // Finalizer must not call JS APIs.
+    let _ = ctx;
+
+    let holder_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetOpaque(ctx, val) }
+        as *mut Box<dyn crate::api::{{ class.name|capitalize }}Class>;
+    if !holder_ptr.is_null() {
+        unsafe {
+            let holder: Box<Box<dyn crate::api::{{ class.name|capitalize }}Class>> =
+                Box::from_raw(holder_ptr);
+            drop(holder);
+        }
+    }
+}
+
+{%- for method in class.methods %}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|lower }}(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    // Validate receiver.
+    let cid = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, this_val) };
+    if cid < mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 {
+        return js_throw_type_error(ctx, "invalid receiver");
+    }
+
+    let holder_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetOpaque(ctx, this_val) }
+        as *mut Box<dyn crate::api::{{ class.name|capitalize }}Class>;
+    if holder_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing opaque");
+    }
+
+    {%- for p in method.params %}
+    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {%- endfor %}
+
+    let inst: &mut dyn crate::api::{{ class.name|capitalize }}Class = unsafe { &mut **holder_ptr };
+    let result = inst.{{ method.name|lower }}({%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
+    {{ method.return_type|emit_return_convert("result")|safe }}
+}
+{%- endfor %}
+
+{%- for prop in class.properties %}
+{%- if !(prop.modifiers|is_proto_prop) %}
+// Instance property {{ prop.name }}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|lower }}(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let _ = argc;
+    let _ = argv;
+
+    let cid = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, this_val) };
+    if cid < mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 {
+        return js_throw_type_error(ctx, "invalid receiver");
+    }
+
+    let holder_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetOpaque(ctx, this_val) }
+        as *mut Box<dyn crate::api::{{ class.name|capitalize }}Class>;
+    if holder_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing opaque");
+    }
+
+    let inst: &mut dyn crate::api::{{ class.name|capitalize }}Class = unsafe { &mut **holder_ptr };
+    let result = inst.get_{{ prop.name|lower }}();
+    {{ prop.property_type|emit_value_to_js("result")|safe }}
+}
+
+{%- if !(prop.modifiers|is_readonly_prop) %}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|lower }}(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let _ = argc;
+
+    let cid = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, this_val) };
+    if cid < mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 {
+        return js_throw_type_error(ctx, "invalid receiver");
+    }
+
+    let holder_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetOpaque(ctx, this_val) }
+        as *mut Box<dyn crate::api::{{ class.name|capitalize }}Class>;
+    if holder_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing opaque");
+    }
+
+    if argv.is_null() {
+        return js_throw_type_error(ctx, "missing value");
+    }
+
+    // setter value is argv[0]
+    let v0 = unsafe { *argv };
+    {{ prop|emit_setter_value_extract|safe }}
+
+    let inst: &mut dyn crate::api::{{ class.name|capitalize }}Class = unsafe { &mut **holder_ptr };
+    unsafe { inst.set_{{ prop.name|lower }}(v0) };
+    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
+}
+{%- endif %}
+
+{%- else %}
+// Proto property {{ prop.name }}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_proto_{{ prop.name|lower }}(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let _ = this_val;
+    let _ = argc;
+    let _ = argv;
+
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextHandle::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+
+    let ext_ptr = h.inner.ridl_ext_ptr();
+    if ext_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
+    }
+
+    // slot key is generated in app aggregate, use the stable name here.
+    let slot_name = concat!("proto_", "{{ module_name|normalize_ident|lower }}", "_", "{{ class.name|normalize_ident|lower }}");
+    let Some(slot_ptr) = (unsafe {
+        ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(
+            ext_ptr,
+            slot_name.as_ptr(),
+            slot_name.len(),
+        )
+    }) else {
+        return js_throw_type_error(ctx, "missing proto ctx slot");
+    };
+
+    let slot = unsafe { &mut *slot_ptr };
+    if !slot.is_set() {
+        return js_throw_type_error(ctx, "proto not initialized");
+    }
+
+    let proto = slot.ptr() as *mut crate::api::{{ class.name|capitalize }}ProtoState;
+    if proto.is_null() {
+        return js_throw_type_error(ctx, "missing proto state");
+    }
+
+    let cstr_ptr = unsafe { crate::api::ridl_proto_get_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(proto) };
+    if cstr_ptr.is_null() {
+        return js_throw_type_error(ctx, "invalid string");
+    }
+    unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr_ptr) }
+}
+
+{%- if !(prop.modifiers|is_readonly_prop) %}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_proto_{{ prop.name|lower }}(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let _ = this_val;
+    let _ = argc;
+
+    if argv.is_null() {
+        return js_throw_type_error(ctx, "missing value");
+    }
+
+    // setter value is argv[0]
+    let v0 = unsafe { *argv };
+    {{ prop|emit_setter_value_extract|safe }}
+
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextHandle::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+
+    let ext_ptr = h.inner.ridl_ext_ptr();
+    if ext_ptr.is_null() {
+        return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
+    }
+
+    let slot_name = concat!("proto_", "{{ module_name|normalize_ident|lower }}", "_", "{{ class.name|normalize_ident|lower }}");
+    let Some(slot_ptr) = (unsafe {
+        ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(
+            ext_ptr,
+            slot_name.as_ptr(),
+            slot_name.len(),
+        )
+    }) else {
+        return js_throw_type_error(ctx, "missing proto ctx slot");
+    };
+
+    let slot = unsafe { &mut *slot_ptr };
+    if !slot.is_set() {
+        return js_throw_type_error(ctx, "proto not initialized");
+    }
+
+    let proto = slot.ptr() as *mut crate::api::{{ class.name|capitalize }}ProtoState;
+    if proto.is_null() {
+        return js_throw_type_error(ctx, "missing proto state");
+    }
+
+    unsafe { crate::api::ridl_proto_set_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(proto, v0) };
+    // NOTE: in this mquickjs fork, JS_ToCString returns a borrowed pointer (no JS_FreeCString).
+    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
+}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+
+{%- endfor %}

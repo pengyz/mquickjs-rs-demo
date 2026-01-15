@@ -120,6 +120,103 @@ pub fn is_readonly_prop(modifiers: &[PropertyModifier]) -> ::askama::Result<bool
     Ok(modifiers.contains(&PropertyModifier::ReadOnly))
 }
 
+pub fn is_proto_prop(modifiers: &[PropertyModifier]) -> ::askama::Result<bool> {
+    Ok(modifiers.contains(&PropertyModifier::Proto))
+}
+
+pub fn any_proto_props(properties: &[crate::parser::ast::Property]) -> ::askama::Result<bool> {
+    Ok(properties
+        .iter()
+        .any(|p| p.modifiers.contains(&PropertyModifier::Proto)))
+}
+
+pub fn normalize_ident(s: &str) -> ::askama::Result<String> {
+    let mut out = String::with_capacity(s.len());
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() || ch == '_' {
+            out.push(ch);
+        } else {
+            out.push('_');
+        }
+    }
+    Ok(out)
+}
+
+pub fn proto_module_ns(
+    module_decl: &Option<crate::parser::ast::ModuleDeclaration>,
+    fallback_module_name: &str,
+) -> ::askama::Result<String> {
+    Ok(module_decl
+        .as_ref()
+        .map(|m| m.module_path.clone())
+        .unwrap_or_else(|| fallback_module_name.to_string()))
+}
+
+pub fn methods_total(
+    interfaces: &[crate::generator::TemplateInterface],
+    classes: &[crate::generator::TemplateClass],
+) -> ::askama::Result<usize> {
+    let mut total = 0usize;
+    for i in interfaces {
+        total += i.methods.len();
+    }
+    for c in classes {
+        total += c.methods.len();
+    }
+    Ok(total)
+}
+
+pub fn methods_total_filter(
+    interfaces: &[crate::generator::TemplateInterface],
+    classes: &[crate::generator::TemplateClass],
+) -> ::askama::Result<usize> {
+    methods_total(interfaces, classes)
+}
+
+pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askama::Result<String> {
+    // Contract: setter takes exactly one argument at argv[0].
+    // We intentionally do not use `this_val` here.
+    let mut w = CodeWriter::new();
+
+    emit_missing_arg(&mut w, 1, "value");
+
+    // argv[0] -> v0
+    w.push_line("let v0 = unsafe { *argv.add(0) };".to_string());
+
+    // Convert v0 into `v0` (Rust typed) in-place.
+    match &prop.property_type {
+        Type::Bool => {
+            w.push_line("let v0: bool = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToBool(ctx, v0) } != 0;".to_string());
+        }
+        Type::Int => {
+            emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
+            // Avoid shadowing the JSValue `v0`.
+            emit_to_i32_expr(&mut w, "v0", "out0", "\"arg1: failed to convert to int\"");
+            w.push_line("let v0: i32 = out0;".to_string());
+        }
+        Type::Double | Type::Float => {
+            emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
+            emit_to_f64_expr(&mut w, "v0", "v0", "\"arg1: failed to convert to number\"");
+            if matches!(prop.property_type, Type::Float) {
+                w.push_line("let v0: f32 = v0 as f32;".to_string());
+            }
+        }
+        Type::String => {
+            emit_check_is_string_expr(&mut w, "v0", "\"arg1: expected string\"");
+            // Convert to C string pointer; in this mquickjs fork, JS_ToCString returns a borrowed pointer.
+            w.push_line("let mut buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };".to_string());
+            w.push_line("let cptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v0, &mut buf as *mut _) };".to_string());
+            w.push_line("if cptr.is_null() { return js_throw_type_error(ctx, \"arg1: failed to convert to string\"); }".to_string());
+            w.push_line("let v0: *const core::ffi::c_char = cptr;".to_string());
+        }
+        _ => {
+            w.push_line("return js_throw_type_error(ctx, \"setter: unsupported property type\");".to_string());
+        }
+    }
+
+    Ok(w.into_string())
+}
+
 
 pub fn emit_param_extract(
     param: &TemplateParam,

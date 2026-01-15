@@ -27,4 +27,72 @@ pub trait {{ s.name|capitalize }}Singleton {
 // TODO(complex-types): future struct/enum/type alias declarations generated from RIDL.
 // Current policy: complex types are mapped to `any(JSValue)` in v1 and are passed through.
 
-{% include "rust_class_api.rs.j2" %}
+// -----------------------------------------------------------------------------
+// RIDL class API (traits + proto FFI declarations)
+// -----------------------------------------------------------------------------
+
+{%- for class in classes %}
+
+// Class {{ class.name }}
+pub trait {{ class.name|capitalize }}Class {
+{%- for method in class.methods %}
+    fn {{ method.name|lower }}(
+        &mut self,
+        {%- for p in method.params %}
+        {{ p.name|lower }}: {{ p.ty|rust_type_from_idl }}{%- if !loop.last %}, {% endif %}
+        {%- endfor %}
+    ) -> {{ method.return_type|rust_type_from_idl }};
+{%- endfor %}
+
+{%- for prop in class.properties %}
+{%- if !(prop.modifiers|is_proto_prop) %}
+{%- if prop.modifiers|is_readonly_prop %}
+    fn get_{{ prop.name|lower }}(&mut self) -> {{ prop.property_type|rust_type_from_idl }};
+{%- else %}
+    fn get_{{ prop.name|lower }}(&mut self) -> {{ prop.property_type|rust_type_from_idl }};
+    fn set_{{ prop.name|lower }}(&mut self, v: {{ prop.property_type|rust_type_from_idl }});
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+
+}
+
+{%- if class.properties|any_proto_props %}
+
+/// Per-context class prototype shared state (erased).
+///
+/// Module must provide these functions for each class that has proto properties.
+pub type {{ class.name|capitalize }}ProtoState = core::ffi::c_void;
+
+unsafe extern "C" {
+    pub fn ridl_create_proto_{{ class.name|normalize_ident|lower }}() -> *mut {{ class.name|capitalize }}ProtoState;
+    pub fn ridl_drop_proto_{{ class.name|normalize_ident|lower }}(p: *mut {{ class.name|capitalize }}ProtoState);
+}
+
+{%- for prop in class.properties %}
+{%- if prop.modifiers|is_proto_prop %}
+{%- if prop.modifiers|is_readonly_prop %}
+unsafe extern "C" {
+    pub fn ridl_proto_get_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(
+        proto: *mut {{ class.name|capitalize }}ProtoState,
+    ) -> *const core::ffi::c_char;
+}
+{%- else %}
+unsafe extern "C" {
+    pub fn ridl_proto_get_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(
+        proto: *mut {{ class.name|capitalize }}ProtoState,
+    ) -> *const core::ffi::c_char;
+}
+
+unsafe extern "C" {
+    pub fn ridl_proto_set_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(
+        proto: *mut {{ class.name|capitalize }}ProtoState,
+        v: *const core::ffi::c_char,
+    );
+}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+
+{%- endfor %}

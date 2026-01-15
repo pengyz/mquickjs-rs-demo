@@ -1,4 +1,7 @@
 
+// Demo module used for end-to-end validation.
+
+// (No explicit `module` decl in this file yet; it will be treated as GLOBAL for now.)
 
 fn default_echo_str(s: string) -> string;
 fn default_add_i32(a: int, b: int) -> int;
@@ -12,5 +15,15 @@ singleton demo {
   fn ping(s: string);
 }
 
-// NOTE: class/proto support is under active development.
-// Keep this module buildable for end-to-end workflow validation.
+// True class demo for end-to-end validation.
+class Counter {
+  constructor();
+
+  fn inc(delta: int) -> int;
+
+  // Instance property.
+  property value: int;
+
+  // Per-context shared state.
+  proto readonly property token: string;
+}

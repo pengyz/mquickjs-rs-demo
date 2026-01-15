@@ -1,6 +1,6 @@
 use core::ffi::c_void;
 
-use crate::ridl_runtime::ErasedSingletonSlot;
+use crate::ridl_runtime::ErasedCtxSlot;
 
 /// A vtable describing how to access a singleton slot within an app-defined `CtxExt`.
 ///
@@ -9,12 +9,13 @@ use crate::ridl_runtime::ErasedSingletonSlot;
 #[repr(C)]
 pub struct RidlCtxExtVTable {
     pub get_slot:
-        unsafe extern "C" fn(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedSingletonSlot,
+        unsafe extern "C" fn(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedCtxSlot,
     pub get_slot_by_name: unsafe extern "C" fn(
         ext_ptr: *mut c_void,
         name_ptr: *const u8,
         name_len: usize,
-    ) -> *mut ErasedSingletonSlot,
+    ) -> *mut ErasedCtxSlot,
+
 }
 
 static mut RIDL_CTX_EXT_VTABLE: *const RidlCtxExtVTable = core::ptr::null();
@@ -30,10 +31,10 @@ pub unsafe fn ridl_set_ctx_ext_vtable(vt: &'static RidlCtxExtVTable) {
 ///
 /// Safety: `ext_ptr` must point to the app's `CtxExt` instance (stored behind ContextInner.ridl_ext_ptr).
 #[inline]
-pub unsafe fn ridl_get_erased_singleton_slot(
+pub unsafe fn ridl_get_erased_ctx_slot(
     ext_ptr: *mut c_void,
     slot_index: u32,
-) -> Option<*mut ErasedSingletonSlot> {
+) -> Option<*mut ErasedCtxSlot> {
     let vt = RIDL_CTX_EXT_VTABLE;
     if vt.is_null() {
         return None;
@@ -52,11 +53,11 @@ pub unsafe fn ridl_get_erased_singleton_slot(
 /// - `ext_ptr` must point to the app's `CtxExt` instance.
 /// - `name_ptr..name_ptr+name_len` must be valid for reads.
 #[inline]
-pub unsafe fn ridl_get_erased_singleton_slot_by_name(
+pub unsafe fn ridl_get_erased_ctx_slot_by_name(
     ext_ptr: *mut c_void,
     name_ptr: *const u8,
     name_len: usize,
-) -> Option<*mut ErasedSingletonSlot> {
+) -> Option<*mut ErasedCtxSlot> {
     let vt = RIDL_CTX_EXT_VTABLE;
     if vt.is_null() {
         return None;

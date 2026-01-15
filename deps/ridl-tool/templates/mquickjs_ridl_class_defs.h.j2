@@ -5,24 +5,25 @@
  * mquickjs ROM build tool.
  */
 
-{%- for class in classes %}
+{%- for module in modules %}
+{%- for class in module.classes %}
 
-/* {{ module_name }}::{{ class.name }} */
+/* {{ class.module_name }}::{{ class.name }} */
 
-JSValue js_{{ module_name|lower }}_{{ class.name|lower }}_constructor(
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
     JSContext *ctx,
     JSValue this_val,
     int argc,
     JSValue *argv
 );
 
-void js_{{ module_name|lower }}_{{ class.name|lower }}_finalizer(
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer(
     JSContext *ctx,
     JSValue val
 );
 
 {%- for method in class.methods %}
-JSValue js_{{ module_name|lower }}_{{ class.name|lower }}_{{ method.name|lower }}(
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|lower }}(
     JSContext *ctx,
     JSValue this_val,
     int argc,
@@ -30,31 +31,32 @@ JSValue js_{{ module_name|lower }}_{{ class.name|lower }}_{{ method.name|lower }
 );
 {%- endfor %}
 
-static const JSPropDef js_{{ module_name|lower }}_{{ class.name|lower }}_proto_funcs[] = {
+static const JSPropDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs[] = {
 {%- for method in class.methods %}
-    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ module_name|lower }}_{{ class.name|lower }}_{{ method.name|lower }}),
+    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|lower }}),
 {%- endfor %}
     JS_PROP_END,
 };
 
-static const JSClassDef js_{{ module_name|lower }}_{{ class.name|lower }}_class_def =
+static const JSClassDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class_def =
     JS_CLASS_DEF(
         "{{ class.name }}",
         {{ class.methods|length }},
-        js_{{ module_name|lower }}_{{ class.name|lower }}_constructor,
-        RIDL_CLASS_{{ module_name }}_{{ class.name }},
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor,
+        JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }},
         NULL,
-        js_{{ module_name|lower }}_{{ class.name|lower }}_proto_funcs,
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs,
         NULL,
-        js_{{ module_name|lower }}_{{ class.name|lower }}_finalizer
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer
     );
 
 // Keep-alive symbol referenced from Rust aggregated_symbols.
-void js_{{ module_name|lower }}_{{ class.name|lower }}_class(void) {
-    (void)&js_{{ module_name|lower }}_{{ class.name|lower }}_class_def;
-    (void)&js_{{ module_name|lower }}_{{ class.name|lower }}_proto_funcs;
-    (void)&js_{{ module_name|lower }}_{{ class.name|lower }}_constructor;
-    (void)&js_{{ module_name|lower }}_{{ class.name|lower }}_finalizer;
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class(void) {
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class_def;
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs;
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor;
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer;
 }
 
+{%- endfor %}
 {%- endfor %}

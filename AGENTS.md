@@ -5,6 +5,8 @@
 - 禁止做“简化硬编码”：任何聚合/注册/初始化逻辑不得通过硬编码 singleton 名称（例如 "console"）或模块白名单来实现，必须走标准、可扩展的通用机制（新增模块仅放入 ridl-modules/ 即可生效）。
 - In this repo, the build orchestrator crate currently named xtask should be renamed to ridl-builder, and the aggregated module selection snapshot should be named ridl-manifest.json (instead of ridl-plan.json).
 - For multi-app support: app-id normalization should replace any non [A-Za-z0-9_] characters with '_' (including '-' -> '_'), and select the app package by matching cargo metadata package.manifest_path exactly to the provided --cargo-toml (most stable rule).
+- RIDL class id 命名规范：若 class 属于全局注册，则 module_name 使用固定值 GLOBAL；若有 module 声明，则用 module path normalize（非 [A-Za-z0-9_] 替换为 _）后参与 class id 拼接；class id 全大写。
+- 禁止在 build.rs 等处为 rerun-if-changed 写死相对路径（例如 println!("cargo:rerun-if-changed=../../deps/ridl-tool")）；修复必须走通用机制，不得用临时硬编码绕过。
 
 ## Working Conventions
 - For any requirement, think deeply first and produce a concrete plan. Store plans under `doc/planning/` (one plan per requirement) and mark the plan as completed when done.

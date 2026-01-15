@@ -2,28 +2,29 @@ use core::ffi::c_void;
 
 use crate::ridl_ext_access;
 
-/// A type-erased singleton slot stored in per-context extension state.
+/// A type-erased ctx slot stored in per-context extension state.
 ///
 /// This is a RIDL runtime primitive: module-generated code can store a pointer to a module-defined
-/// singleton implementation, plus a drop function to release it at JSContext teardown.
-pub struct ErasedSingletonSlot {
+/// state object (singleton state, class prototype state, etc), plus a drop function to release it
+/// at JSContext teardown.
+pub struct ErasedCtxSlot {
     ptr: *mut c_void,
     drop_fn: Option<unsafe extern "C" fn(*mut c_void)>,
 }
 
-/// Per-singleton erased vtable exported by modules.
+/// Per-slot erased vtable exported by modules.
 ///
-/// The app-side aggregator uses this to allocate the singleton and register it into a ctx-ext slot
-/// without naming the module's Rust types/traits.
+/// The app-side aggregator uses this to allocate a module-owned state object and register it into
+/// a ctx-ext slot without naming the module's Rust types/traits.
 #[repr(C)]
-pub struct RidlErasedSingletonVTable {
-    /// Create the singleton allocation. Must return an opaque pointer owned by the module.
+pub struct RidlErasedSlotVTable {
+    /// Create the allocation. Must return an opaque pointer owned by the module.
     pub create: unsafe extern "C" fn() -> *mut c_void,
-    /// Drop the singleton allocation previously returned by `create`.
+    /// Drop the allocation previously returned by `create`.
     pub drop: unsafe extern "C" fn(*mut c_void),
 }
 
-impl ErasedSingletonSlot {
+impl ErasedCtxSlot {
     pub const fn empty() -> Self {
         Self {
             ptr: core::ptr::null_mut(),
@@ -98,7 +99,7 @@ impl RidlSlotWriter for RidlCtxExtWriter {
         drop_fn: unsafe extern "C" fn(*mut c_void),
     ) -> Result<(), RidlSlotSetError> {
         let Some(slot_ptr) =
-            ridl_ext_access::ridl_get_erased_singleton_slot(self.ext_ptr, slot_index)
+            ridl_ext_access::ridl_get_erased_ctx_slot(self.ext_ptr, slot_index)
         else {
             return Err(RidlSlotSetError::VTableMissing);
         };

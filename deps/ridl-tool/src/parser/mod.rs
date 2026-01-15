@@ -21,6 +21,7 @@ pub enum FileMode {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParsedIDL {
+    pub module: Option<ModuleDeclaration>,
     pub mode: FileMode,
     pub items: Vec<IDLItem>,
 }
@@ -65,7 +66,7 @@ pub fn parse_idl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Er
         }
     }
 
-    Ok(ParsedIDL { mode, items })
+    Ok(ParsedIDL { module, mode, items })
 }
 
 fn parse_mode_decl(
@@ -266,8 +267,11 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                         let method = parse_method(member_pair)?;
                         methods.push(method);
                     }
-                    Rule::constructor => {
-                        constructor = Some(parse_constructor(member_pair)?);
+                    Rule::class_constructor => {
+                        constructor = Some(parse_class_constructor(member_pair, &name)?);
+                    }
+                    Rule::class_constructor_compat => {
+                        constructor = Some(parse_class_constructor(member_pair, &name)?);
                     }
                     _ => {} // 其他规则
                 }
@@ -452,15 +456,31 @@ fn parse_normal_property(
     })
 }
 
-fn parse_constructor(
+fn parse_class_constructor(
     pair: pest::iterators::Pair<Rule>,
+    class_name: &str,
 ) -> Result<Function, Box<dyn std::error::Error>> {
+    let rule = pair.as_rule();
     let inner_pairs = pair.into_inner();
     let mut pair_iter = inner_pairs.filter(|p| p.as_rule() != Rule::WS);
 
-    // constructor name
-    let name_pair = pair_iter.next().ok_or("Expected constructor name")?;
-    let name = name_pair.as_str().to_string();
+    // Preferred: constructor(<params>)
+    // Compat: <ClassName>(<params>)
+    let name: String;
+    if rule == Rule::class_constructor_compat {
+        let name_pair = pair_iter.next().ok_or("Expected constructor name")?;
+        name = name_pair.as_str().to_string();
+        if name != class_name {
+            return Err(format!(
+                "constructor compat form must match class name: expected {}, got {}",
+                class_name, name
+            )
+            .into());
+        }
+    } else {
+        // Use a stable internal name; glue generation does not need it.
+        name = "constructor".to_string();
+    }
 
     // parameter list
     let mut params = Vec::new();
@@ -470,7 +490,6 @@ fn parse_constructor(
         }
     }
 
-    // 构造函数没有返回类型，所以使用Void
     Ok(Function {
         name,
         params,

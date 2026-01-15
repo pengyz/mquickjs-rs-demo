@@ -3,6 +3,8 @@ use std::path::Path;
 fn main() {
     // Re-run if the IDL changes.
     println!("cargo:rerun-if-changed=src/ridl_module_demo_strict.ridl");
+    // When ridl-tool templates change, users should run `cargo run -p ridl-builder -- prepare`.
+    // build.rs only relies on the ridl_tool crate; Cargo will rebuild it when sources change.
 
     let out_dir = std::env::var("OUT_DIR").expect("OUT_DIR not set");
     let out_dir = Path::new(&out_dir);
@@ -18,6 +20,7 @@ fn main() {
 
     ridl_tool::generator::generate_module_files(
         &items,
+        parsed.module.clone(),
         parsed.mode,
         out_dir,
         "ridl_module_demo_strict",

@@ -11,6 +11,7 @@ fn main() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR not set"));
 
     let ridl_tool = resolve_ridl_tool();
+    println!("cargo:rerun-if-changed={}", ridl_tool.display());
 
     // Generate module-level glue: api.rs + glue.rs
     let status = Command::new(&ridl_tool)

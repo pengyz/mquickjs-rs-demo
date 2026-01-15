@@ -54,6 +54,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 // 生成模块特定文件
                 generator::generate_module_files(
                     &items,
+                    parsed.module.clone(),
                     parsed.mode,
                     Path::new(output_dir),
                     &module_name,

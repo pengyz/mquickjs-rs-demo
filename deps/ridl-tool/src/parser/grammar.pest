@@ -21,7 +21,7 @@ definition = { interface_def | class_def | enum_def | struct_def | global_functi
 mode_decl = { "mode" ~ WS ~ mode_name ~ WS? ~ ";" }
 mode_name = { identifier }
 
-module_decl = { "module" ~ WS ~ module_path ~ ("@" ~ WS ~ version)? }
+module_decl = { "module" ~ WS ~ module_path ~ ("@" ~ WS ~ version)? ~ WS? ~ ";"? }
 module_path = { identifier ~ ("." ~ identifier)* }
 version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
 
@@ -54,7 +54,7 @@ singleton_def = { WS? ~ "singleton" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ singlet
 singleton_member = { method_def | readonly_prop | readwrite_prop | normal_prop }
 
 // Class members
-class_member = { const_member | proto_readonly_prop | proto_readwrite_prop | readonly_prop | readwrite_prop | normal_prop | method_def | constructor }
+class_member = { const_member | proto_readonly_prop | proto_readwrite_prop | readonly_prop | readwrite_prop | normal_prop | method_def | class_constructor | class_constructor_compat }
 const_member = { "const" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type ~ WS ~ "=" ~ WS ~ literal }
 proto_readonly_prop = { "proto" ~ WS ~ "readonly" ~ WS ~ "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
 proto_readwrite_prop = { "proto" ~ WS ~ "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
@@ -64,7 +64,13 @@ readwrite_prop = { "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
 normal_prop = { identifier ~ WS ~ ":" ~ WS ~ type }
 // Method definition: support fn name(params) -> type format, return type is optional
 method_def = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ (WS ~ ("->") ~ WS ~ type)? }
-constructor = { identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
+
+// Class constructor
+// - Preferred: `constructor(...)` inside class body.
+// - Compatibility: `<ClassName>(...)` inside class body.
+// Note: semicolon is enforced by the class_def rule: `(WS ~ class_member ~ WS ~ ";")*`
+class_constructor = { "constructor" ~ WS ~ "(" ~ WS ~ param_list? ~ WS ~ ")" }
+class_constructor_compat = { identifier ~ WS ~ "(" ~ WS ~ param_list? ~ WS ~ ")" }
 
 // Enum definition - fixed to handle comma properly
 enum_value = { identifier ~ (WS ~ "=" ~ WS ~ integer)? }
