@@ -64,5 +64,5 @@ mod __ridl_agg_symbols {
 #[inline(always)]
 pub fn ensure_symbols() {
     // Force reference to keepalive table so the linker keeps referenced symbols.
-    let _ = unsafe { __ridl_agg_symbols::__ridl_keepalive_ptrs.as_ptr() };
+    let _ = __ridl_agg_symbols::__ridl_keepalive_ptrs.as_ptr();
 }

@@ -21,8 +21,8 @@ pub mod slot_indices {
 use mquickjs_rs::ridl_runtime::ErasedCtxSlot;
 
 pub struct CtxExt {
-{%- for s in slots %}
-    pub {{ s.name }}: ErasedCtxSlot,
+{%- for s in slot_inits %}
+    pub {{ s.slot_key }}: ErasedCtxSlot,
 {%- endfor %}
 }
 
@@ -30,8 +30,8 @@ pub struct CtxExt {
 pub unsafe extern "C" fn ridl_ctx_ext_get_slot(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedCtxSlot {
     let ext = unsafe { &mut *(ext_ptr as *mut CtxExt) };
     match slot_index {
-{%- for s in slots %}
-        {{ s.index }} => &mut ext.{{ s.name }} as *mut _,
+{%- for s in slot_inits %}
+        {{ s.slot_index }} => &mut ext.{{ s.slot_key }} as *mut _,
 {%- endfor %}
         _ => core::ptr::null_mut(),
     }
@@ -54,8 +54,8 @@ pub unsafe extern "C" fn ridl_ctx_ext_get_slot_by_name(
     };
 
     match name {
-{%- for s in slots %}
-        "{{ s.name|lower }}" => &mut ext.{{ s.name }} as *mut _,
+{%- for s in slot_inits %}
+        "{{ s.slot_key }}" => &mut ext.{{ s.slot_key }} as *mut _,
 {%- endfor %}
         _ => core::ptr::null_mut(),
     }
@@ -65,8 +65,8 @@ pub unsafe extern "C" fn ridl_ctx_ext_get_slot_by_name(
 impl CtxExt {
     pub const fn new() -> Self {
         Self {
-{%- for s in slots %}
-            {{ s.name }}: ErasedCtxSlot::empty(),
+{%- for s in slot_inits %}
+            {{ s.slot_key }}: ErasedCtxSlot::empty(),
 {%- endfor %}
         }
     }
@@ -79,12 +79,8 @@ static RIDL_CTX_EXT_VT: ::mquickjs_rs::ridl_ext_access::RidlCtxExtVTable =
     };
 
 unsafe fn drop_ctx_ext(p: *mut c_void) {
-    unsafe {
-        let mut ext = Box::from_raw(p as *mut CtxExt);
-
-
-        drop(ext);
-    }
+    let ext = unsafe { Box::from_raw(p as *mut CtxExt) };
+    drop(ext);
 }
 
 pub unsafe fn ridl_context_init(ctx: *mut mquickjs_ffi::JSContext) {

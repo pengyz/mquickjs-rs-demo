@@ -32,8 +32,10 @@ pub fn generate_ridl_runtime_support(
     out_dir: &Path,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // We share the same slot ordering and singleton init ordering with the legacy generator.
+    // Slot indices are global within an app aggregate.
     let mut slots: Vec<Slot> = Vec::new();
     let mut slot_inits: Vec<SlotInit> = Vec::new();
+    // Temporary: used for mapping slot_key -> final sorted index (filled after sorting).
     let mut slot_map: BTreeMap<String, u32> = BTreeMap::new();
     let mut proto_keys: BTreeMap<String, String> = BTreeMap::new();
 
@@ -46,18 +48,29 @@ pub fn generate_ridl_runtime_support(
                 match item {
                     crate::parser::ast::IDLItem::Singleton(s) => {
                         let name = sanitize_ident(&s.name);
-                        if !slots.iter().any(|x| x.name == name) {
+                        let name_key = name.to_lowercase();
+
+                        let slot_index = *slot_map.entry(name_key.clone()).or_insert_with(|| {
+                            let next = slots.len() as u32;
                             slots.push(Slot {
                                 name: name.clone(),
-                                index: 0,
+                                index: next,
                             });
-                        }
+                            next
+                        });
+
+                        let module_ns = parsed
+                            .module
+                            .as_ref()
+                            .map(|m| m.module_path.as_str())
+                            .unwrap_or("GLOBAL");
+                        let module_ns = sanitize_ident(module_ns).to_lowercase();
 
                         slot_inits.push(SlotInit {
                             crate_name: m.crate_name.clone(),
-                            slot_index: 0,
+                            slot_index,
                             vt_ident: format!("RIDL_{}_CTX_SLOT_VT", name.to_uppercase()),
-                            slot_key: name.to_lowercase(),
+                            slot_key: format!("singleton_{}_{}", module_ns, name.to_lowercase()),
                         });
                     }
                     crate::parser::ast::IDLItem::Class(c) => {
@@ -94,13 +107,16 @@ pub fn generate_ridl_runtime_support(
 
                         let field_name = format!(
                             "proto_{}_{}",
-                            sanitize_ident(&crate_ns_norm.replace('.', "_")),
-                            sanitize_ident(&c.name)
+                            sanitize_ident(&crate_ns_norm.replace('.', "_")).to_lowercase(),
+                            sanitize_ident(&c.name).to_lowercase()
                         );
 
                         // Proto backings are stored as ctx-ext slots (same mechanism as singletons).
-                        // We reserve a dedicated slot index using the field_name.
-                        let slot_index = *slot_map.entry(field_name.to_lowercase()).or_insert_with(|| {
+                        // We reserve a dedicated slot index using the field_name. We can only rely
+                        // on the "existing entry" case *after* the final slot_map rebuild below,
+                        // so here we always allocate a fresh slot.
+                        let field_key = field_name.to_lowercase();
+                        let slot_index = *slot_map.entry(field_key).or_insert_with(|| {
                             let next = slots.len() as u32;
                             slots.push(Slot {
                                 name: field_name.clone(),
@@ -124,7 +140,7 @@ pub fn generate_ridl_runtime_support(
                                 module_name,
                                 sanitize_ident(&c.name).to_uppercase()
                             ),
-                            slot_key: field_name.to_lowercase(),
+                            slot_key: field_name,
                         });
                     }
                     _ => {}
@@ -134,6 +150,7 @@ pub fn generate_ridl_runtime_support(
     }
 
     slots.sort_by(|a, b| a.name.cmp(&b.name));
+    // Rebuild slot_map with final sorted indices.
     slot_map.clear();
     for (i, s) in slots.iter_mut().enumerate() {
         s.index = i as u32;
@@ -147,6 +164,21 @@ pub fn generate_ridl_runtime_support(
     for init in slot_inits.iter_mut() {
         if let Some(idx) = slot_map.get(&init.slot_key.to_lowercase()) {
             init.slot_index = *idx;
+        }
+    }
+
+    // Ensure we never generate duplicate slot indices (would lead to unreachable match arms
+    // and broken slot dispatch at runtime).
+    {
+        let mut used: std::collections::BTreeMap<u32, String> = std::collections::BTreeMap::new();
+        for init in slot_inits.iter() {
+            if let Some(prev) = used.insert(init.slot_index, init.slot_key.clone()) {
+                return Err(format!(
+                    "duplicate ctx slot index {}: {} vs {}",
+                    init.slot_index, prev, init.slot_key
+                )
+                .into());
+            }
         }
     }
 

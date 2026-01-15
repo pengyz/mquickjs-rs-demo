@@ -64,11 +64,11 @@ int js_{{ interface.name|lower }}_init(JSContext *ctx, JSModuleDef *m);
 {%- for module in modules %}
 {%- for s in module.singletons %}
 {%- for method in s.methods %}
-JSValue js_{{ s.name|lower }}_{{ method.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-JSValue js_{{ s.name|lower }}_get_{{ prop.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
@@ -84,19 +84,19 @@ JSValue js_{{ s.name|lower }}_get_{{ prop.name|lower }}(JSContext *ctx, JSValue 
 #define JS_RIDL_DECLS \
 {%- for module in modules %}
 {%- for s in module.singletons %}
-    static const JSPropDef js_{{ s.name|lower }}_props[] = { \
+    static const JSPropDef js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_props[] = { \
 {%- for method in s.methods %}
-        JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ s.name|lower }}_{{ method.name|lower }}), \
+        JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}), \
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-        JS_CGETSET_DEF("{{ prop.name }}", js_{{ s.name|lower }}_get_{{ prop.name|lower }}, NULL), \
+        JS_CGETSET_DEF("{{ prop.name }}", js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}, NULL), \
 {%- endif %}
 {%- endfor %}
         JS_PROP_END, \
     }; \
-    static const JSClassDef js_{{ s.name|lower }}_obj = \
-        JS_OBJECT_DEF("{{ s.name|capitalize }}", js_{{ s.name|lower }}_props); \
+    static const JSClassDef js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_obj = \
+        JS_OBJECT_DEF("{{ s.name|capitalize }}", js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_props); \
 {%- endfor %}
 {%- endfor %}
     /* empty */
@@ -117,7 +117,7 @@ JSValue js_{{ s.name|lower }}_get_{{ prop.name|lower }}(JSContext *ctx, JSValue 
 {%- endfor %}
 /* singletons are registered as global object properties (e.g. globalThis.console) */ \
 {%- for s in module.singletons %}
-    JS_PROP_CLASS_DEF("{{ s.name }}", &js_{{ s.name|lower }}_obj), \
+    JS_PROP_CLASS_DEF("{{ s.name }}", &js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_obj), \
 {%- endfor %}
 /* user classes are exported on global object (global mode) */ \
 {%- for class in module.classes %}

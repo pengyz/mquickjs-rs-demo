@@ -82,6 +82,7 @@ fn aggregate_cmd(args: Vec<String>) {
     }
 }
 
+#[allow(dead_code)]
 fn find_workspace_root() -> PathBuf {
     // Walk up from crate dir until we find a Cargo.toml containing [workspace]
     let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

@@ -62,9 +62,7 @@ unsafe extern "C" fn ridl_proto_{{ c.name|normalize_ident|lower }}_create() -> *
 
 unsafe extern "C" fn ridl_proto_{{ c.name|normalize_ident|lower }}_drop(p: *mut core::ffi::c_void) {
     if !p.is_null() {
-        unsafe {
-            crate::ridl_drop_proto_{{ c.name|normalize_ident|lower }}(p as *mut crate::api::{{ c.name|capitalize }}ProtoState);
-        }
+        crate::ridl_drop_proto_{{ c.name|normalize_ident|lower }}(p as *mut crate::api::{{ c.name|capitalize }}ProtoState);
     }
 }
 {%- endif %}
@@ -87,11 +85,11 @@ mod __ridl_symbols {
 {%- endfor %}
 {%- for s in singletons %}
 {%- for method in s.methods %}
-        fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+        fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-        fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+        fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
@@ -108,11 +106,11 @@ mod __ridl_symbols {
 {%- endfor %}
 {%- for s in singletons %}
 {%- for method in s.methods %}
-        let _ = js_{{ s.name|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+        let _ = js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-        let _ = js_{{ s.name|lower }}_get_{{ prop.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+        let _ = js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
@@ -155,7 +153,7 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
 {%- for s in singletons %}
 {%- for method in s.methods %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
     {%- for p in method.params %}
     {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
@@ -170,7 +168,13 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
     if ext_ptr.is_null() {
         return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
     }
-    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
+    let Some(slot_ptr) = (unsafe {
+        ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(
+            ext_ptr,
+            b"singleton_{{ s.module_name|normalize_ident|lower }}_{{ s.name|normalize_ident|lower }}".as_ptr(),
+            b"singleton_{{ s.module_name|normalize_ident|lower }}_{{ s.name|normalize_ident|lower }}".len(),
+        )
+    }) else {
         return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
     };
     let slot = unsafe { &mut *slot_ptr };
@@ -192,7 +196,7 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_{{ method.name|lower }}(ctx: *mut
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
     let _ = argc;
     let _ = argv;
@@ -206,7 +210,13 @@ pub unsafe extern "C" fn js_{{ s.name|lower }}_get_{{ prop.name|lower }}(ctx: *m
     if ext_ptr.is_null() {
         return js_throw_type_error(ctx, "missing ridl_ext (call ridl_context_init)");
     }
-    let Some(slot_ptr) = (unsafe { ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(ext_ptr, b"{{ s.name|lower }}".as_ptr(), b"{{ s.name|lower }}".len()) }) else {
+    let Some(slot_ptr) = (unsafe {
+        ::mquickjs_rs::ridl_ext_access::ridl_get_erased_ctx_slot_by_name(
+            ext_ptr,
+            b"singleton_{{ s.module_name|normalize_ident|lower }}_{{ s.name|normalize_ident|lower }}".as_ptr(),
+            b"singleton_{{ s.module_name|normalize_ident|lower }}_{{ s.name|normalize_ident|lower }}".len(),
+        )
+    }) else {
         return js_throw_type_error(ctx, "missing ridl ctx_ext vtable (call ridl_context_init)");
     };
     let slot = unsafe { &mut *slot_ptr };
@@ -252,9 +262,9 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
-    argc: c_int,
-    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+    this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+    _argc: c_int,
+    _argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
     let _ = this_val;
 
@@ -302,13 +312,12 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    val: mquickjs_rs::mquickjs_ffi::JSValue,
+    opaque: *mut core::ffi::c_void,
 ) {
     // Finalizer must not call JS APIs.
     let _ = ctx;
 
-    let holder_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetOpaque(ctx, val) }
-        as *mut Box<dyn crate::api::{{ class.name|capitalize }}Class>;
+    let holder_ptr = opaque as *mut Box<dyn crate::api::{{ class.name|capitalize }}Class>;
     if !holder_ptr.is_null() {
         unsafe {
             let holder: Box<Box<dyn crate::api::{{ class.name|capitalize }}Class>> =
@@ -322,10 +331,11 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|lower }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
     argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let this_val = unsafe { *this_val };
     // Validate receiver.
     let cid = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, this_val) };
     if cid < mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 {
@@ -354,10 +364,11 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|lower }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
     argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let this_val = unsafe { *this_val };
     let _ = argc;
     let _ = argv;
 
@@ -381,10 +392,11 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|lower }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
     argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let this_val = unsafe { *this_val };
     let _ = argc;
 
     let cid = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, this_val) };
@@ -403,11 +415,10 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     }
 
     // setter value is argv[0]
-    let v0 = unsafe { *argv };
     {{ prop|emit_setter_value_extract|safe }}
 
     let inst: &mut dyn crate::api::{{ class.name|capitalize }}Class = unsafe { &mut **holder_ptr };
-    unsafe { inst.set_{{ prop.name|lower }}(v0) };
+    inst.set_{{ prop.name|lower }}(v0);
     mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
 }
 {%- endif %}
@@ -417,11 +428,11 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_proto_{{ prop.name|lower }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
     argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
-    let _ = this_val;
+    let _ = unsafe { *this_val };
     let _ = argc;
     let _ = argv;
 
@@ -467,11 +478,11 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_proto_{{ prop.name|lower }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+    this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
     argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
-    let _ = this_val;
+    let _ = unsafe { *this_val };
     let _ = argc;
 
     if argv.is_null() {
@@ -479,7 +490,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     }
 
     // setter value is argv[0]
-    let v0 = unsafe { *argv };
+    let _v0 = unsafe { *argv };
     {{ prop|emit_setter_value_extract|safe }}
 
     let Some(h) = (unsafe { mquickjs_rs::context::ContextHandle::from_js_ctx(ctx) }) else {

@@ -69,7 +69,7 @@ fn generate_register_h_and_symbols(
         let mut functions: Vec<TemplateFunction> = Vec::new();
         let mut interfaces: Vec<TemplateInterface> = Vec::new();
         let mut classes: Vec<TemplateClass> = Vec::new();
-        let mut singletons: Vec<crate::parser::ast::Singleton> = Vec::new();
+        let mut singletons: Vec<TemplateSingleton> = Vec::new();
 
         for item in parsed.items {
             match item {
@@ -79,7 +79,25 @@ fn generate_register_h_and_symbols(
                 crate::parser::ast::IDLItem::Interface(i) => {
                     interfaces.push(TemplateInterface::from_with_mode(i, parsed.mode))
                 }
-                crate::parser::ast::IDLItem::Singleton(s) => singletons.push(s),
+                crate::parser::ast::IDLItem::Singleton(mut s) => {
+                    s.module = parsed.module.clone();
+                    let module_name = s
+                        .module
+                        .as_ref()
+                        .map(|m| m.module_path.as_str())
+                        .unwrap_or("GLOBAL")
+                        .to_string();
+                    singletons.push(TemplateSingleton {
+                        name: s.name,
+                        module_name,
+                        methods: s
+                            .methods
+                            .into_iter()
+                            .map(|m| TemplateMethod::from_with_mode(m, parsed.mode))
+                            .collect(),
+                        properties: s.properties,
+                    })
+                }
                 crate::parser::ast::IDLItem::Class(c) => {
                     classes.push(TemplateClass::from_with_mode(
                         module_name.clone(),
@@ -159,7 +177,7 @@ struct RustGlueTemplate {
     module_decl: Option<crate::parser::ast::ModuleDeclaration>,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
-    singletons: Vec<TemplateInterface>,
+    singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
 }
 
@@ -171,7 +189,7 @@ struct RustApiTemplate {
     module_decl: Option<crate::parser::ast::ModuleDeclaration>,
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
-    singletons: Vec<TemplateInterface>,
+    singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
 }
 
@@ -185,6 +203,7 @@ struct AggSymbolsTemplate {
 
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TemplateModule {
     module_name: String,
     module_decl: Option<crate::parser::ast::ModuleDeclaration>,
@@ -192,8 +211,16 @@ struct TemplateModule {
 
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
-    singletons: Vec<crate::parser::ast::Singleton>,
+    singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateSingleton {
+    name: String,
+    module_name: String,
+    methods: Vec<TemplateMethod>,
+    properties: Vec<crate::parser::ast::Property>,
 }
 
 #[derive(Debug, Clone)]
@@ -202,6 +229,7 @@ struct TemplateInterface {
     #[allow(dead_code)]
     slot_index: u32,
     methods: Vec<TemplateMethod>,
+    #[allow(dead_code)]
     properties: Vec<crate::parser::ast::Property>,
 }
 
@@ -346,7 +374,11 @@ pub fn collect_definitions(ridl_files: &[String]) -> Result<Vec<IDL>, Box<dyn st
                 crate::parser::ast::IDLItem::Struct(s) => structs.push(s),
                 crate::parser::ast::IDLItem::Using(u) => using.push(u),
                 crate::parser::ast::IDLItem::Import(im) => imports.push(im),
-                crate::parser::ast::IDLItem::Singleton(s) => singletons.push(s),
+                crate::parser::ast::IDLItem::Singleton(mut s) => {
+                    // In aggregate mode, singletons inherit file-level module decl.
+                    s.module = module.clone();
+                    singletons.push(s)
+                }
             }
         }
 
@@ -411,15 +443,22 @@ pub fn generate_module_files(
     let mut singletons = Vec::new();
     for item in items {
         if let crate::parser::ast::IDLItem::Singleton(s) = item {
-            singletons.push(TemplateInterface::from_with_mode(
-                crate::parser::ast::Interface {
-                    name: s.name.clone(),
-                    methods: s.methods.clone(),
-                    properties: s.properties.clone(),
-                    module: None,
-                },
-                file_mode,
-            ));
+            let singleton_module_name = module_decl
+                .as_ref()
+                .map(|m| m.module_path.as_str())
+                .unwrap_or("GLOBAL")
+                .to_string();
+            singletons.push(TemplateSingleton {
+                name: s.name.clone(),
+                module_name: singleton_module_name,
+                methods: s
+                    .methods
+                    .clone()
+                    .into_iter()
+                    .map(|m| TemplateMethod::from_with_mode(m, file_mode))
+                    .collect(),
+                properties: s.properties.clone(),
+            });
         }
     }
 

@@ -12,20 +12,20 @@
 
 JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
     JSContext *ctx,
-    JSValue this_val,
+    JSValue *this_val,
     int argc,
     JSValue *argv
 );
 
 void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer(
     JSContext *ctx,
-    JSValue val
+    void *opaque
 );
 
 {%- for method in class.methods %}
 JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|lower }}(
     JSContext *ctx,
-    JSValue this_val,
+    JSValue *this_val,
     int argc,
     JSValue *argv
 );

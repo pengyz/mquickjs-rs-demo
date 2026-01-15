@@ -142,6 +142,7 @@ pub fn normalize_ident(s: &str) -> ::askama::Result<String> {
     Ok(out)
 }
 
+#[allow(dead_code)]
 pub fn proto_module_ns(
     module_decl: &Option<crate::parser::ast::ModuleDeclaration>,
     fallback_module_name: &str,
