@@ -157,15 +157,16 @@ pub fn generate_ridl_runtime_support(
         slot_map.insert(s.name.to_lowercase(), s.index);
     }
 
-    slot_inits.sort_by(|a, b| {
-        (a.crate_name.as_str(), a.slot_index).cmp(&(b.crate_name.as_str(), b.slot_index))
-    });
-
     for init in slot_inits.iter_mut() {
         if let Some(idx) = slot_map.get(&init.slot_key.to_lowercase()) {
             init.slot_index = *idx;
         }
     }
+
+    // Sort after re-mapping to final indices.
+    slot_inits.sort_by(|a, b| {
+        (a.crate_name.as_str(), a.slot_index).cmp(&(b.crate_name.as_str(), b.slot_index))
+    });
 
     // Ensure we never generate duplicate slot indices (would lead to unreachable match arms
     // and broken slot dispatch at runtime).
@@ -174,8 +175,8 @@ pub fn generate_ridl_runtime_support(
         for init in slot_inits.iter() {
             if let Some(prev) = used.insert(init.slot_index, init.slot_key.clone()) {
                 return Err(format!(
-                    "duplicate ctx slot index {}: {} vs {}",
-                    init.slot_index, prev, init.slot_key
+                    "duplicate ctx slot index {}: {} vs {}\nslot_inits={:?}\nslots={:?}",
+                    init.slot_index, prev, init.slot_key, slot_inits, slots
                 )
                 .into());
             }

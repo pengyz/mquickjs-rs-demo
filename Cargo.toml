@@ -7,6 +7,7 @@ members = [
     "ridl-modules/stdlib",
     "ridl-modules/ridl_module_demo_default",
     "ridl-modules/ridl_module_demo_strict",
+    "ridl-modules/test_class",
     ".", "deps/mquickjs-build", "ridl-builder",
 ]
 
@@ -39,6 +40,9 @@ path = "ridl-modules/ridl_module_demo_default"
 
 [dependencies.ridl_module_demo_strict]
 path = "ridl-modules/ridl_module_demo_strict"
+
+[dependencies.test_class]
+path = "ridl-modules/test_class"
 
 [features]
 # Demo app defaults to having RIDL stdlib extensions enabled.

@@ -1,0 +1,22 @@
+// test_class: class 语法/组合覆盖（global-only）
+// NOTE: 当前工程仅支持 global 模式（无完整 module 模式）。
+// TODO(module): 支持 module 模式后补充导出可见性/导入语义相关测试。
+
+mode strict;
+
+// ---- 基础：constructor + method + instance property ----
+class Basic {
+  constructor();
+
+  fn add(a: int, b: int) -> int;
+
+  property value: int;
+}
+
+// ---- receiver 校验：提供方法用于验证 invalid receiver path ----
+class Receiver {
+  constructor();
+
+  fn get_tag() -> string;
+}
+

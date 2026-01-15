@@ -69,6 +69,7 @@ unsafe extern "C" fn ridl_proto_{{ c.name|normalize_ident|lower }}_drop(p: *mut 
 {%- endfor %}
 
 mod __ridl_symbols {
+    #[allow(unused_imports)]
     use super::*;
 
     // Keep glue symbols linked.
@@ -335,6 +336,8 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     argc: c_int,
     argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    let _ = argc;
+    let _ = argv;
     let this_val = unsafe { *this_val };
     // Validate receiver.
     let cid = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, this_val) };
