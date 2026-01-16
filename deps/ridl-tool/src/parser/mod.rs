@@ -98,6 +98,137 @@ pub fn parse_ridl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::E
     parse_idl_file(content)
 }
 
+fn decode_ridl_string_literal(
+    pos: &crate::parser::ast::SourcePos,
+    raw: &str,
+) -> Result<String, Box<dyn std::error::Error>> {
+    let inner = raw
+        .strip_prefix('"')
+        .and_then(|s| s.strip_suffix('"'))
+        .ok_or_else(|| {
+            format!(
+                "Invalid string literal at {}:{}: missing surrounding quotes",
+                pos.line, pos.column
+            )
+        })?;
+
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+
+        // In pest span, a RIDL escape like `\n` is observed as `\\n`.
+        // That means:
+        // - an actual escape prefix is represented by a *pair* of backslashes in `inner`.
+        // - a literal backslash character is also represented by a pair, and is expressed
+        //   as the escape `\\\\` (i.e. `"\\\\"` inside the source string literal).
+        let mut run = 1usize;
+        while let Some('\\') = chars.peek().copied() {
+            chars.next();
+            run += 1;
+        }
+
+        // Our pest span may contain an odd run right before `"` for the sequence `\\\"`
+        // (bytes [92,92,92,34]). This represents the escape `\"` (a quote) in RIDL.
+        let pairs = run / 2;
+        let odd = run % 2 == 1;
+
+        let mut next = chars.peek().copied();
+
+        if odd {
+            if next == Some('"') {
+                // `\\\"` => decode to `"`.
+                let esc = chars.next().ok_or_else(|| {
+                    format!(
+                        "Invalid string literal at {}:{}: trailing escape\\",
+                        pos.line, pos.column
+                    )
+                })?;
+                debug_assert_eq!(esc, '"');
+                out.push('"');
+                continue;
+            }
+
+            return Err(format!(
+                "Invalid string literal at {}:{}: invalid backslash sequence",
+                pos.line, pos.column
+            )
+            .into());
+        }
+
+        next = chars.peek().copied();
+
+        if matches!(next, Some('n' | 't' | 'r' | '"')) {
+            for _ in 0..(pairs - 1) {
+                out.push('\\');
+            }
+
+            let esc = chars.next().ok_or_else(|| {
+                format!(
+                    "Invalid string literal at {}:{}: trailing escape\\",
+                    pos.line, pos.column
+                )
+            })?;
+
+            match esc {
+                'n' => out.push('\n'),
+                'r' => out.push('\r'),
+                't' => out.push('\t'),
+                '"' => out.push('"'),
+                _ => unreachable!(),
+            }
+
+            continue;
+        }
+
+        if matches!(next, Some('\\')) {
+            // Decode `\\\\` as a single literal backslash.
+            // In inner this can show up as 4 backslashes followed by `\\` (next='\\'),
+            // so we need at least 2 pairs.
+            if pairs < 2 {
+                return Err(format!(
+                    "Invalid string literal at {}:{}: invalid backslash sequence",
+                    pos.line, pos.column
+                )
+                .into());
+            }
+
+            for _ in 0..(pairs - 2) {
+                out.push('\\');
+            }
+
+            let esc = chars.next().ok_or_else(|| {
+                format!(
+                    "Invalid string literal at {}:{}: trailing escape\\",
+                    pos.line, pos.column
+                )
+            })?;
+            debug_assert_eq!(esc, '\\');
+            out.push('\\');
+            continue;
+        }
+
+        if pairs == 1 {
+            let next = chars.peek().copied().unwrap_or('\0');
+            return Err(format!(
+                "Invalid string literal at {}:{}: unsupported escape \\\\{}",
+                pos.line, pos.column, next
+            )
+            .into());
+        }
+
+        for _ in 0..pairs {
+            out.push('\\');
+        }
+    }
+
+    Ok(out)
+}
+
 fn parse_module_decl(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<ModuleDeclaration, Box<dyn std::error::Error>> {
@@ -335,15 +466,9 @@ fn parse_var_field(
     let literal_pair = iter
         .next()
         .ok_or("Expected literal value for var field")?;
+
     let init_literal = match property_type {
-        crate::parser::ast::Type::String => {
-            let s = literal_pair.as_str();
-            // grammar keeps quotes; strip surrounding quotes for runtime string creation.
-            s.strip_prefix('"')
-                .and_then(|x| x.strip_suffix('"'))
-                .unwrap_or(s)
-                .to_string()
-        }
+        crate::parser::ast::Type::String => decode_ridl_string_literal(&pair_pos(&literal_pair), literal_pair.as_str())?,
         _ => literal_pair.as_str().to_string(),
     };
 
