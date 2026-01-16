@@ -22,8 +22,10 @@ pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotW
 
 // Erased ctx slot vtables consumed by the app-side aggregated ridl_context_init.
 //
-// - singleton slots: module provides `crate::ridl_create_<name>_singleton() -> *mut c_void`.
-//   This pointer must be a *thin* pointer produced by `Box::into_raw(Box<Box<dyn Trait>>)`.
+// - singleton slots:
+//   - Module must provide a Rust-level creator: `crate::impls::create_<name>_singleton() -> Box<dyn Trait>`.
+//   - Glue exports the C ABI creator: `#[no_mangle] extern "C" fn ridl_create_<name>_singleton() -> *mut c_void`.
+//     Return value is an erased *thin* pointer produced by `Box::into_raw(Box<Box<dyn Trait>>)`.
 // - class proto slots: module provides `crate::ridl_create_proto_<class>() -> <Impl as Class>::Proto`
 {%- for s in singletons %}
 pub static RIDL_{{ s.name|to_upper_camel_case|to_snake_case|upper }}_CTX_SLOT_VT: ::mquickjs_rs::ridl_runtime::RidlErasedSlotVTable =
@@ -32,15 +34,23 @@ pub static RIDL_{{ s.name|to_upper_camel_case|to_snake_case|upper }}_CTX_SLOT_VT
         drop: ridl_{{ s.name|to_snake_case }}_singleton_drop,
     };
 
+#[unsafe(no_mangle)]
+pub extern "C" fn ridl_create_{{ s.name|to_snake_case }}_singleton() -> *mut core::ffi::c_void {
+    let b: Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton> =
+        crate::impls::create_{{ s.name|to_snake_case }}_singleton();
+    let holder: Box<Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>> = Box::new(b);
+    Box::into_raw(holder) as *mut core::ffi::c_void
+}
+
 unsafe extern "C" fn ridl_{{ s.name|to_snake_case }}_singleton_create() -> *mut core::ffi::c_void {
-    // Module creator returns a *thin* pointer: `*mut Box<dyn Trait>` (stored as erased pointer).
-    crate::ridl_create_{{ s.name|to_snake_case }}_singleton()
+    // The per-context slot vtable uses the exported creator symbol.
+    ridl_create_{{ s.name|to_snake_case }}_singleton()
 }
 
 unsafe extern "C" fn ridl_{{ s.name|to_snake_case }}_singleton_drop(p: *mut core::ffi::c_void) {
     if !p.is_null() {
         unsafe {
-            // Safety: `p` is a thin pointer produced by `Box::into_raw(Box<Box<dyn Trait>>)` in module creator.
+            // Safety: `p` is a thin pointer produced by `Box::into_raw(Box<Box<dyn Trait>>)` in exported creator.
             let holder: Box<Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>> = Box::from_raw(p as *mut _);
             drop(holder);
         }
@@ -158,6 +168,12 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
+    {%- if method.params|length == 0 %}
+    {%- if !method.has_variadic %}
+    let _ = argc;
+    let _ = argv;
+    {%- endif %}
+    {%- endif %}
     {%- for p in method.params %}
     {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
     {%- endfor %}
@@ -188,10 +204,8 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
     let s: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
-    unsafe {
-        s.{{ method.name|to_snake_case }}(ctx, core::slice::from_raw_parts(argv, argc as usize).to_vec());
-    }
-    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
+    let result = s.{{ method.name|to_snake_case }}({%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
+    {{ method.return_type|emit_return_convert("result")|safe }}
 }
 {%- endfor %}
 

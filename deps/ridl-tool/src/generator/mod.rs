@@ -257,6 +257,7 @@ struct TemplateMethod {
     name: String,
     params: Vec<TemplateParam>,
     return_type: Type,
+    has_variadic: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -297,10 +298,13 @@ impl TemplateMethod {
             .map(|p| TemplateParam::from_with_mode(p, file_mode))
             .collect();
 
+        let has_variadic = params.iter().any(|p| p.variadic);
+
         Self {
             name: method.name,
             params,
             return_type: method.return_type,
+            has_variadic,
         }
     }
 }

@@ -11,14 +11,19 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
     {%- for method in s.methods %}
     fn {{ method.name|to_snake_case }}(
         &mut self,
-        ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
-    );
+        {%- for p in method.params %}
+        {%- if p.variadic %}
+        {{ p.name|lower }}: Vec<{{ p.ty|rust_type_from_idl|safe }}>
+        {%- else %}
+        {{ p.name|lower }}: {{ p.ty|rust_type_from_idl|safe }}{%- if !loop.last %}, {% endif %}
+        {%- endif %}
+        {%- endfor %}
+    ) -> {{ method.return_type|rust_type_from_idl|safe }};
     {%- endfor %}
 
     {%- for prop in s.properties %}
     {%- if prop.modifiers|is_readonly_prop %}
-    fn {{ prop.name|to_snake_case }}(&self) -> {{ prop.property_type|rust_type_from_idl }};
+    fn {{ prop.name|to_snake_case }}(&self) -> {{ prop.property_type|rust_type_from_idl|safe }};
     {%- endif %}
     {%- endfor %}
 }
@@ -39,9 +44,9 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
     fn {{ method.name|to_snake_case }}(
         &mut self,
         {%- for p in method.params %}
-        {{ p.name|lower }}: {{ p.ty|rust_type_from_idl }}{%- if !loop.last %}, {% endif %}
+        {{ p.name|lower }}: {{ p.ty|rust_type_from_idl|safe }}{%- if !loop.last %}, {% endif %}
         {%- endfor %}
-    ) -> {{ method.return_type|rust_type_from_idl }};
+    ) -> {{ method.return_type|rust_type_from_idl|safe }};
 {%- endfor %}
 
 {%- for prop in class.properties %}

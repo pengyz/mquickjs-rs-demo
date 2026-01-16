@@ -20,12 +20,24 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         Type::Int => "i32".to_string(),
         Type::Float => "f32".to_string(),
         Type::Double => "f64".to_string(),
-        // NOTE: `rust_api.rs.j2` only needs basic property types today.
         Type::String => "String".to_string(),
         Type::Void => "()".to_string(),
+
+        // Optional(T) at Rust boundary.
         Type::Optional(inner) => format!("Option<{}>", rust_type_from_idl(inner)?),
+
+        // `any` is always a borrowed JSValue view at the Rust boundary.
+        // User code must not depend on raw `JSValue`.
+        Type::Any => "mquickjs_rs::ValueRef<'_>".to_string(),
+
         Type::Custom(name) => name.clone(),
-        _ => "serde_json::Value".to_string(),
+
+        // Keep explicit: fail fast for types we haven't implemented yet.
+        other => {
+            return Err(askama::Error::Custom(
+                format!("unsupported ridl type in rust_type_from_idl: {other:?}").into(),
+            ));
+        }
     };
     Ok(rust_type)
 }
@@ -105,7 +117,7 @@ pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::R
             ));
         }
         Type::Any => {
-            w.push_line(result_name);
+            w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
         _ => {
             w.push_line("compile_error!(\"v1 glue: unsupported return type\");");
@@ -233,10 +245,34 @@ pub fn emit_param_extract(
     idx1: &usize,
 ) -> ::askama::Result<String> {
     if param.variadic {
-        emit_varargs_collect(&param.name, &param.ty, param.file_mode, *idx0)
-    } else {
-        emit_single_param_extract(&param.name, &param.ty, param.file_mode, *idx0, *idx1)
+        return emit_varargs_collect(&param.name, &param.ty, param.file_mode, *idx0);
     }
+
+    // v1 glue: minimal support for `any?` (Optional(Any)) used by tests.
+    if matches!(&param.ty, Type::Optional(inner) if matches!(inner.as_ref(), Type::Any)) {
+        let mut w = CodeWriter::new();
+        emit_missing_arg(&mut w, *idx1, &param.name);
+        emit_argv_v_let(&mut w, *idx0);
+
+        match param.file_mode {
+            FileMode::Default => {
+                w.push_line(format!(
+                    "let {name}: Option<JSValue> = if mquickjs_rs::mquickjs_ffi::JS_IsNull(_v) == 1 || mquickjs_rs::mquickjs_ffi::JS_IsUndefined(_v) == 1 {{ None }} else {{ Some(_v) }};",
+                    name = param.name
+                ));
+            }
+            FileMode::Strict => {
+                w.push_line(format!(
+                    "let {name}: Option<mquickjs_rs::ValueRef<'_>> = if mquickjs_rs::mquickjs_ffi::JS_IsNull(_v) == 1 || mquickjs_rs::mquickjs_ffi::JS_IsUndefined(_v) == 1 {{ None }} else {{ Some(mquickjs_rs::ValueRef::new(_v)) }};",
+                    name = param.name
+                ));
+            }
+        }
+
+        return Ok(w.into_string());
+    }
+
+    emit_single_param_extract(&param.name, &param.ty, param.file_mode, *idx0, *idx1)
 }
 
 pub fn emit_call_arg(param: &TemplateParam) -> ::askama::Result<String> {
@@ -260,7 +296,8 @@ fn emit_argv_v_expr(idx0_expr: &str) -> String {
 }
 
 fn emit_argv_v_let(w: &mut CodeWriter, idx0: usize) {
-    w.push_line(format!("let v = unsafe {{ *argv.add({idx0}) }};", idx0 = idx0));
+    // The extracted JSValue may only be needed for type checks/conversions.
+    w.push_line(format!("let _v = unsafe {{ *argv.add({idx0}) }};", idx0 = idx0));
 }
 
 fn emit_check_is_string_expr(w: &mut CodeWriter, value_expr: &str, err_expr: &str) {
@@ -339,7 +376,7 @@ fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_
 fn emit_single_param_extract(
     name: &str,
     ty: &Type,
-    file_mode: FileMode,
+    _file_mode: FileMode,
     idx0: usize,
     idx1: usize,
 ) -> ::askama::Result<String> {
@@ -350,8 +387,8 @@ fn emit_single_param_extract(
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid string argument: {name}");
-            emit_check_is_string_expr(&mut w, "v", &format!("\"{}\"", err));
-            emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &format!("\"{}\"", err));
+            emit_check_is_string_expr(&mut w, "_v", &format!("\"{}\"", err));
+            emit_to_cstring_ptr_expr(&mut w, "_v", "ptr", &format!("\"{}\"", err));
             w.push_line(format!("let {name}: *const c_char = ptr;", name = name));
             w.push_line(format!("let _ = {name};", name = name));
         }
@@ -359,41 +396,31 @@ fn emit_single_param_extract(
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid int argument: {name}");
-            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
-            emit_to_i32_expr(&mut w, "v", name, &format!("\"{}\"", err));
+            emit_check_is_number_expr(&mut w, "_v", &format!("\"{}\"", err));
+            emit_to_i32_expr(&mut w, "_v", name, &format!("\"{}\"", err));
         }
         Type::Bool => {
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid bool argument: {name}");
-            emit_extract_bool_expr(&mut w, "v", name, &format!("\"{}\"", err));
+            emit_extract_bool_expr(&mut w, "_v", name, &format!("\"{}\"", err));
         }
         Type::Double => {
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid double argument: {name}");
-            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
-            emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
+            emit_check_is_number_expr(&mut w, "_v", &format!("\"{}\"", err));
+            emit_to_f64_expr(&mut w, "_v", name, &format!("\"{}\"", err));
         }
         Type::Any => {
             emit_missing_arg(&mut w, idx1, name);
-            match file_mode {
-                FileMode::Default => {
-                    w.push_line(format!(
-                        "let {name}: JSValue = {v};",
-                        name = name,
-                        v = emit_argv_v(idx0)
-                    ));
-                }
-                FileMode::Strict => {
-                    w.push_line(format!(
-                        "let {name}: mquickjs_rs::ValueRef<'_> = mquickjs_rs::ValueRef::new({v});",
-                        name = name,
-                        v = emit_argv_v(idx0)
-                    ));
-                }
-            }
+            w.push_line(format!(
+                "let {name}: mquickjs_rs::ValueRef<'_> = mquickjs_rs::ValueRef::new({v});",
+                name = name,
+                v = emit_argv_v(idx0)
+            ));
         }
+
         _ => {
             w.push_line(format!(
                 "compile_error!(\"v1 glue: unsupported parameter type for {name}\");",
@@ -431,7 +458,7 @@ fn emit_varargs_collect(
                 name = name
             ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
-            w.push_line("let v = unsafe { *argv.add(i) };");
+            w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
                 "&format!(\"invalid string argument: {name}[{{}}]\", rel)",
@@ -447,7 +474,7 @@ fn emit_varargs_collect(
         Type::Int => {
             w.push_line(format!("let mut {name}: Vec<i32> = Vec::new();", name = name));
             emit_varargs_loop_header(&mut w, start_idx0, true);
-            w.push_line("let v = unsafe { *argv.add(i) };");
+            w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
                 "&format!(\"invalid int argument: {name}[{{}}]\", rel)",
@@ -463,7 +490,7 @@ fn emit_varargs_collect(
         Type::Bool => {
             w.push_line(format!("let mut {name}: Vec<bool> = Vec::new();", name = name));
             emit_varargs_loop_header(&mut w, start_idx0, true);
-            w.push_line("let v = unsafe { *argv.add(i) };");
+            w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
                 "&format!(\"invalid bool argument: {name}[{{}}]\", rel)",
@@ -478,7 +505,7 @@ fn emit_varargs_collect(
         Type::Double => {
             w.push_line(format!("let mut {name}: Vec<f64> = Vec::new();", name = name));
             emit_varargs_loop_header(&mut w, start_idx0, true);
-            w.push_line("let v = unsafe { *argv.add(i) };");
+            w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
                 "&format!(\"invalid double argument: {name}[{{}}]\", rel)",
@@ -492,33 +519,19 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::Any => {
-            match file_mode {
-                FileMode::Default => {
-                    w.push_line(format!("let mut {name}: Vec<JSValue> = Vec::new();", name = name));
-                    emit_varargs_loop_header(&mut w, start_idx0, false);
-                    w.push_line(format!(
-                        "{name}.push({v});",
-                        name = name,
-                        v = emit_argv_v_expr("i")
-                    ));
-                    w.dedent();
-                    w.push_line("}");
-                }
-                FileMode::Strict => {
-                    w.push_line(format!(
-                        "let mut {name}: Vec<mquickjs_rs::ValueRef<'_>> = Vec::new();",
-                        name = name
-                    ));
-                    emit_varargs_loop_header(&mut w, start_idx0, false);
-                    w.push_line(format!(
-                        "{name}.push(mquickjs_rs::ValueRef::new({v}));",
-                        name = name,
-                        v = emit_argv_v_expr("i")
-                    ));
-                    w.dedent();
-                    w.push_line("}");
-                }
-            }
+            let _ = file_mode;
+            w.push_line(format!(
+                "let mut {name}: Vec<mquickjs_rs::ValueRef<'_>> = Vec::new();",
+                name = name
+            ));
+            emit_varargs_loop_header(&mut w, start_idx0, false);
+            w.push_line(format!(
+                "{name}.push(mquickjs_rs::ValueRef::new({v}));",
+                name = name,
+                v = emit_argv_v_expr("i")
+            ));
+            w.dedent();
+            w.push_line("}");
         }
         _ => {
             w.push_line(format!(
