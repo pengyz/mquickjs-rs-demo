@@ -79,6 +79,13 @@ impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
     }
 }
 
-pub fn ridl_create_console_singleton() -> Box<dyn crate::api::ConsoleSingleton> {
+pub fn ridl_create_console_singleton_impl() -> Box<dyn crate::api::ConsoleSingleton> {
     Box::new(DefaultConsoleSingleton::default())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn ridl_create_console_singleton() -> *mut core::ffi::c_void {
+    let b: Box<dyn crate::api::ConsoleSingleton> = ridl_create_console_singleton_impl();
+    let holder: Box<Box<dyn crate::api::ConsoleSingleton>> = Box::new(b);
+    Box::into_raw(holder) as *mut core::ffi::c_void
 }

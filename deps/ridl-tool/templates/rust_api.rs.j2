@@ -7,9 +7,9 @@
 
 {%- for s in singletons %}
 // Singleton {{ s.name }}
-pub trait {{ s.name|capitalize }}Singleton {
+pub trait {{ s.name|to_upper_camel_case }}Singleton {
     {%- for method in s.methods %}
-    fn {{ method.name|lower }}(
+    fn {{ method.name|to_snake_case }}(
         &mut self,
         ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
         args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
@@ -18,7 +18,7 @@ pub trait {{ s.name|capitalize }}Singleton {
 
     {%- for prop in s.properties %}
     {%- if prop.modifiers|is_readonly_prop %}
-    fn {{ prop.name|lower }}(&self) -> {{ prop.property_type|rust_type_from_idl }};
+    fn {{ prop.name|to_snake_case }}(&self) -> {{ prop.property_type|rust_type_from_idl }};
     {%- endif %}
     {%- endfor %}
 }
@@ -34,9 +34,9 @@ pub trait {{ s.name|capitalize }}Singleton {
 {%- for class in classes %}
 
 // Class {{ class.name }}
-pub trait {{ class.name|capitalize }}Class {
+pub trait {{ class.name|to_upper_camel_case }}Class {
 {%- for method in class.methods %}
-    fn {{ method.name|lower }}(
+    fn {{ method.name|to_snake_case }}(
         &mut self,
         {%- for p in method.params %}
         {{ p.name|lower }}: {{ p.ty|rust_type_from_idl }}{%- if !loop.last %}, {% endif %}
@@ -47,10 +47,10 @@ pub trait {{ class.name|capitalize }}Class {
 {%- for prop in class.properties %}
 {%- if !(prop.modifiers|is_proto_prop) %}
 {%- if prop.modifiers|is_readonly_prop %}
-    fn get_{{ prop.name|lower }}(&mut self) -> {{ prop.property_type|rust_type_from_idl }};
+    fn get_{{ prop.name|to_snake_case }}(&mut self) -> {{ prop.property_type|rust_type_from_idl }};
 {%- else %}
-    fn get_{{ prop.name|lower }}(&mut self) -> {{ prop.property_type|rust_type_from_idl }};
-    fn set_{{ prop.name|lower }}(&mut self, v: {{ prop.property_type|rust_type_from_idl }});
+    fn get_{{ prop.name|to_snake_case }}(&mut self) -> {{ prop.property_type|rust_type_from_idl }};
+    fn set_{{ prop.name|to_snake_case }}(&mut self, v: {{ prop.property_type|rust_type_from_idl }});
 {%- endif %}
 {%- endif %}
 {%- endfor %}
@@ -62,31 +62,31 @@ pub trait {{ class.name|capitalize }}Class {
 /// Per-context class prototype shared state (erased).
 ///
 /// Module must provide these functions for each class that has proto properties.
-pub type {{ class.name|capitalize }}ProtoState = core::ffi::c_void;
+pub type {{ class.name|to_upper_camel_case }}ProtoState = core::ffi::c_void;
 
 unsafe extern "C" {
-    pub fn ridl_create_proto_{{ class.name|normalize_ident|lower }}() -> *mut {{ class.name|capitalize }}ProtoState;
-    pub fn ridl_drop_proto_{{ class.name|normalize_ident|lower }}(p: *mut {{ class.name|capitalize }}ProtoState);
+    pub fn ridl_create_proto_{{ class.name|to_snake_case }}() -> *mut {{ class.name|to_upper_camel_case }}ProtoState;
+    pub fn ridl_drop_proto_{{ class.name|to_snake_case }}(p: *mut {{ class.name|to_upper_camel_case }}ProtoState);
 }
 
 {%- for prop in class.properties %}
 {%- if prop.modifiers|is_proto_prop %}
 {%- if prop.modifiers|is_readonly_prop %}
 unsafe extern "C" {
-    pub fn ridl_proto_get_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(
-        proto: *mut {{ class.name|capitalize }}ProtoState,
+    pub fn ridl_proto_get_{{ class.name|to_snake_case }}_{{ prop.name|to_snake_case }}(
+        proto: *mut {{ class.name|to_upper_camel_case }}ProtoState,
     ) -> *const core::ffi::c_char;
 }
 {%- else %}
 unsafe extern "C" {
-    pub fn ridl_proto_get_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(
-        proto: *mut {{ class.name|capitalize }}ProtoState,
+    pub fn ridl_proto_get_{{ class.name|to_snake_case }}_{{ prop.name|to_snake_case }}(
+        proto: *mut {{ class.name|to_upper_camel_case }}ProtoState,
     ) -> *const core::ffi::c_char;
 }
 
 unsafe extern "C" {
-    pub fn ridl_proto_set_{{ class.name|normalize_ident|lower }}_{{ prop.name|normalize_ident|lower }}(
-        proto: *mut {{ class.name|capitalize }}ProtoState,
+    pub fn ridl_proto_set_{{ class.name|to_snake_case }}_{{ prop.name|to_snake_case }}(
+        proto: *mut {{ class.name|to_upper_camel_case }}ProtoState,
         v: *const core::ffi::c_char,
     );
 }

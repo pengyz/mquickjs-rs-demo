@@ -1,9 +1,9 @@
-use crate::api::TestjsfieldsSingleton;
+use crate::api::TestJsFieldsSingleton;
 
 pub struct DefaultTestJsFieldsSingleton;
 
-impl TestjsfieldsSingleton for DefaultTestJsFieldsSingleton {
-    fn getnullany(
+impl TestJsFieldsSingleton for DefaultTestJsFieldsSingleton {
+    fn get_null_any(
         &mut self,
         _ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
         _args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
@@ -12,6 +12,8 @@ impl TestjsfieldsSingleton for DefaultTestJsFieldsSingleton {
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn ridl_create_testjsfields_singleton() -> Box<dyn TestjsfieldsSingleton> {
-    Box::new(DefaultTestJsFieldsSingleton)
+pub extern "C" fn ridl_create_test_js_fields_singleton() -> *mut core::ffi::c_void {
+    let b: Box<dyn TestJsFieldsSingleton> = Box::new(DefaultTestJsFieldsSingleton);
+    let holder: Box<Box<dyn TestJsFieldsSingleton>> = Box::new(b);
+    Box::into_raw(holder) as *mut core::ffi::c_void
 }

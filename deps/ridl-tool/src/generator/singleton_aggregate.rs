@@ -82,7 +82,10 @@ pub fn generate_ridl_runtime_support(
                         slot_inits.push(SlotInit {
                             crate_name: m.crate_name.clone(),
                             slot_index,
-                            vt_ident: format!("RIDL_{}_CTX_SLOT_VT", name.to_uppercase()),
+                            vt_ident: format!(
+                                "RIDL_{}_CTX_SLOT_VT",
+                                crate::generator::naming::to_snake_case(&name).to_uppercase()
+                            ),
                             slot_key: slot_key.clone(),
                         });
                     }
@@ -169,7 +172,7 @@ pub fn generate_ridl_runtime_support(
                             vt_ident: format!(
                                 "RIDL_{}_{}_PROTO_CTX_SLOT_VT",
                                 module_name,
-                                sanitize_ident(&c.name).to_uppercase()
+                                crate::generator::naming::to_snake_case(&c.name).to_uppercase()
                             ),
                             slot_key: field_name,
                         });

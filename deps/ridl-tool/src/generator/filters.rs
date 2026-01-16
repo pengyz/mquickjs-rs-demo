@@ -142,6 +142,14 @@ pub fn normalize_ident(s: &str) -> ::askama::Result<String> {
     Ok(out)
 }
 
+pub fn to_snake_case(s: &str) -> ::askama::Result<String> {
+    Ok(crate::generator::naming::to_snake_case(s))
+}
+
+pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
+    Ok(crate::generator::naming::to_upper_camel_case(s))
+}
+
 #[allow(dead_code)]
 pub fn proto_module_ns(
     module_decl: &Option<crate::parser::ast::ModuleDeclaration>,

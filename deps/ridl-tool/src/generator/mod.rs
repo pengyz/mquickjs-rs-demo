@@ -29,6 +29,7 @@ fn to_rust_type_ident_simple(name: &str) -> String {
 
 mod code_writer;
 mod filters;
+mod naming;
 
 fn generate_register_h_and_symbols(
     ridl_files: &[String],
