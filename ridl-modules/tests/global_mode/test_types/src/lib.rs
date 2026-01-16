@@ -4,8 +4,7 @@ pub mod impls {
     pub use crate::api::TestTypesSingleton;
 
     pub use crate::types_impl::DefaultTestTypesSingleton;
+    pub use crate::types_impl::create_test_types_singleton;
 }
 
 mod types_impl;
-
-pub use types_impl::ridl_create_test_types_singleton;

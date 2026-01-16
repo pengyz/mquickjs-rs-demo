@@ -1,19 +1,13 @@
-use crate::api::TestSingletonSingleton;
+use crate::api::TestPingSingleton;
 
-pub struct DefaultTestSingletonSingleton;
+pub struct DefaultTestPingSingleton;
 
-impl TestSingletonSingleton for DefaultTestSingletonSingleton {
-    fn ping(
-        &mut self,
-        _ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        _args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
-    ) {
+impl TestPingSingleton for DefaultTestPingSingleton {
+    fn ping(&mut self) -> String {
+        "ok".to_string()
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ridl_create_test_singleton_singleton() -> *mut core::ffi::c_void {
-    let b: Box<dyn TestSingletonSingleton> = Box::new(DefaultTestSingletonSingleton);
-    let holder: Box<Box<dyn TestSingletonSingleton>> = Box::new(b);
-    Box::into_raw(holder) as *mut core::ffi::c_void
+pub fn create_test_ping_singleton() -> Box<dyn TestPingSingleton> {
+    Box::new(DefaultTestPingSingleton)
 }

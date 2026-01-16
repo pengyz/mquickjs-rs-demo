@@ -1,3 +1,3 @@
-var t = globalThis.TestSingleton;
+var t = globalThis.TestPing;
 
 t.ping();

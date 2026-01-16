@@ -1,11 +1,10 @@
 mquickjs_rs::ridl_include_module!();
 
 pub mod impls {
-    pub use crate::api::TestSingletonSingleton;
+    pub use crate::api::TestPingSingleton;
 
-    pub use crate::singleton_impl::DefaultTestSingletonSingleton;
+    pub use crate::singleton_impl::DefaultTestPingSingleton;
+    pub use crate::singleton_impl::create_test_ping_singleton;
 }
 
 mod singleton_impl;
-
-pub use singleton_impl::ridl_create_test_singleton_singleton;

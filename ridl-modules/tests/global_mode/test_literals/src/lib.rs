@@ -4,8 +4,7 @@ pub mod impls {
     pub use crate::api::TestLiteralsSingleton;
 
     pub use crate::literals_impl::DefaultTestLiteralsSingleton;
+    pub use crate::literals_impl::create_test_literals_singleton;
 }
 
 mod literals_impl;
-
-pub use literals_impl::ridl_create_test_literals_singleton;

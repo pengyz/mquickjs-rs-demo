@@ -4,8 +4,7 @@ pub mod impls {
     pub use crate::api::TestJsFieldsSingleton;
 
     pub use crate::js_fields_impl::DefaultTestJsFieldsSingleton;
+    pub use crate::js_fields_impl::create_test_js_fields_singleton;
 }
 
 mod js_fields_impl;
-
-pub use js_fields_impl::ridl_create_test_js_fields_singleton;

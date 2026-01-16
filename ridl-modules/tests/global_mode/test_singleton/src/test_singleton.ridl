@@ -1,5 +1,5 @@
 mode strict;
 
-singleton TestSingleton {
+singleton TestPing {
     fn ping() -> string;
 }

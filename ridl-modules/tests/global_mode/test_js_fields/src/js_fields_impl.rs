@@ -3,17 +3,12 @@ use crate::api::TestJsFieldsSingleton;
 pub struct DefaultTestJsFieldsSingleton;
 
 impl TestJsFieldsSingleton for DefaultTestJsFieldsSingleton {
-    fn get_null_any(
-        &mut self,
-        _ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        _args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
-    ) {
+    fn get_null_any(&mut self) -> mquickjs_rs::ValueRef<'_> {
+        // v1 tests validate JS-visible behavior only; return `undefined`.
+        mquickjs_rs::ValueRef::new(mquickjs_rs::mquickjs_ffi::JS_UNDEFINED)
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ridl_create_test_js_fields_singleton() -> *mut core::ffi::c_void {
-    let b: Box<dyn TestJsFieldsSingleton> = Box::new(DefaultTestJsFieldsSingleton);
-    let holder: Box<Box<dyn TestJsFieldsSingleton>> = Box::new(b);
-    Box::into_raw(holder) as *mut core::ffi::c_void
+pub fn create_test_js_fields_singleton() -> Box<dyn TestJsFieldsSingleton> {
+    Box::new(DefaultTestJsFieldsSingleton)
 }
