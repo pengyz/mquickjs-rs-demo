@@ -211,6 +211,15 @@ impl SemanticValidator {
             }
             Type::Union(types) => {
                 for t in types {
+                    if matches!(t, Type::Optional(_)) {
+                        self.errors.push(RIDLError::new(
+                            "Union 类型不允许成员级可空（例如 string? | int）。若需要可空，请写 (A | B)? 或 A | B | null".to_string(),
+                            0,
+                            0,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
+                    }
                     self.validate_type(t);
                 }
             }
@@ -386,6 +395,29 @@ impl SemanticValidator {
                 // - Custom types may only be initialized with null.
                 match &f.field_type {
                     Type::Bool | Type::Int | Type::Float | Type::Double | Type::String | Type::Null => {}
+                    Type::Any => {
+                        // any is allowed to be initialized with null (and other literals in the future).
+                    }
+                    Type::Optional(inner) => {
+                        // For nullable fields, only null init is guaranteed to be valid in MVP.
+                        // Non-null literal validation is handled by the underlying type.
+                        if f.init_literal == "null" {
+                            // ok
+                        } else if matches!(**inner, Type::String) {
+                            // ok: string literal already decoded in parser
+                        } else {
+                            self.errors.push(RIDLError::new(
+                                format!(
+                                    "Invalid js field '{}': only null or string literal init is supported for nullable fields in MVP",
+                                    f.name
+                                ),
+                                line,
+                                col,
+                                self.file_path.clone(),
+                                RIDLErrorType::SemanticError,
+                            ));
+                        }
+                    }
                     Type::Custom(_) => {
                         if f.init_literal != "null" {
                             self.errors.push(RIDLError::new(

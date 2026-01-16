@@ -1071,22 +1071,36 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
 
 fn parse_union_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::error::Error>> {
     let mut types = Vec::new();
+    let mut has_null = false;
 
     for inner_pair in pair.into_inner() {
         match inner_pair.as_rule() {
             Rule::WS => { /* 跳过空白 */ }
             _ => {
                 let parsed_type = parse_type(inner_pair)?;
+                if parsed_type == Type::Null {
+                    has_null = true;
+                    continue;
+                }
                 types.push(parsed_type);
             }
         }
     }
 
     if types.is_empty() {
-        return Err("Union type has no types".into());
+        return if has_null {
+            Ok(Type::Null)
+        } else {
+            Err("Union type has no types".into())
+        };
     }
 
-    Ok(Type::Union(types))
+    let u = Type::Union(types);
+    if has_null {
+        Ok(Type::Optional(Box::new(u)))
+    } else {
+        Ok(u)
+    }
 }
 
 fn parse_nullable_type(
@@ -1401,6 +1415,7 @@ mod tests {
             fn testFn(cb: callback(success: bool, result: string)) -> void;
             fn handleNullable(data: string?) -> void;
             fn handleUnion(data: (bool | object)) -> void;
+fn handleUnionNullable(data: (bool | object | null)) -> void;
             fn handleMap(data: map<string, int>) -> void;
             fn handleArray(data: array<string>) -> void;
             fn handleOptionalParam(data: string?) -> void;
@@ -1461,6 +1476,37 @@ mod tests {
                             "Expected union parameter type, got {:?}",
                             handle_union.params[0].param_type
                         );
+                    }
+
+                    // 新增：检查 union + null 的整体可空规范化。
+                    // handleUnionNullable: (bool | object | null) => Optional(Union(bool, object))
+                    if let Some(handle_union_nullable) = interface
+                        .methods
+                        .iter()
+                        .find(|m| m.name == "handleUnionNullable")
+                    {
+                        let param_type = match &handle_union_nullable.params[0].param_type {
+                            Type::Group(inner) => &**inner,
+                            other => other,
+                        };
+
+                        if let Type::Optional(inner) = param_type {
+                            if let Type::Union(types) = &**inner {
+                                assert_eq!(types.len(), 2);
+                                assert!(types.iter().any(|t| matches!(t, Type::Bool)));
+                                assert!(types.iter().any(|t| matches!(t, Type::Object)));
+                            } else {
+                                panic!(
+                                    "Expected Optional(Union(_)) param type, got {:?}",
+                                    handle_union_nullable.params[0].param_type
+                                );
+                            }
+                        } else {
+                            panic!(
+                                "Expected optional union parameter type, got {:?}",
+                                handle_union_nullable.params[0].param_type
+                            );
+                        }
                     }
 
                     // 检查handleMap方法
