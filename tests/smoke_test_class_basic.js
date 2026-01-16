@@ -18,3 +18,29 @@ assert(b.value === 0, "Basic.value default");
 
 b.value = 7;
 assert(b.value === 7, "Basic.value set/get");
+
+// JS-only fields (instance)
+// Debug: print actual value when assertion fails.
+if (b.js_var !== "v0") {
+  throw new Error("Basic.js_var default (got: " + String(b.js_var) + ")");
+}
+// proto var default (inherited)
+assert(b.js_proto_var === 1, "Basic.js_proto_var default from prototype");
+
+// instance write should shadow prototype
+b.js_proto_var = 2;
+assert(b.js_proto_var === 2, "Basic.js_proto_var shadowed on instance");
+
+var b2 = new Basic();
+assert(b2.js_proto_var === 1, "Basic.js_proto_var unchanged for new instance");
+
+// JS-only instance field
+assert(b.js_var === "v0", "Basic.js_var default");
+
+b.js_var = "v1";
+assert(b.js_var === "v1", "Basic.js_var writable");
+
+var del_var = delete b.js_var;
+assert(del_var === true, "Basic.js_var delete returns true");
+assert(b.js_var === undefined, "Basic.js_var deleted");
+

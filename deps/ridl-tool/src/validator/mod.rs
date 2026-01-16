@@ -78,6 +78,9 @@ impl SemanticValidator {
         // 验证标识符命名
         self.validate_identifiers(idl);
 
+        // 语义约束：JS-only 字段与 native property 互斥等
+        self.validate_js_fields(idl);
+
         if self.errors.is_empty() {
             Ok(())
         } else {
@@ -266,7 +269,7 @@ impl SemanticValidator {
             }
         }
 
-        // 检查类中的方法、属性和构造函数
+        // 检查类中的方法、属性、JS-only 字段和构造函数
         for class in &idl.classes {
             for method in &class.methods {
                 self.check_for_keyword_usage(&method.name, "method name");
@@ -276,6 +279,9 @@ impl SemanticValidator {
             }
             for property in &class.properties {
                 self.check_for_keyword_usage(&property.name, "property name");
+            }
+            for f in &class.js_fields {
+                self.check_for_keyword_usage(&f.name, "js field name");
             }
             if let Some(ref constructor) = class.constructor {
                 for param in &constructor.params {
@@ -322,6 +328,52 @@ impl SemanticValidator {
             self.check_for_keyword_usage(&callback.name, "callback name");
             for param in &callback.params {
                 self.check_for_keyword_usage(&param.name, "parameter name");
+            }
+        }
+    }
+
+    fn validate_js_fields(&mut self, idl: &IDL) {
+        for class in &idl.classes {
+            // Disallow name collisions between js_fields and native properties.
+            for f in &class.js_fields {
+                if class.properties.iter().any(|p| p.name == f.name) {
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Invalid js field '{}': js-only fields cannot share name with native property in class '{}'",
+                            f.name, class.name
+                        ),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+
+                if class.methods.iter().any(|m| m.name == f.name) {
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Invalid js field '{}': js-only fields cannot share name with method in class '{}'",
+                            f.name, class.name
+                        ),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+
+                if f.name == "constructor" {
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Invalid js field '{}': reserved name in class '{}'",
+                            f.name, class.name
+                        ),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
             }
         }
     }

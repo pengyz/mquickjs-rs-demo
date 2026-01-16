@@ -240,6 +240,15 @@ struct TemplateClass {
     constructor: Option<TemplateFunction>,
     methods: Vec<TemplateMethod>,
     properties: Vec<crate::parser::ast::Property>,
+    js_fields: Vec<TemplateJsField>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateJsField {
+    name: String,
+    field_type: crate::parser::ast::Type,
+    init_literal: String,
+    is_proto: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -340,6 +349,18 @@ impl TemplateClass {
                 .map(|m| TemplateMethod::from_with_mode(m, file_mode))
                 .collect(),
             properties: class.properties,
+            js_fields: class
+                .js_fields
+                .into_iter()
+                .map(|f| TemplateJsField {
+                    name: f.name,
+                    field_type: f.field_type,
+                    init_literal: f.init_literal,
+                    is_proto: f
+                        .modifiers
+                        .contains(&crate::parser::ast::PropertyModifier::Proto),
+                })
+                .collect(),
         }
     }
 }

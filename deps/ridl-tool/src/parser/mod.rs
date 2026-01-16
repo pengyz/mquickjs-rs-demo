@@ -227,6 +227,7 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
     // 解析类体
     let mut methods = Vec::new();
     let mut properties = Vec::new();
+    let mut js_fields = Vec::new();
     let mut constructor = None;
 
     for pair in class_pairs {
@@ -260,8 +261,16 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                         properties.push(prop);
                     }
                     Rule::const_member => {
-                        let prop = parse_const_property(member_pair)?; // 修复函数名
-                        properties.push(prop);
+                        return Err("`const` is not supported in mquickjs RIDL; use `var`".into());
+                    }
+                    Rule::var_member => {
+                        let f = parse_var_field(member_pair)?;
+                        js_fields.push(f);
+                    }
+                    Rule::proto_var_member => {
+                        let mut f = parse_var_field(member_pair)?;
+                        f.modifiers.insert(0, crate::parser::ast::PropertyModifier::Proto);
+                        js_fields.push(f);
                     }
                     Rule::method_def => {
                         let method = parse_method(member_pair)?;
@@ -286,52 +295,53 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
         constructor,
         methods,
         properties,
+        js_fields,
         module: None,
     })
 }
 
-fn parse_const_property(
+fn parse_var_field(
     pair: pest::iterators::Pair<Rule>,
-) -> Result<Property, Box<dyn std::error::Error>> {
+) -> Result<crate::parser::ast::JsField, Box<dyn std::error::Error>> {
     let inner_pairs = pair.into_inner();
-
-    // 过滤掉WS规则，只保留有意义的元素
     let elements: Vec<_> = inner_pairs.filter(|p| p.as_rule() != Rule::WS).collect();
 
     if elements.len() < 3 {
         return Err(format!(
-            "Expected at least 3 elements for const property, got {}",
+            "Expected at least 3 elements for var field, got {}",
             elements.len()
         )
         .into());
     }
 
     let mut iter = elements.into_iter();
+    let name_pair = iter.next().ok_or("Expected identifier for var field")?;
+    let name = name_pair.as_str().to_string();
 
-    // 第一个非WS元素应该是标识符（属性名）
-    let identifier_pair = iter
-        .next()
-        .ok_or("Expected identifier for const property")?;
-    if identifier_pair.as_rule() != Rule::identifier {
-        return Err(format!("Expected identifier, got {:?}", identifier_pair.as_rule()).into());
-    }
-    let name = identifier_pair.as_str().to_string();
-
-    // 第二个非WS元素应该是类型
-    let type_pair = iter.next().ok_or("Expected type for const property")?;
+    let type_pair = iter.next().ok_or("Expected type for var field")?;
     let property_type = parse_type(type_pair)?;
 
-    // 第三个非WS元素应该是字面量值
     let literal_pair = iter
         .next()
-        .ok_or("Expected literal value for const property")?;
-    let default_value = parse_literal(literal_pair)?;
+        .ok_or("Expected literal value for var field")?;
+    let init_literal = match property_type {
+        crate::parser::ast::Type::String => {
+            let s = literal_pair.as_str();
+            // grammar keeps quotes; strip surrounding quotes for runtime string creation.
+            s.strip_prefix('"')
+                .and_then(|x| x.strip_suffix('"'))
+                .unwrap_or(s)
+                .to_string()
+        }
+        _ => literal_pair.as_str().to_string(),
+    };
 
-    Ok(Property {
-        modifiers: vec![PropertyModifier::Const],
+    Ok(crate::parser::ast::JsField {
+        kind: crate::parser::ast::JsFieldKind::Var,
+        modifiers: Vec::new(),
         name,
-        property_type,
-        default_value: Some(default_value),
+        field_type: property_type,
+        init_literal,
     })
 }
 
@@ -370,7 +380,6 @@ fn parse_readonly_property(
         modifiers: vec![PropertyModifier::ReadOnly],
         name,
         property_type,
-        default_value: None,
     })
 }
 
@@ -411,7 +420,6 @@ fn parse_readwrite_property(
         modifiers: vec![PropertyModifier::ReadWrite],
         name,
         property_type,
-        default_value: None,
     })
 }
 
@@ -452,7 +460,6 @@ fn parse_normal_property(
         modifiers: vec![PropertyModifier::ReadWrite], // 普通属性默认可读写
         name,
         property_type,
-        default_value: None,
     })
 }
 
@@ -971,6 +978,7 @@ fn parse_nullable_type(
     Err("Nullable type has no base type".into())
 }
 
+#[allow(dead_code)]
 fn parse_literal(pair: pest::iterators::Pair<Rule>) -> Result<String, Box<dyn std::error::Error>> {
     Ok(pair.as_str().to_string())
 }
@@ -1093,8 +1101,7 @@ fn parse_singleton(
                         properties.push(prop);
                     }
                     Rule::normal_prop => {
-                        let prop = parse_normal_property(member_pair)?;
-                        properties.push(prop);
+                        return Err("`normal_prop` is not supported in singleton; use `property`".into());
                     }
                     _ => {}
                 }
@@ -1203,8 +1210,8 @@ mod tests {
     fn test_parse_class_with_properties() {
         let ridl = r#"
         class Person {
-            name: string;
-            age: int;
+            var name: string = "";
+            var age: int = 0;
             Person(name: string, age: int);
             fn getName() -> string;
             fn getAge() -> int;
@@ -1219,17 +1226,17 @@ mod tests {
                 match &items[0] {
                     IDLItem::Class(class) => {
                         assert_eq!(class.name, "Person");
-                        assert_eq!(class.properties.len(), 2);
+                        assert_eq!(class.js_fields.len(), 2);
                         assert!(class.constructor.is_some());
                         assert_eq!(class.methods.len(), 3);
 
-                        let prop1 = &class.properties[0];
-                        assert_eq!(prop1.name, "name");
-                        assert_eq!(prop1.property_type, Type::String);
+                        let f1 = &class.js_fields[0];
+                        assert_eq!(f1.name, "name");
+                        assert_eq!(f1.field_type, Type::String);
 
-                        let prop2 = &class.properties[1];
-                        assert_eq!(prop2.name, "age");
-                        assert_eq!(prop2.property_type, Type::Int);
+                        let f2 = &class.js_fields[1];
+                        assert_eq!(f2.name, "age");
+                        assert_eq!(f2.field_type, Type::Int);
 
                         let constructor = class.constructor.as_ref().unwrap();
                         assert_eq!(constructor.name, "Person");
@@ -1743,9 +1750,8 @@ mod tests {
     fn test_class_definition() {
         let input = r#"
         class TestClass {
-            name: string;
-            age: int;
-            const MAX_AGE: int = 150;
+            var name: string = "";
+            var age: int = 0;
             readonly property enabled: bool;
             TestClass(name: string, age: int);
             fn getName() -> string;
@@ -1865,7 +1871,7 @@ mod tests {
         }
         
         class UserProcessor {
-            cache: map<UserId, Person>?;
+            var cache: any = null;
             UserProcessor();
             fn processUser(user: Person) -> bool;
         }
@@ -1882,7 +1888,7 @@ mod tests {
         "#;
 
         let result = IDLParser::parse(Rule::idl, input);
-        assert!(result.is_ok());
+        assert!(result.is_ok(), "parse failed: {:?}", result.err());
     }
 
     // 模块化定义测试

@@ -47,6 +47,7 @@ pub struct Class {
     pub constructor: Option<Function>,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
+    pub js_fields: Vec<JsField>,
     pub module: Option<ModuleDeclaration>,
 }
 
@@ -95,15 +96,28 @@ pub struct Property {
     pub modifiers: Vec<PropertyModifier>,
     pub name: String,
     pub property_type: Type,
-    pub default_value: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum PropertyModifier {
     ReadOnly,
     ReadWrite,
-    Const,
     Proto,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum JsFieldKind {
+    Var,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct JsField {
+    pub kind: JsFieldKind,
+    pub modifiers: Vec<PropertyModifier>,
+    pub name: String,
+    pub field_type: Type,
+    // Literal text after parsing; limited to parser literal subset.
+    pub init_literal: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

@@ -9,6 +9,15 @@ use std::path::Path;
 struct RidlRuntimeSupportTemplate {
     slots: Vec<Slot>,
     slot_inits: Vec<SlotInit>,
+    proto_vars: Vec<ProtoVarInit>,
+}
+
+#[derive(Debug, Clone)]
+struct ProtoVarInit {
+    class_name: String,
+    field_name: String,
+    field_type: crate::parser::ast::Type,
+    init_literal: String,
 }
 
 #[derive(Debug, Clone)]
@@ -35,6 +44,7 @@ pub fn generate_ridl_runtime_support(
     // Slot indices are global within an app aggregate.
     let mut slots: Vec<Slot> = Vec::new();
     let mut slot_inits: Vec<SlotInit> = Vec::new();
+    let mut proto_vars: Vec<ProtoVarInit> = Vec::new();
     // Temporary: used for mapping slot_key -> final sorted index (filled after sorting).
     let mut slot_map: BTreeMap<String, u32> = BTreeMap::new();
     let mut proto_keys: BTreeMap<String, String> = BTreeMap::new();
@@ -48,17 +58,10 @@ pub fn generate_ridl_runtime_support(
                 match item {
                     crate::parser::ast::IDLItem::Singleton(s) => {
                         let name = sanitize_ident(&s.name);
-                        let name_key = name.to_lowercase();
 
-                        let slot_index = *slot_map.entry(name_key.clone()).or_insert_with(|| {
-                            let next = slots.len() as u32;
-                            slots.push(Slot {
-                                name: name.clone(),
-                                index: next,
-                            });
-                            next
-                        });
-
+                        // Singleton slot indices must be globally unique across modules.
+                        // Use the same key as slot_inits (module_ns + singleton name),
+                        // not just the singleton name.
                         let module_ns = parsed
                             .module
                             .as_ref()
@@ -66,11 +69,21 @@ pub fn generate_ridl_runtime_support(
                             .unwrap_or("GLOBAL");
                         let module_ns = sanitize_ident(module_ns).to_lowercase();
 
+                        let slot_key = format!("singleton_{}_{}", module_ns, name.to_lowercase());
+                        let slot_index = *slot_map.entry(slot_key.clone()).or_insert_with(|| {
+                            let next = slots.len() as u32;
+                            slots.push(Slot {
+                                name: slot_key.clone(),
+                                index: next,
+                            });
+                            next
+                        });
+
                         slot_inits.push(SlotInit {
                             crate_name: m.crate_name.clone(),
                             slot_index,
                             vt_ident: format!("RIDL_{}_CTX_SLOT_VT", name.to_uppercase()),
-                            slot_key: format!("singleton_{}_{}", module_ns, name.to_lowercase()),
+                            slot_key: slot_key.clone(),
                         });
                     }
                     crate::parser::ast::IDLItem::Class(c) => {
@@ -79,6 +92,24 @@ pub fn generate_ridl_runtime_support(
                             .properties
                             .iter()
                             .any(|p| p.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto));
+                        if !has_proto {
+                            // Note: proto vars are installed on JS prototype, independent from proto state.
+                            // We still need to collect them even when there's no proto state.
+                        }
+
+                        // Collect proto vars to be installed as JS prototype data properties.
+                        for f in &c.js_fields {
+                            if !f.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto) {
+                                continue;
+                            }
+                            proto_vars.push(ProtoVarInit {
+                                class_name: c.name.clone(),
+                                field_name: f.name.clone(),
+                                field_type: f.field_type.clone(),
+                                init_literal: f.init_literal.clone(),
+                            });
+                        }
+
                         if !has_proto {
                             continue;
                         }
@@ -183,7 +214,11 @@ pub fn generate_ridl_runtime_support(
         }
     }
 
-    let t = RidlRuntimeSupportTemplate { slots, slot_inits };
+    let t = RidlRuntimeSupportTemplate {
+        slots,
+        slot_inits,
+        proto_vars,
+    };
     std::fs::write(out_dir.join("ridl_runtime_support.rs"), t.render()?)?;
     Ok(())
 }
