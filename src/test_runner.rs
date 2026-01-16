@@ -38,8 +38,13 @@ pub fn collect_js_files(path: &Path) -> Result<Vec<PathBuf>, String> {
 }
 
 pub fn run_one_js_file(path: &Path) -> Result<(), String> {
-    let script =
+    let mut script =
         fs::read_to_string(path).map_err(|e| format!("failed to read {}: {e}", path.display()))?;
+
+    // Some editors may add an UTF-8 BOM; QuickJS doesn't accept it.
+    if script.starts_with('\u{feff}') {
+        script = script.trim_start_matches('\u{feff}').to_string();
+    }
 
     // Process-level RIDL initialization is owned by the application entrypoint.
     // Unit tests for this crate may run without ridl-extensions.
@@ -48,8 +53,9 @@ pub fn run_one_js_file(path: &Path) -> Result<(), String> {
     // ridl_context_init() is applied and singleton slots are filled.
     let mut context = crate::Context::default();
 
-    context
-        .eval(&script)
-        .map(|_result| ())
-        .map_err(|e| format!("eval failed: {e}"))
+    context.eval(&script).map(|_result| ()).map_err(|e| {
+        // Include file path and a short prefix to help diagnose syntax errors.
+        let prefix: String = script.chars().take(80).collect();
+        format!("eval failed: {e}\n  file: {}\n  prefix: {:?}", path.display(), prefix)
+    })
 }

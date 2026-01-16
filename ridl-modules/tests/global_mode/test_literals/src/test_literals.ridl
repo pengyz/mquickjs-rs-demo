@@ -1,0 +1,5 @@
+mode strict;
+
+singleton TestLiterals {
+    fn getStringWithEscapes() -> void;
+}

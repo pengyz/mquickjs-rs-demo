@@ -1,0 +1,8 @@
+mode strict;
+
+// global_mode: keep minimal surface for now.
+// We will add import/using cases after module_mode lands.
+
+singleton TestImportUsing {
+    fn ping() -> int;
+}

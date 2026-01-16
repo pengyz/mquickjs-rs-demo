@@ -1,0 +1,9 @@
+mode strict;
+
+class User {
+    fn getName() -> string;
+}
+
+singleton TestClass {
+    fn makeUser(name: string) -> User;
+}

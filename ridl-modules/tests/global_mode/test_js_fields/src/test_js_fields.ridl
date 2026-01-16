@@ -1,0 +1,5 @@
+mode strict;
+
+singleton TestJsFields {
+    fn getNullAny() -> any;
+}

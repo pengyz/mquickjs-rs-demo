@@ -1,0 +1,16 @@
+mode strict;
+
+enum Color {
+    Red = 1;
+    Green = 2;
+}
+
+msgpack struct Msg {
+    id: int;
+    text: string;
+}
+
+singleton TestStructEnum {
+    fn getRed() -> Color;
+    fn makeMsg(id: int, text: string) -> Msg;
+}

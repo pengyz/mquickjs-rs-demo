@@ -1,0 +1,6 @@
+mode strict;
+
+singleton TestFn {
+    // v1 glue currently supports primitive conversions for strict mode.
+    fn addInt(a: int, b: int) -> void;
+}

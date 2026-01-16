@@ -1,0 +1,5 @@
+mode strict;
+
+singleton TestDiagnostics {
+    fn ok() -> bool;
+}

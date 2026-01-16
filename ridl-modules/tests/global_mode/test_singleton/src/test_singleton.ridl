@@ -1,0 +1,5 @@
+mode strict;
+
+singleton TestSingleton {
+    fn ping() -> string;
+}
