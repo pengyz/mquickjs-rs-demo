@@ -64,13 +64,22 @@ impl Default for DefaultConsoleSingleton {
 }
 
 impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
-    fn log(&mut self, ctx: *mut JSContext, args: Vec<JSValue>) {
-        print_js_values(ctx, &args, false);
+    fn log(&mut self, args: Vec<mquickjs_rs::ValueRef<'_>>) {
+        // Keep v1 behavior: format via QuickJS C API.
+        // NOTE: ValueRef is a borrowed view; we can pass through raw values.
+        // TODO: if we later want to avoid using C string conversion here, implement formatting in Rust.
+        let Some(h) = mquickjs_rs::context::ContextHandle::current() else {
+            return;
+        };
+        print_js_values(h.ctx, &args.iter().map(|v| v.as_raw()).collect::<Vec<_>>(), false);
         println!();
     }
 
-    fn error(&mut self, ctx: *mut JSContext, args: Vec<JSValue>) {
-        print_js_values(ctx, &args, true);
+    fn error(&mut self, args: Vec<mquickjs_rs::ValueRef<'_>>) {
+        let Some(h) = mquickjs_rs::context::ContextHandle::current() else {
+            return;
+        };
+        print_js_values(h.ctx, &args.iter().map(|v| v.as_raw()).collect::<Vec<_>>(), true);
         eprintln!();
     }
 
@@ -79,13 +88,6 @@ impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
     }
 }
 
-pub fn ridl_create_console_singleton_impl() -> Box<dyn crate::api::ConsoleSingleton> {
+pub fn create_console_singleton() -> Box<dyn crate::api::ConsoleSingleton> {
     Box::new(DefaultConsoleSingleton::default())
-}
-
-#[unsafe(no_mangle)]
-pub extern "C" fn ridl_create_console_singleton() -> *mut core::ffi::c_void {
-    let b: Box<dyn crate::api::ConsoleSingleton> = ridl_create_console_singleton_impl();
-    let holder: Box<Box<dyn crate::api::ConsoleSingleton>> = Box::new(b);
-    Box::into_raw(holder) as *mut core::ffi::c_void
 }

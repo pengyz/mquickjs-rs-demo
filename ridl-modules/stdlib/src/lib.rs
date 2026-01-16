@@ -4,9 +4,9 @@ pub mod impls {
     pub use crate::api::ConsoleSingleton;
 
     pub use crate::stdlib_impl::DefaultConsoleSingleton;
+
+    pub use crate::stdlib_impl::create_console_singleton;
 }
 
 mod stdlib_impl;
-
-pub use stdlib_impl::ridl_create_console_singleton;
 
