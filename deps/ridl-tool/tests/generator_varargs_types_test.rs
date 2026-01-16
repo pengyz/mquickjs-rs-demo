@@ -12,7 +12,7 @@ fn h(...rest_b: bool) -> void;
     ridl_tool::validator::validate_with_mode(&parsed.items, parsed.mode).expect("validate ridl");
 
     let tmp = tempfile::tempdir().expect("tempdir");
-    ridl_tool::generator::generate_module_files(&parsed.items, parsed.mode, tmp.path(), "demo")
+    ridl_tool::generator::generate_module_files(&parsed.items, parsed.module.clone(), parsed.mode, tmp.path(), "demo")
         .expect("generate module files");
 
     let glue = fs::read_to_string(tmp.path().join("glue.rs")).expect("read glue");

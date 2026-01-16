@@ -33,7 +33,7 @@ fn ok(...args: any) -> void;
     )
     .unwrap();
 
-    generate_module_files(&parsed.items, parsed.mode, &out_dir, "m").unwrap();
+    generate_module_files(&parsed.items, parsed.module.clone(), parsed.mode, &out_dir, "m").unwrap();
 
     let glue = fs::read_to_string(out_dir.join("glue.rs")).unwrap();
 
