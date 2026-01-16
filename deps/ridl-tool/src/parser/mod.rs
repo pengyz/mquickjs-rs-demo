@@ -13,6 +13,12 @@ use ast::{
     Property, PropertyModifier, SerializationFormat, StructDef, Type,
 };
 
+fn pair_pos(pair: &pest::iterators::Pair<Rule>) -> ast::SourcePos {
+    let (line, column) = pair.line_col();
+    ast::SourcePos { line, column }
+}
+
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileMode {
     Default,
@@ -95,6 +101,7 @@ pub fn parse_ridl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::E
 fn parse_module_decl(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<ModuleDeclaration, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let mut inner_pairs = pair.into_inner();
 
     // module_path
@@ -110,6 +117,7 @@ fn parse_module_decl(
     Ok(ModuleDeclaration {
         module_path,
         version,
+        pos,
     })
 }
 
@@ -215,6 +223,7 @@ fn parse_interface(
 }
 
 fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let class_pairs = pair.into_inner();
 
     // 获取类名
@@ -292,6 +301,7 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
 
     Ok(Class {
         name,
+        pos,
         constructor,
         methods,
         properties,
@@ -303,6 +313,7 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
 fn parse_var_field(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<crate::parser::ast::JsField, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let inner_pairs = pair.into_inner();
     let elements: Vec<_> = inner_pairs.filter(|p| p.as_rule() != Rule::WS).collect();
 
@@ -340,6 +351,7 @@ fn parse_var_field(
         kind: crate::parser::ast::JsFieldKind::Var,
         modifiers: Vec::new(),
         name,
+        pos,
         field_type: property_type,
         init_literal,
     })
@@ -1071,6 +1083,7 @@ fn parse_import_list(
 fn parse_singleton(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<Singleton, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let mut inner_pairs = pair.into_inner();
 
     // identifier
@@ -1113,6 +1126,7 @@ fn parse_singleton(
 
     Ok(Singleton {
         name,
+        pos,
         methods,
         properties,
         module: None,

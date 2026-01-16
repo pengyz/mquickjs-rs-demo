@@ -2,9 +2,17 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct SourcePos {
+    pub line: usize,
+    pub column: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ModuleDeclaration {
     pub module_path: String,
     pub version: Option<String>,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -44,6 +52,8 @@ pub struct Interface {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Class {
     pub name: String,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
     pub constructor: Option<Function>,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
@@ -69,6 +79,8 @@ pub struct StructDef {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Singleton {
     pub name: String,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
     pub module: Option<ModuleDeclaration>,
@@ -115,6 +127,8 @@ pub struct JsField {
     pub kind: JsFieldKind,
     pub modifiers: Vec<PropertyModifier>,
     pub name: String,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
     pub field_type: Type,
     // Literal text after parsing; limited to parser literal subset.
     pub init_literal: String,

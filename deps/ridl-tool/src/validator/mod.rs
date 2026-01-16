@@ -334,16 +334,22 @@ impl SemanticValidator {
 
     fn validate_js_fields(&mut self, idl: &IDL) {
         for class in &idl.classes {
-            // Disallow name collisions between js_fields and native properties.
+            // Disallow name collisions between js_fields and native properties/methods/ctor.
             for f in &class.js_fields {
+                let (line, col) = f
+                    .pos
+                    .as_ref()
+                    .map(|p| (p.line, p.column))
+                    .unwrap_or((0, 0));
+
                 if class.properties.iter().any(|p| p.name == f.name) {
                     self.errors.push(RIDLError::new(
                         format!(
                             "Invalid js field '{}': js-only fields cannot share name with native property in class '{}'",
                             f.name, class.name
                         ),
-                        0,
-                        0,
+                        line,
+                        col,
                         self.file_path.clone(),
                         RIDLErrorType::SemanticError,
                     ));
@@ -355,8 +361,8 @@ impl SemanticValidator {
                             "Invalid js field '{}': js-only fields cannot share name with method in class '{}'",
                             f.name, class.name
                         ),
-                        0,
-                        0,
+                        line,
+                        col,
                         self.file_path.clone(),
                         RIDLErrorType::SemanticError,
                     ));
@@ -368,8 +374,89 @@ impl SemanticValidator {
                             "Invalid js field '{}': reserved name in class '{}'",
                             f.name, class.name
                         ),
-                        0,
-                        0,
+                        line,
+                        col,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+
+                // MVP literal/type constraints.
+                // - Only primitive + null are supported for now.
+                // - Custom types may only be initialized with null.
+                match &f.field_type {
+                    Type::Bool | Type::Int | Type::Float | Type::Double | Type::String | Type::Null => {}
+                    Type::Custom(_) => {
+                        if f.init_literal != "null" {
+                            self.errors.push(RIDLError::new(
+                                format!(
+                                    "Invalid js field '{}': custom type can only be initialized with null in MVP",
+                                    f.name
+                                ),
+                                line,
+                                col,
+                                self.file_path.clone(),
+                                RIDLErrorType::SemanticError,
+                            ));
+                        }
+                    }
+                    _ => {
+                        self.errors.push(RIDLError::new(
+                            format!(
+                                "Invalid js field '{}': unsupported js-only field type '{:?}' in MVP",
+                                f.name, f.field_type
+                            ),
+                            line,
+                            col,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
+                    }
+                }
+            }
+
+            // Disallow duplicate names among js_fields themselves.
+            let mut js_names = std::collections::HashMap::<&str, usize>::new();
+            for f in &class.js_fields {
+                *js_names.entry(&f.name).or_insert(0) += 1;
+            }
+            for (name, cnt) in js_names {
+                if cnt > 1 {
+                    let (line, col) = class
+                        .pos
+                        .as_ref()
+                        .map(|p| (p.line, p.column))
+                        .unwrap_or((0, 0));
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Duplicate js field '{}': js-only fields must have unique names within class '{}'",
+                            name, class.name
+                        ),
+                        line,
+                        col,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+            }
+        }
+
+        // Ensure singletons do not use proto property modifiers (parser should already reject).
+        for singleton in &idl.singletons {
+            for p in &singleton.properties {
+                if p.modifiers.contains(&PropertyModifier::Proto) {
+                    let (line, col) = singleton
+                        .pos
+                        .as_ref()
+                        .map(|p| (p.line, p.column))
+                        .unwrap_or((0, 0));
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Invalid singleton property '{}': singleton cannot declare proto property",
+                            p.name
+                        ),
+                        line,
+                        col,
                         self.file_path.clone(),
                         RIDLErrorType::SemanticError,
                     ));
