@@ -26,12 +26,19 @@ fn js_smoke_tests() {
 
     let total = files.len();
 
+    let summary = mquickjs_demo::test_runner::run_files_with_summary(&files);
+
     let mut failures: Vec<(PathBuf, String)> = Vec::new();
     for f in files {
         if let Err(e) = mquickjs_demo::test_runner::run_one_js_file(&f) {
             failures.push((f, e));
         }
     }
+
+    assert_eq!(
+        summary.total.total, total,
+        "summary total should match file count"
+    );
 
     if !failures.is_empty() {
         eprintln!("JS smoke failures: {}/{}", failures.len(), total);

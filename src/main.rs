@@ -10,44 +10,71 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    if args.len() < 2 {
-        eprintln!("Usage: {} <js-file-or-dir>", args[0]);
-        process::exit(2);
-    }
-
-    let path = Path::new(&args[1]);
-    let files = match test_runner::collect_js_files(path) {
-        Ok(v) => v,
-        Err(e) => {
-            eprintln!("Error: {e}");
-            process::exit(2);
+    let files = if args.len() < 2 {
+        // Temporary hard-coded defaults (per repo convention):
+        // - tests/: framework-level integration tests
+        // - ridl-modules/: module-level tests
+        let mut all = Vec::new();
+        for p in [Path::new("tests"), Path::new("ridl-modules")] {
+            match test_runner::collect_js_files(p) {
+                Ok(mut v) => all.append(&mut v),
+                Err(e) => {
+                    eprintln!("Error: {e}");
+                    process::exit(2);
+                }
+            }
+        }
+        all
+    } else {
+        let path = Path::new(&args[1]);
+        match test_runner::collect_js_files(path) {
+            Ok(v) => v,
+            Err(e) => {
+                eprintln!("Error: {e}");
+                process::exit(2);
+            }
         }
     };
 
     if files.is_empty() {
-        eprintln!("No .js files found under: {}", path.display());
+        eprintln!("No .js files found under default roots (tests/, ridl-modules/) or provided path");
         process::exit(2);
     }
 
-    let mut failed = 0usize;
+    println!("[==========] Running {} JS tests.", files.len());
+
     for f in &files {
         match test_runner::run_one_js_file(f) {
             Ok(()) => {
                 println!("PASS {}", f.display());
             }
             Err(err) => {
-                failed += 1;
                 println!("FAIL {}", f.display());
                 eprintln!("  {err}");
             }
         }
     }
 
-    let total = files.len();
-    let passed = total - failed;
-    println!("\nSummary: {passed}/{total} passed");
+    let summary = test_runner::run_files_with_summary(&files);
 
-    if failed == 0 {
+    println!("\n[----------] Group summary:");
+    for (k, c) in &summary.by_group {
+        println!(
+            "[----------] {:<32} {} tests, {} passed, {} failed",
+            k, c.total, c.passed, c.failed
+        );
+    }
+
+    println!(
+        "\n[==========] {} tests ran.",
+        summary.total.total
+    );
+    println!("[  PASSED  ] {} tests.", summary.total.passed);
+    if summary.total.failed > 0 {
+        println!("[  FAILED  ] {} tests.", summary.total.failed);
+    }
+
+    if summary.total.failed == 0 {
         process::exit(0);
     }
     process::exit(1);

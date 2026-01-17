@@ -72,13 +72,11 @@ ridl-modules/
 
 为了满足“所有 JS 用例都迁移到模块目录”，本阶段计划将 repo 根 `tests/` 改为：
 
-- 仅保留一个入口目录 `tests/`，其下包含：
-  - `tests/ridl-modules/` -> 指向 `ridl-modules/` 的目录链接（或复制目录结构）
+- runner 未传参时默认扫描 `tests/` 与 `ridl-modules/`（临时写死），不再依赖 `tests/ridl-modules` 软链接。
 
-然后 `cargo run -- tests` 仍然递归扫描 `tests/`，从而覆盖所有模块内 tests。
+然后 `cargo run -- tests` 会递归扫描 `tests/` 与 `ridl-modules/`。
 
-> 注意：这是过渡方案，避免立刻修改 runner。
-> 后续可以再把 runner 入口从 `tests/` 改为直接扫描 `ridl-modules/**/tests/*.js`。
+> 注意：这是过渡方案：先把框架级用例收敛到 `tests/global/**`，并让 runner 同时扫描两棵树；后续再补选择/过滤规则。
 
 ## 分组维度说明
 

@@ -43,7 +43,7 @@
   - 提供迁移路径/兼容策略（必要时）。
 
 ### 6. runner：去掉 tests/ridl-modules 软链接兼容层
-- 现状：runner 通过 `tests/ridl-modules -> ../ridl-modules` 过渡来发现模块内 tests。
+- 现状：runner 未传参时默认扫描 `tests/` 与 `ridl-modules/`。
 - 产出：runner 原生扫描仓库根 `ridl-modules/**/tests/**/*.js`。
 
 ## 工作方式

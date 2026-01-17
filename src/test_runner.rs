@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -58,4 +59,76 @@ pub fn run_one_js_file(path: &Path) -> Result<(), String> {
         let prefix: String = script.chars().take(80).collect();
         format!("eval failed: {e}\n  file: {}\n  prefix: {:?}", path.display(), prefix)
     })
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct CaseCounts {
+    pub total: usize,
+    pub passed: usize,
+    pub failed: usize,
+}
+
+impl CaseCounts {
+    pub fn record_ok(&mut self) {
+        self.total += 1;
+        self.passed += 1;
+    }
+
+    pub fn record_fail(&mut self) {
+        self.total += 1;
+        self.failed += 1;
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct RunSummary {
+    pub by_group: BTreeMap<String, CaseCounts>,
+    pub total: CaseCounts,
+}
+
+pub fn group_key_for_path(path: &Path) -> String {
+    // Grouping heuristics (stable, path-based):
+    // - tests/global/<group>/... -> global/<group>
+    // - ridl-modules/tests/<mode>/<module>/... -> <mode>/<module>
+    // - ridl-modules/<module>/tests/... -> module/<module>
+    let parts: Vec<String> = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().to_string())
+        .collect();
+
+    if parts.len() >= 3 && parts[0] == "tests" && parts[1] == "global" {
+        return format!("global/{}", parts[2]);
+    }
+
+    if parts.len() >= 5 && parts[0] == "ridl-modules" && parts[1] == "tests" {
+        return format!("{}/{}", parts[2], parts[3]);
+    }
+
+    if parts.len() >= 3 && parts[0] == "ridl-modules" {
+        return format!("module/{}", parts[1]);
+    }
+
+    "ungrouped".to_string()
+}
+
+pub fn run_files_with_summary(files: &[PathBuf]) -> RunSummary {
+    let mut summary = RunSummary::default();
+
+    for f in files {
+        let group = group_key_for_path(f);
+        let g = summary.by_group.entry(group).or_default();
+
+        match run_one_js_file(f) {
+            Ok(()) => {
+                summary.total.record_ok();
+                g.record_ok();
+            }
+            Err(_e) => {
+                summary.total.record_fail();
+                g.record_fail();
+            }
+        }
+    }
+
+    summary
 }

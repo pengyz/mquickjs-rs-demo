@@ -40,8 +40,8 @@
 ## P1：测试组织与基础设施
 
 ### 6) 测试目录与 runner 扫描
-- 现状：通过 `tests/ridl-modules -> ../ridl-modules` 软链接过渡，`cargo run -- tests` 仍可发现模块内 tests。
-- 待办：runner 原生支持扫描 `ridl-modules/**/tests/**/*.js`，并最终移除过渡入口或仅保留兼容。
+- 现状：runner 未传参时默认扫描 `tests/` 与 `ridl-modules/`。
+- 待办：进一步明确“框架用例 vs 功能模块用例”的选择规则（本次先不做筛选），并完善 runner 的扫描/过滤策略。
 
 ### 7) 测试模块与功能模块的同构组织
 - 约定：功能模块（如 stdlib）与框架测试模块在组织上同构（`src/*.ridl` + `tests/*.js`），差异仅在存放位置/用途。
