@@ -67,7 +67,7 @@
 - `ridl_include_module!` 相关 glue 引用路径是否依赖特定命名
 
 3. 测试模块与功能模块手写 impl：
-- `ridl-modules/tests/global_mode/**/src/*_impl.rs`
+- `tests/global/**/src/*_impl.rs`
 - 以及任何使用生成 trait 名/方法名/ctor 名的模块
 
 4. app 侧聚合/注册：

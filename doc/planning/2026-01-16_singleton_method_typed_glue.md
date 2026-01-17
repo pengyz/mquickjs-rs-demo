@@ -65,7 +65,7 @@ fn foo(&mut self, a: T1, b: T2, ...) -> R
 
 **阶段 A（语义对齐，先跑通现有用例）**
 - 先让 singleton method 的签名与 glue 调用闭合（强类型化）。
-- **类型集合范围说明（阶段A）：仅覆盖当前仓库里 stdlib + ridl-modules/tests/global_mode 现有用例实际用到的类型。**
+- **类型集合范围说明（阶段A）：仅覆盖当前仓库里 stdlib + tests/global 现有用例实际用到的类型。**
   - 未覆盖到的类型路径继续 `compile_error!`，避免静默错误。
 - `any` 在 Rust 边界统一为 `mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>`（不允许用户代码使用裸 `JSValue`）。
 - variadic（...）允许，且与 class method 设计一致：Rust 侧签名为 `Vec<T>`。

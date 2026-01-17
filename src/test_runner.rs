@@ -89,7 +89,7 @@ pub struct RunSummary {
 pub fn group_key_for_path(path: &Path) -> String {
     // Grouping heuristics (stable, path-based):
     // - tests/global/<group>/... -> global/<group>
-    // - ridl-modules/tests/<mode>/<module>/... -> <mode>/<module>
+    // - tests/<mode>/<module>/... -> <mode>/<module>
     // - ridl-modules/<module>/tests/... -> module/<module>
     let parts: Vec<String> = path
         .components()

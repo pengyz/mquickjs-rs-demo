@@ -3,7 +3,7 @@
 ## 目标
 
 - 将所有 JS 集成用例从 repo 根 `tests/` 迁移到对应 RIDL module 内部（模块自带 tests 目录）。
-- 按测试维度重组为若干“测试模块”（framework-level），位于：`ridl-modules/tests/`。
+- 按测试维度重组为若干“测试模块”（framework-level），位于：`tests/global/`。
 - 功能模块（例如 `ridl-modules/stdlib`）也可以拥有自己的模块内 JS 用例，用于验证业务/功能正确性。
 
 ## 约束与现状
@@ -55,16 +55,16 @@ ridl-modules/
   - `tests/smoke_console_log_varargs.js` -> `ridl-modules/stdlib/tests/console_log_varargs.js`
 
 - class 相关（现有 `tests/smoke_test_class_*`）：
-  - 迁移到 framework 模块：`ridl-modules/tests/test_class/tests/`
+  - 迁移到 framework 模块：`tests/global/test_class/tests/`
     - `smoke_test_class_basic.js` -> `basic.js`
     - `smoke_test_class_proto.js` -> `proto.js`
     - `smoke_test_class_errors.js` -> `errors.js`
 
 - ridl demo / glue / varargs：
   - 暂时归入 `test_fn`（后续如需可拆 `test_glue` / `test_variadic`）
-    - `tests/smoke_ridl_strict_demo.js` -> `ridl-modules/tests/test_fn/tests/strict_demo.js`
-    - `tests/smoke_ridl_v1_glue.js` -> `ridl-modules/tests/test_fn/tests/v1_glue.js`
-    - `tests/smoke_ridl_varargs.js` -> `ridl-modules/tests/test_fn/tests/varargs.js`
+    - `tests/smoke_ridl_strict_demo.js` -> `tests/global/fn/test_fn/tests/strict_demo.js`
+    - `tests/smoke_ridl_v1_glue.js` -> `tests/global/fn/test_fn/tests/v1_glue.js`
+    - `tests/smoke_ridl_varargs.js` -> `tests/global/fn/test_fn/tests/varargs.js`
 
 ## 运行方式（本阶段）
 

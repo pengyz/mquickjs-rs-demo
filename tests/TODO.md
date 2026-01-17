@@ -23,7 +23,7 @@
 ### 3. ridl-builder 聚合链路：enum/struct/msgpack struct 端到端
 - 现象：聚合链路对包含 enum/struct 的 RIDL 文件解析不一致，导致 test_struct_enum 暂缓。
 - 产出：
-  - `ridl-modules/tests/global_mode/test_struct_enum` 纳入 app 依赖
+  - `tests/global/test_struct_enum` 纳入 app 依赖
   - 新增/恢复 JS 用例并通过。
 
 ### 4. class glue：修复生成代码错误与 constructor hook 约定

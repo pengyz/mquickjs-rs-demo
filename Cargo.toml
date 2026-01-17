@@ -9,17 +9,17 @@ members = [
     "deps/mquickjs-build",
     "ridl-builder",
 
-    "ridl-modules/tests/global_mode/test_types",
-    "ridl-modules/tests/global_mode/test_literals",
-    "ridl-modules/tests/global_mode/test_fn",
-    "ridl-modules/tests/global_mode/test_js_fields",
-    "ridl-modules/tests/global_mode/test_class",
-    "ridl-modules/tests/global_mode/test_singleton",
-    "ridl-modules/tests/global_mode/test_import_using",
-    "ridl-modules/tests/global_mode/test_diagnostics",
+    "tests/global/types/test_types",
+    "tests/global/literals/test_literals",
+    "tests/global/fn/test_fn",
+    "tests/global/js_fields/test_js_fields",
+    "tests/global/class/test_class",
+    "tests/global/singleton/test_singleton",
+    "tests/global/import_using/test_import_using",
+    "tests/global/diagnostics/test_diagnostics",
 ]
 
-# NOTE: test RIDL modules live under ridl-modules/tests/. They are workspace members but
+# NOTE: test RIDL modules live under tests/global/. They are workspace members but
 # are not linked into the demo app by default (to avoid exposing test APIs).
 
 [package]
@@ -47,25 +47,25 @@ mquickjs-ridl-glue = { path = "deps/mquickjs-ridl-glue" }
 path = "ridl-modules/stdlib"
 
 [dependencies.ridl_test_g_types]
-path = "ridl-modules/tests/global_mode/test_types"
+path = "tests/global/types/test_types"
 
 [dependencies.ridl_test_g_literals]
-path = "ridl-modules/tests/global_mode/test_literals"
+path = "tests/global/literals/test_literals"
 
 [dependencies.ridl_test_g_fn]
-path = "ridl-modules/tests/global_mode/test_fn"
+path = "tests/global/fn/test_fn"
 
 [dependencies.ridl_test_g_js_fields]
-path = "ridl-modules/tests/global_mode/test_js_fields"
+path = "tests/global/js_fields/test_js_fields"
 
 [dependencies.ridl_test_g_singleton]
-path = "ridl-modules/tests/global_mode/test_singleton"
+path = "tests/global/singleton/test_singleton"
 
 [dependencies.ridl_test_g_import_using]
-path = "ridl-modules/tests/global_mode/test_import_using"
+path = "tests/global/import_using/test_import_using"
 
 [dependencies.ridl_test_g_diagnostics]
-path = "ridl-modules/tests/global_mode/test_diagnostics"
+path = "tests/global/diagnostics/test_diagnostics"
 
 [features]
 # Demo app defaults to having RIDL stdlib extensions enabled.
