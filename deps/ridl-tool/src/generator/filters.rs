@@ -26,9 +26,13 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         // Optional(T) at Rust boundary.
         Type::Optional(inner) => format!("Option<{}>", rust_type_from_idl(inner)?),
 
-        // `any` is always a borrowed JSValue view at the Rust boundary.
-        // User code must not depend on raw `JSValue`.
-        Type::Any => "mquickjs_rs::ValueRef<'_>".to_string(),
+        // `any` at Rust boundary:
+        // - param: borrowed view (Local<Value>)
+        // - return: owned/rooted value (Global<Value>)
+        //
+        // Note: return-type mapping is handled at template level because it depends on whether
+        // the position is param vs return.
+        Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
 
         Type::Custom(name) => name.clone(),
 
@@ -263,7 +267,7 @@ pub fn emit_param_extract(
             }
             FileMode::Strict => {
                 w.push_line(format!(
-                    "let {name}: Option<mquickjs_rs::ValueRef<'_>> = if mquickjs_rs::mquickjs_ffi::JS_IsNull(_v) == 1 || mquickjs_rs::mquickjs_ffi::JS_IsUndefined(_v) == 1 {{ None }} else {{ Some(mquickjs_rs::ValueRef::new(_v)) }};",
+                    "let {name}: Option<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = if mquickjs_rs::mquickjs_ffi::JS_IsNull(_v) == 1 || mquickjs_rs::mquickjs_ffi::JS_IsUndefined(_v) == 1 {{ None }} else {{ Some(scope.value(_v)) }};",
                     name = param.name
                 ));
             }
@@ -415,7 +419,7 @@ fn emit_single_param_extract(
         Type::Any => {
             emit_missing_arg(&mut w, idx1, name);
             w.push_line(format!(
-                "let {name}: mquickjs_rs::ValueRef<'_> = mquickjs_rs::ValueRef::new({v});",
+                "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value({v});",
                 name = name,
                 v = emit_argv_v(idx0)
             ));
@@ -521,12 +525,12 @@ fn emit_varargs_collect(
         Type::Any => {
             let _ = file_mode;
             w.push_line(format!(
-                "let mut {name}: Vec<mquickjs_rs::ValueRef<'_>> = Vec::new();",
+                "let mut {name}: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = Vec::new();",
                 name = name
             ));
             emit_varargs_loop_header(&mut w, start_idx0, false);
             w.push_line(format!(
-                "{name}.push(mquickjs_rs::ValueRef::new({v}));",
+                "{name}.push(scope.value({v}));",
                 name = name,
                 v = emit_argv_v_expr("i")
             ));

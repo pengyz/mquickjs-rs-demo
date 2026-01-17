@@ -33,9 +33,9 @@ fn ok(...args: any) -> void;
 
     let glue = fs::read_to_string(out_dir.join("glue.rs")).unwrap();
 
-    // In strict mode, varargs(any) should be collected as Vec<ValueRef<'_>>.
+    // In strict mode, varargs(any) should be collected as Vec<Local<Value>>.
     assert!(
-        glue.contains("Vec<mquickjs_rs::ValueRef<'_>>"),
-        "expected strict varargs(any) -> Vec<ValueRef<'_>> in glue; got:\n{glue}"
+        glue.contains("Vec<mquickjs_rs::handles::local::Local"),
+        "expected strict varargs(any) -> Vec<Local<Value>> in glue; got:\n{glue}"
     );
 }

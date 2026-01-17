@@ -258,6 +258,7 @@ struct TemplateMethod {
     params: Vec<TemplateParam>,
     return_type: Type,
     has_variadic: bool,
+    needs_scope: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -300,11 +301,20 @@ impl TemplateMethod {
 
         let has_variadic = params.iter().any(|p| p.variadic);
 
+        fn is_any_like(ty: &Type) -> bool {
+            matches!(ty, Type::Any)
+                || matches!(ty, Type::Optional(inner) if matches!(inner.as_ref(), Type::Any))
+        }
+
+        let needs_scope = params.iter().any(|p| is_any_like(&p.ty))
+            || (has_variadic && params.iter().any(|p| p.variadic && is_any_like(&p.ty)));
+
         Self {
             name: method.name,
             params,
             return_type: method.return_type,
             has_variadic,
+            needs_scope,
         }
     }
 }

@@ -50,11 +50,11 @@
 ## 3) any/object（JSValue）映射
 - 采用二层模型：借用型 + 可保存型（pinned）。
 
-### 借用型：`ValueRef<'ctx>`
+### 借用型：`Local<'ctx, Value>`
 - 用于 glue 调用栈内的临时视图（argv/this）。
 - 不保证跨调用边界安全，禁止长期保存。
 
-### 可保存型：`PinnedValue<'ctx>`
+### 可保存型：`Global<Value>`
 - 内部通过 `JS_AddGCRef` 将 JSValue 固定为 GC root（pin）。
 - Drop 时 `JS_DeleteGCRef`（unpin）。
 - 允许用户在同一 Context 生命周期内跨调用保存。
@@ -101,7 +101,7 @@
 - 为每个 class 生成实例 trait：
   - `trait <ClassName>Class { ... }`
   - 构造器返回：`Box<dyn <ClassName>Class>`（调用侧不需要碰 JSValue/class_id）。
-  - any/object 参数：`ValueRef<'ctx>`；需要保存的 API 返回 `PinnedValue<'ctx>`（按需求逐步扩展）。
+  - any/object 参数：`Local<'ctx, Value>`；需要保存的 API 返回 `Global<Value>`（按需求逐步扩展）。
 - 若该 class 声明了 `proto property`，生成共享态 trait：
   - `trait <ClassName>Proto { ... }`
 
@@ -150,7 +150,7 @@
 - 实例生命周期：由 JS GC / ctx free 触发 class finalizer -> drop opaque。
 - finalizer 禁止调用 JS API；因此只允许释放内存/资源。
 - proto property 共享态生命周期：per-JSContext，跟随 ctx user_data/ctx-ext drop。
-- any/object 的可保存性：必须通过 `PinnedValue`（GCRef pin）实现，且严格绑定同一 Context。
+- any/object 的可保存性：必须通过 `Global<Value>`（GCRef root）实现，且严格绑定同一 Context。
 
 # 需要新增/修改的最小 API 面
 
@@ -160,12 +160,12 @@
 - `JS_SetOpaque`
 - `JS_GetOpaque`
 - `JS_GetClassID`
-- `JSGCRef` 与 `JS_AddGCRef/JS_DeleteGCRef`（用于 `PinnedValue`）
+- `JSGCRef` 与 `JS_AddGCRef/JS_DeleteGCRef`（用于 `Global<Value>`）
 - `mqjs_ridl_class_id.h` 中的 `RIDL_CLASS_*` enum 常量（通过 bindgen include）。
 
 ## 2) deps/mquickjs-rs
 - 在 `mquickjs_rs::mquickjs_ffi` 层 re-export 以上符号与 class id 常量。
-- 提供 `ValueRef<'ctx>` / `PinnedValue<'ctx>` 的安全封装（基于 GCRef）。
+- 提供 `Local<'ctx, Value>` / `Global<Value>` 的安全封装（基于 GCRef）。
 
 ## 3) deps/ridl-tool
 - parser/ast：PropertyModifier 增加 Proto。
@@ -183,7 +183,7 @@
   - 可 `new` 多个实例
   - `proto readonly property token: string` 在多个实例间共享（同一 ctx）
   - 实例 drop 能触发 finalizer（通过计数或日志验证；finalizer 不能调用 JS API）
-  - any/object：参数可读；需要保存时使用 `PinnedValue`（GCRef pin）
+  - any/object：参数可读；需要保存时使用 `Global<Value>`（GCRef root）
 
 # 状态
 - [ ] 进行中

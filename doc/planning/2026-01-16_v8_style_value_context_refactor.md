@@ -207,7 +207,7 @@ thread_local! { static TLS_CURRENT: RefCell<Vec<CurrentEntry>> = ...; }
 ### Phase 1：引入新类型但不替换旧 API
 
 - 新增 `Scope/Local/Global` 与最小工具函数。
-- 不改现有 `ValueRef/PinnedValue`，只在新模块中实验。
+- 不保留旧 `ValueRef/PinnedValue`，直接以 `Local/Global` 为唯一语义载体。
 - 增加单元测试：
   - Local 不能跨 scope 返回（编译期示例，用 doc test）。
   - Global 可以跨 scope 保存并 roundtrip。
@@ -219,7 +219,7 @@ thread_local! { static TLS_CURRENT: RefCell<Vec<CurrentEntry>> = ...; }
   - `any` 参数构造 `scope.local_value(argv[i])`
   - `any` 返回走 `Global::as_raw()`
 
-### Phase 3：弃用旧 ValueRef/PinnedValue
+### Phase 3：清理历史文档/术语（ValueRef/PinnedValue）
 
 - 标记 deprecated，并提供简单映射：
   - `ValueRef` ≈ `Local<Value>`

@@ -335,7 +335,7 @@ ctx 获取约定（确认版）：
   - class：finalizer drop
   - proto：ctx-ext drop
   - singleton：slot drop
-- 不允许把 JSValue 长期保存到 Rust 对象中（除非后续引入 `PinnedValue`/GCRef 方案并明确绑定 ctx）。
+- 不允许把 JSValue 长期保存到 Rust 对象中（除非后续引入 `Global<Value>`/GCRef root 方案并明确绑定 ctx）。
 
 ---
 

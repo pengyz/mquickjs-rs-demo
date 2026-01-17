@@ -37,9 +37,9 @@ fn ok(...args: any) -> void;
 
     let glue = fs::read_to_string(out_dir.join("glue.rs")).unwrap();
 
-    // In strict mode, `any` should map to ValueRef in glue conversions.
+    // In strict mode, `any` should map to Local<Value> in glue conversions.
     assert!(
-        glue.contains("ValueRef"),
-        "expected strict any -> ValueRef mapping in glue; got:\n{glue}"
+        glue.contains("handles::local::Local"),
+        "expected strict any -> Local<Value> mapping in glue; got:\n{glue}"
     );
 }

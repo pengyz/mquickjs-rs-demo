@@ -4,13 +4,15 @@ use std::os::raw::c_void;
 use std::sync::Arc;
 
 use crate::mquickjs_ffi;
-use crate::value::ValueRef;
+use crate::handles::local::{Local, Value};
 
 pub struct ContextInner {
     // NOTE: host per-context extensions (initialized by application-generated ridl_context_init).
     // Type-erased to avoid coupling mquickjs-rs to generated RIDL types.
     ridl_ext_ptr: std::cell::UnsafeCell<*mut c_void>,
     ridl_ext_drop: std::cell::UnsafeCell<Option<unsafe fn(*mut c_void)>>,
+
+    pub(crate) alive: std::sync::atomic::AtomicBool,
 }
 
 
@@ -19,6 +21,7 @@ impl ContextInner {
         Self {
             ridl_ext_ptr: std::cell::UnsafeCell::new(std::ptr::null_mut()),
             ridl_ext_drop: std::cell::UnsafeCell::new(None),
+            alive: std::sync::atomic::AtomicBool::new(true),
         }
     }
 
@@ -58,13 +61,13 @@ pub struct Context {
 
 /// Borrow-like handle reconstructed from JSContext user_data.
 /// It must NOT free the JSContext.
-pub struct ContextHandle {
+pub struct ContextToken {
     pub ctx: *mut mquickjs_ffi::JSContext,
     pub inner: Arc<ContextInner>,
 }
 
 thread_local! {
-    static TLS_CURRENT_CTX: RefCell<Vec<ContextHandle>> = RefCell::new(Vec::new());
+    static TLS_CURRENT_CTX: RefCell<Vec<ContextToken>> = RefCell::new(Vec::new());
 }
 
 pub struct CurrentGuard {
@@ -80,7 +83,7 @@ impl Drop for CurrentGuard {
     }
 }
 
-impl ContextHandle {
+impl ContextToken {
     /// Safety: ctx must be alive, and ctx user_data must have been set by mquickjs-rs Context.
     pub unsafe fn from_js_ctx(ctx: *mut mquickjs_ffi::JSContext) -> Option<Self> {
         if ctx.is_null() {
@@ -101,7 +104,7 @@ impl ContextHandle {
     pub fn enter_current(&self) -> CurrentGuard {
         TLS_CURRENT_CTX.with(|s| {
             let mut stack = s.borrow_mut();
-            stack.push(ContextHandle {
+            stack.push(ContextToken {
                 ctx: self.ctx,
                 inner: self.inner.clone(),
             });
@@ -114,10 +117,10 @@ impl ContextHandle {
         f()
     }
 
-    pub fn current() -> Option<ContextHandle> {
+    pub fn current() -> Option<ContextToken> {
         TLS_CURRENT_CTX.with(|s| {
             let stack = s.borrow();
-            stack.last().map(|h| ContextHandle {
+            stack.last().map(|h| ContextToken {
                 ctx: h.ctx,
                 inner: h.inner.clone(),
             })
@@ -126,8 +129,8 @@ impl ContextHandle {
 }
 
 impl Context {
-    pub fn handle(&self) -> ContextHandle {
-        ContextHandle {
+    pub fn token(&self) -> ContextToken {
+        ContextToken {
             ctx: self.ctx,
             inner: self.inner.clone(),
         }
@@ -181,7 +184,7 @@ impl Context {
     }
 
     pub fn eval(&mut self, code: &str) -> Result<String, String> {
-        let handle = self.handle();
+        let handle = self.token();
         let _g = handle.enter_current();
 
         let c_code = CString::new(code).map_err(|e| e.to_string())?;
@@ -232,7 +235,7 @@ impl Context {
     }
 
     /// 创建一个新的字符串值
-    pub fn create_string(&self, rust_str: &str) -> Result<ValueRef<'_>, String> {
+    pub fn create_string<'a>(&self, scope: &crate::handles::scope::Scope<'a>, rust_str: &str) -> Result<Local<'a, Value>, String> {
         let c_str = CString::new(rust_str).map_err(|e| e.to_string())?;
         let js_value = unsafe { mquickjs_ffi::JS_NewString(self.ctx, c_str.as_ptr()) };
 
@@ -242,11 +245,11 @@ impl Context {
             return Err("Failed to create string".to_string());
         }
 
-        Ok(ValueRef::new(js_value))
+        Ok(scope.value(js_value))
     }
 
     /// 创建一个新的数字值
-    pub fn create_number(&self, num: f64) -> Result<ValueRef<'_>, String> {
+    pub fn create_number<'a>(&self, scope: &crate::handles::scope::Scope<'a>, num: f64) -> Result<Local<'a, Value>, String> {
         let js_value = unsafe { mquickjs_ffi::JS_NewFloat64(self.ctx, num) };
 
         if (js_value as u32) & ((1u32 << (mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
@@ -255,49 +258,43 @@ impl Context {
             return Err("Failed to create number".to_string());
         }
 
-        Ok(ValueRef::new(js_value))
+        Ok(scope.value(js_value))
     }
 
     /// 创建一个新的布尔值
-    pub fn create_boolean(&self, boolean: bool) -> Result<ValueRef<'_>, String> {
+    pub fn create_boolean<'a>(&self, scope: &crate::handles::scope::Scope<'a>, boolean: bool) -> Result<Local<'a, Value>, String> {
         let js_value = mquickjs_ffi::js_mkbool(boolean);
-        Ok(ValueRef::new(js_value))
+        Ok(scope.value(js_value))
     }
 
     /// 创建一个新的对象
-    pub fn create_object(&self) -> Result<ValueRef<'_>, String> {
+    pub fn create_object<'a>(&self, scope: &crate::handles::scope::Scope<'a>) -> Result<Local<'a, Value>, String> {
         let obj = unsafe { mquickjs_ffi::JS_NewObject(self.ctx) };
         if (obj as u32) & ((1u32 << (mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
             == (mquickjs_ffi::JS_TAG_EXCEPTION as u32)
         {
             return Err("Failed to create object".to_string());
         }
-        Ok(ValueRef::new(obj))
+        Ok(scope.value(obj))
     }
 
     /// 将值转换为Rust字符串
-    pub fn get_string(&self, value: ValueRef<'_>) -> Result<String, String> {
-        if !value.is_string(self) {
-            return Err("Value is not a string".to_string());
-        }
-
+    pub fn get_string(&self, value: Local<'_, Value>) -> Result<String, String> {
         let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
-        let result_ptr = unsafe { mquickjs_ffi::JS_ToCString(self.ctx, value.as_raw(), &mut cstr_buf) };
+        let result_ptr =
+            unsafe { mquickjs_ffi::JS_ToCString(self.ctx, value.as_raw(), &mut cstr_buf) };
 
-        if !result_ptr.is_null() {
-            let result_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy().into_owned() };
-            Ok(result_str)
-        } else {
-            Err("Failed to convert Value to string".to_string())
+        if result_ptr.is_null() {
+            return Err("Failed to convert Value to string".to_string());
         }
+
+        Ok(unsafe { CStr::from_ptr(result_ptr) }
+            .to_string_lossy()
+            .into_owned())
     }
 
     /// 获取数字值
-    pub fn get_number(&self, value: ValueRef<'_>) -> Result<f64, String> {
-        if !value.is_number(self) {
-            return Err("Value is not a number".to_string());
-        }
-
+    pub fn get_number(&self, value: Local<'_, Value>) -> Result<f64, String> {
         let mut result = 0.0;
         let ret = unsafe { mquickjs_ffi::JS_ToNumber(self.ctx, &mut result, value.as_raw()) };
 
@@ -309,11 +306,7 @@ impl Context {
     }
 
     /// 获取布尔值
-    pub fn get_boolean(&self, value: ValueRef<'_>) -> Result<bool, String> {
-        if !value.is_bool(self) {
-            return Err("Value is not a boolean".to_string());
-        }
-
+    pub fn get_boolean(&self, value: Local<'_, Value>) -> Result<bool, String> {
         let mut result = 0i32;
         let ret = unsafe { mquickjs_ffi::JS_ToInt32(self.ctx, &mut result, value.as_raw()) };
 
@@ -327,6 +320,10 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
+        self.inner
+            .alive
+            .store(false, std::sync::atomic::Ordering::Release);
+
         unsafe {
             mquickjs_ffi::JS_FreeContext(self.ctx);
         }

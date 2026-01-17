@@ -18,7 +18,11 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
         {{ p.name|lower }}: {{ p.ty|rust_type_from_idl|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endfor %}
-    ) -> {{ method.return_type|rust_type_from_idl|safe }};
+    ) -> {%- if method.return_type == Type::Any -%}
+        mquickjs_rs::handles::global::Global<mquickjs_rs::handles::local::Value>
+    {%- else -%}
+        {{ method.return_type|rust_type_from_idl|safe }}
+    {%- endif -%};
     {%- endfor %}
 
     {%- for prop in s.properties %}
@@ -46,7 +50,11 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
         {%- for p in method.params %}
         {{ p.name|lower }}: {{ p.ty|rust_type_from_idl|safe }}{%- if !loop.last %}, {% endif %}
         {%- endfor %}
-    ) -> {{ method.return_type|rust_type_from_idl|safe }};
+    ) -> {%- if method.return_type == Type::Any -%}
+        mquickjs_rs::handles::global::Global<mquickjs_rs::handles::local::Value>
+    {%- else -%}
+        {{ method.return_type|rust_type_from_idl|safe }}
+    {%- endif -%};
 {%- endfor %}
 
 {%- for prop in class.properties %}
