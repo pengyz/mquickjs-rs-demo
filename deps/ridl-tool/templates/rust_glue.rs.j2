@@ -1,4 +1,6 @@
 // Auto-generated Rust glue code for RIDL interfaces
+#[allow(non_snake_case, non_camel_case_types, non_upper_case_globals)]
+
 use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
 
 use std::ffi::CString;
@@ -157,7 +159,7 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
     {%- endfor %}
 
     let result = {{ function.name|to_snake_case }}({%- for p in function.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
-    {{ function.return_type|emit_return_convert("result")|safe }}
+    {{ function.return_rust_ty|emit_return_convert_typed(function.return_type, "result")|safe }}
 }
 {%- endfor %}
 
@@ -208,7 +210,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_
     let s: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
     let result = s.{{ method.name|to_snake_case }}({%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
-    {{ method.return_type|emit_return_convert("result")|safe }}
+    {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
 }
 {%- endfor %}
 
@@ -263,7 +265,7 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
     {%- endfor %}
 
     let result = {{ interface.name|to_snake_case }}_{{ method.name|to_snake_case }}(this_val, {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
-    {{ method.return_type|emit_return_convert("result")|safe }}
+    {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
 }
 {%- endfor %}
 {%- endfor %}
@@ -404,7 +406,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 
     let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };
     let result = inst.{{ method.name|to_snake_case }}({%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
-    {{ method.return_type|emit_return_convert("result")|safe }}
+    {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
 }
 {%- endfor %}
 

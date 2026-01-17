@@ -11,6 +11,6 @@ singleton TestTypes {
 
     // TODO(V1): union is part of V1 compliance, but ridl-tool currently cannot
     // generate Rust types for union. Enable these after union support lands.
-    // fn echoStringOrInt(v: string | int) -> string | int;
-    // fn echoStringOrNull(v: string | null) -> string | null;
+    fn echoStringOrInt(v: string | int) -> string | int;
+    fn echoStringOrIntNullable(v: string | int | null) -> (string | int)?;
 }

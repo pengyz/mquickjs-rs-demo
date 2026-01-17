@@ -210,6 +210,8 @@ impl SemanticValidator {
                 self.validate_type(value_type);
             }
             Type::Union(types) => {
+                let mut numeric_count = 0;
+
                 for t in types {
                     if matches!(t, Type::Optional(_)) {
                         self.errors.push(RIDLError::new(
@@ -220,7 +222,22 @@ impl SemanticValidator {
                             RIDLErrorType::SemanticError,
                         ));
                     }
+
+                    if matches!(t, Type::Int | Type::Float | Type::Double) {
+                        numeric_count += 1;
+                    }
+
                     self.validate_type(t);
+                }
+
+                if numeric_count >= 2 {
+                    self.errors.push(RIDLError::new(
+                        "Union 不支持数值类型联合（例如 int | double）。若不确定数值类型，请使用 double".to_string(),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
                 }
             }
             Type::Group(inner_type) => {

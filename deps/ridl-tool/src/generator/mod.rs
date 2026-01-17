@@ -1,4 +1,220 @@
 use crate::parser::ast::{Class, Function, IDLItem, Interface, Method, Param, Type, IDL};
+
+use union_types::collect_union_types;
+
+fn apply_union_rust_ty_overrides(union_types: &[TemplateUnionType], tpl: &mut impl RustGlueLikeTemplate) {
+    for itf in tpl.interfaces_mut().iter_mut() {
+        for m in &mut itf.methods {
+            let name = m.name.clone();
+            apply_union_rust_ty_overrides_method(union_types, &name, m);
+        }
+    }
+
+    for f in tpl.functions_mut().iter_mut() {
+        let name = f.name.clone();
+        apply_union_rust_ty_overrides_function(union_types, &name, f);
+    }
+
+    for s in tpl.singletons_mut().iter_mut() {
+        for m in &mut s.methods {
+            let name = m.name.clone();
+            apply_union_rust_ty_overrides_method(union_types, &name, m);
+        }
+    }
+
+    for c in tpl.classes_mut().iter_mut() {
+        if let Some(ctor) = &mut c.constructor {
+            let name = ctor.name.clone();
+            apply_union_rust_ty_overrides_function(union_types, &name, ctor);
+        }
+        for m in &mut c.methods {
+            let name = m.name.clone();
+            apply_union_rust_ty_overrides_method(union_types, &name, m);
+        }
+    }
+}
+
+fn apply_union_rust_ty_overrides_function(
+    union_types: &[TemplateUnionType],
+    fn_name: &str,
+    f: &mut TemplateFunction,
+) {
+    for p in &mut f.params {
+        apply_union_rust_ty_overrides_param(union_types, fn_name, &p.name, &p.ty, &mut p.rust_ty);
+    }
+
+    // Return type: optionality comes from the type shape; we don't use the "Optional" label.
+    apply_union_rust_ty_overrides_ty(union_types, fn_name, "", &f.return_type, &mut f.return_rust_ty);
+}
+
+fn apply_union_rust_ty_overrides_method(
+    union_types: &[TemplateUnionType],
+    fn_name: &str,
+    m: &mut TemplateMethod,
+) {
+    for p in &mut m.params {
+        apply_union_rust_ty_overrides_param(union_types, fn_name, &p.name, &p.ty, &mut p.rust_ty);
+    }
+
+    // Return type label should not affect optionality; only the type shape should.
+    apply_union_rust_ty_overrides_ty(union_types, fn_name, "", &m.return_type, &mut m.return_rust_ty);
+}
+
+fn apply_union_rust_ty_overrides_param(
+    union_types: &[TemplateUnionType],
+    fn_name: &str,
+    param_name: &str,
+    ty: &Type,
+    out_rust_ty: &mut String,
+) {
+    apply_union_rust_ty_overrides_ty(union_types, fn_name, param_name, ty, out_rust_ty);
+}
+
+fn apply_union_rust_ty_overrides_ty(
+    union_types: &[TemplateUnionType],
+    fn_name: &str,
+    label: &str,
+    ty: &Type,
+    out_rust_ty: &mut String,
+) {
+    if !contains_union(ty) {
+        return;
+    }
+
+
+    if let Some((enum_path, optional)) = union_enum_path_for_ty(union_types, fn_name, label, ty) {
+        *out_rust_ty = if optional {
+            format!("Option<{}>", enum_path)
+        } else {
+            enum_path
+        };
+        return;
+    }
+
+    // Fallback: union exists but we don't support generating a stable enum for this shape yet.
+    // Keep previous rust_ty (likely derived from rust_type_from_idl) so callers can surface a
+    // deterministic compile_error later.
+}
+
+fn contains_union(ty: &Type) -> bool {
+    match ty {
+        Type::Union(_) => true,
+        Type::Optional(inner) => contains_union(inner),
+        Type::Group(inner) => contains_union(inner),
+        _ => false,
+    }
+}
+
+fn union_enum_path_for_ty(
+    union_types: &[TemplateUnionType],
+    fn_name: &str,
+    label: &str,
+    ty: &Type,
+) -> Option<(String, bool)> {
+    match ty {
+        Type::Optional(inner) => {
+            // Optional(T) means nullable at the outer layer.
+            // For unions we normalize nullability into Option<UnionEnum>.
+            let (base, base_opt) = union_enum_path_for_ty(union_types, fn_name, label, inner)?;
+
+            // Always optional due to outer Optional; if inner already implies optional, avoid double Option.
+            Some((base, !base_opt))
+        }
+        Type::Custom(s) => {
+            // Parser may represent `(A|B)` as Custom("(A | B)") inside Optional(...).
+            // Normalize such cases by parsing the inner as a union.
+            if s.starts_with('(') && s.ends_with(')') && s.contains('|') {
+                let inner = &s[1..s.len() - 1];
+                let mut keys: Vec<&'static str> = vec![];
+                for part in inner.split('|') {
+                    match part.trim() {
+                        "string" => keys.push("String"),
+                        "int" => keys.push("Int"),
+                        "float" => keys.push("Float"),
+                        "double" => keys.push("Double"),
+                        _ => return None,
+                    }
+                }
+
+                keys.sort();
+                let name = format!("Union{}", keys.join(""));
+                let u = union_types.iter().find(|u| u.name == name)?;
+                let is_optional = label == "Optional";
+                return Some((format!("crate::api::{}::union::{}", u.domain, u.name), is_optional));
+            }
+            None
+        }
+        Type::Group(inner) => {
+            // Group(...) is only syntactic grouping.
+            union_enum_path_for_ty(union_types, fn_name, label, inner)
+        }
+        Type::Union(types) => {
+            let mut keys: Vec<&'static str> = vec![];
+            let mut nullable = false;
+
+            for t in types {
+                match t {
+                    Type::String => keys.push("String"),
+                    Type::Int => keys.push("Int"),
+                    Type::Null => nullable = true,
+                    _ => {}
+                }
+            }
+            keys.sort();
+            keys.dedup();
+            let name = if keys.is_empty() {
+                "Union".to_string()
+            } else {
+                format!("Union{}", keys.join(""))
+            };
+
+            let u = union_types.iter().find(|u| u.name == name)?;
+            // v1 semantic (strategy A): `T1 | T2 | null` is sugar for `(T1|T2)?`.
+            // Also, `label=="Optional"` is used by outer Optional(...) wrapper for params.
+            let is_optional = nullable || label == "Optional";
+            Some((format!("crate::api::{}::union::{}", u.domain, u.name), is_optional))
+        }
+        _ => None,
+    }
+}
+
+fn group_union_types_by_domain(union_types: Vec<TemplateUnionType>) -> Vec<TemplateUnionDomain> {
+    let mut domains: Vec<String> = vec![];
+    for u in &union_types {
+        if !domains.iter().any(|d| d == &u.domain) {
+            domains.push(u.domain.clone());
+        }
+    }
+
+    let mut out: Vec<TemplateUnionDomain> = vec![];
+    for d in domains {
+        let unions = union_types
+            .iter()
+            .filter(|u| u.domain == d)
+            .cloned()
+            .collect::<Vec<_>>();
+        out.push(TemplateUnionDomain { domain: d, unions });
+    }
+    out
+}
+
+fn to_upper_camel_case(s: &str) -> String {
+    let mut out = String::new();
+    let mut upper_next = true;
+    for ch in s.chars() {
+        if ch.is_ascii_alphanumeric() {
+            if upper_next {
+                out.extend(ch.to_uppercase());
+                upper_next = false;
+            } else {
+                out.push(ch);
+            }
+        } else {
+            upper_next = true;
+        }
+    }
+    if out.is_empty() { "X".to_string() } else { out }
+}
 use askama::Template;
 use std::path::Path;
 
@@ -30,6 +246,7 @@ fn to_rust_type_ident_simple(name: &str) -> String {
 mod code_writer;
 mod filters;
 mod naming;
+mod union_types;
 
 fn generate_register_h_and_symbols(
     ridl_files: &[String],
@@ -169,6 +386,13 @@ struct MquickjsRidlClassDefsTemplate {
     modules: Vec<TemplateModule>,
 }
 
+trait RustGlueLikeTemplate {
+    fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface>;
+    fn functions_mut(&mut self) -> &mut Vec<TemplateFunction>;
+    fn singletons_mut(&mut self) -> &mut Vec<TemplateSingleton>;
+    fn classes_mut(&mut self) -> &mut Vec<TemplateClass>;
+}
+
 #[derive(Template)]
 #[template(path = "rust_glue.rs.j2")]
 struct RustGlueTemplate {
@@ -182,6 +406,21 @@ struct RustGlueTemplate {
     classes: Vec<TemplateClass>,
 }
 
+impl RustGlueLikeTemplate for RustGlueTemplate {
+    fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface> {
+        &mut self.interfaces
+    }
+    fn functions_mut(&mut self) -> &mut Vec<TemplateFunction> {
+        &mut self.functions
+    }
+    fn singletons_mut(&mut self) -> &mut Vec<TemplateSingleton> {
+        &mut self.singletons
+    }
+    fn classes_mut(&mut self) -> &mut Vec<TemplateClass> {
+        &mut self.classes
+    }
+}
+
 #[derive(Template)]
 #[template(path = "rust_api.rs.j2")]
 #[allow(dead_code)]
@@ -192,6 +431,49 @@ struct RustApiTemplate {
     functions: Vec<TemplateFunction>,
     singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
+
+    union_types_by_domain: Vec<TemplateUnionDomain>,
+}
+
+impl RustGlueLikeTemplate for RustApiTemplate {
+    fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface> {
+        &mut self.interfaces
+    }
+    fn functions_mut(&mut self) -> &mut Vec<TemplateFunction> {
+        &mut self.functions
+    }
+    fn singletons_mut(&mut self) -> &mut Vec<TemplateSingleton> {
+        &mut self.singletons
+    }
+    fn classes_mut(&mut self) -> &mut Vec<TemplateClass> {
+        &mut self.classes
+    }
+}
+
+#[derive(Debug, Clone)]
+#[allow(dead_code)]
+struct TemplateUnionDomain {
+    domain: String,
+    unions: Vec<TemplateUnionType>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateUnionType {
+    /// The Rust module path for the type domain (global/module).
+    /// e.g. `global` or `foo_bar`
+    domain: String,
+
+    /// A short PascalCase name within the union namespace.
+    /// e.g. `EchoStringOrInt`
+    name: String,
+
+    members: Vec<TemplateUnionMember>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateUnionMember {
+    variant: String,
+    rust_ty: String,
 }
 
 
@@ -257,6 +539,7 @@ struct TemplateMethod {
     name: String,
     params: Vec<TemplateParam>,
     return_type: Type,
+    return_rust_ty: String,
     has_variadic: bool,
     needs_scope: bool,
 }
@@ -264,16 +547,23 @@ struct TemplateMethod {
 #[derive(Debug, Clone)]
 pub(crate) struct TemplateParam {
     pub(crate) name: String,
+    pub(crate) rust_name: String,
     pub(crate) ty: Type,
     pub(crate) variadic: bool,
     pub(crate) file_mode: crate::parser::FileMode,
+
+    // Filled during template construction.
+    // For union types this will be a fully qualified path under `crate::api::{domain}::union::*`.
+    pub(crate) rust_ty: String,
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 struct TemplateFunction {
     name: String,
     params: Vec<TemplateParam>,
     return_type: Type,
+    return_rust_ty: String,
 }
 
 impl TemplateInterface {
@@ -309,10 +599,15 @@ impl TemplateMethod {
         let needs_scope = params.iter().any(|p| is_any_like(&p.ty))
             || (has_variadic && params.iter().any(|p| p.variadic && is_any_like(&p.ty)));
 
+        let return_type = method.return_type;
+        let return_rust_ty = crate::generator::filters::rust_type_from_idl(&return_type)
+            .unwrap_or_else(|_| "()".to_string());
+
         Self {
             name: method.name,
             params,
-            return_type: method.return_type,
+            return_type,
+            return_rust_ty,
             has_variadic,
             needs_scope,
         }
@@ -321,11 +616,17 @@ impl TemplateMethod {
 
 impl TemplateParam {
     fn from_with_mode(param: Param, file_mode: crate::parser::FileMode) -> Self {
+        let ty = param.param_type;
+        let rust_ty = crate::generator::filters::rust_type_from_idl(&ty).unwrap_or_else(|_| "()".to_string());
+        let rust_name = crate::generator::filters::rust_ident(&param.name);
+
         Self {
             name: param.name,
-            ty: param.param_type,
+            rust_name,
+            ty,
             variadic: param.variadic,
             file_mode,
+            rust_ty,
         }
     }
 }
@@ -338,10 +639,15 @@ impl TemplateFunction {
             .map(|p| TemplateParam::from_with_mode(p, file_mode))
             .collect();
 
+        let return_type = function.return_type;
+        let return_rust_ty = crate::generator::filters::rust_type_from_idl(&return_type)
+            .unwrap_or_else(|_| "()".to_string());
+
         Self {
             name: function.name,
             params,
-            return_type: function.return_type,
+            return_type,
+            return_rust_ty,
         }
     }
 }
@@ -498,7 +804,7 @@ pub fn generate_module_files(
         }
     }
 
-    let rust_glue_template = RustGlueTemplate {
+    let mut rust_glue_template = RustGlueTemplate {
         module_name: module_name.to_string(),
         module_decl,
         interfaces: interfaces.clone(),
@@ -506,19 +812,35 @@ pub fn generate_module_files(
         singletons,
         classes: classes.clone(),
     };
+
+    let union_types = collect_union_types(
+        &module_name.to_string(),
+        rust_glue_template.module_decl.clone(),
+        &interfaces,
+        &rust_glue_template.functions,
+        &rust_glue_template.singletons,
+        &classes,
+    );
+    apply_union_rust_ty_overrides(&union_types, &mut rust_glue_template);
     let rust_glue_code = rust_glue_template.render()?;
     std::fs::write(output_path.join("glue.rs"), rust_glue_code)?;
 
     // 生成 Rust API（trait/类型声明），供用户 impl 层与 glue 层共享引用。
     // 注意：这里不生成任何 `todo!()` 实现骨架，避免误导用户编辑 OUT_DIR 生成物。
-    let rust_api_template = RustApiTemplate {
+    let union_types = union_types;
+
+    let mut rust_api_template = RustApiTemplate {
         module_name: module_name.to_string(),
         module_decl: rust_glue_template.module_decl.clone(),
         interfaces: interfaces.clone(),
         functions: functions.clone(),
         singletons: rust_glue_template.singletons.clone(),
         classes: classes.clone(),
+        union_types_by_domain: group_union_types_by_domain(union_types.clone()),
     };
+
+    // Keep API trait signatures consistent with glue by applying the same union overrides.
+    apply_union_rust_ty_overrides(&union_types, &mut rust_api_template);
     let rust_api_code = rust_api_template.render()?;
     std::fs::write(output_path.join("api.rs"), rust_api_code)?;
 

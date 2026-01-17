@@ -64,6 +64,32 @@ try {
 }
 assert(threw, 'expected TypeError for echoIntNullable(1.5)')
 
+// Union(string | int)
+assertEq(t.echoStringOrInt('hello'), 'hello')
+assertEq(t.echoStringOrInt(123), 123)
+
+threw = false
+try {
+  t.echoStringOrInt(1.5)
+} catch (e3) {
+  threw = true
+}
+assert(threw, 'expected TypeError for echoStringOrInt(1.5)')
+
+// Optional(Union(string | int))
+assertEq(t.echoStringOrIntNullable(null), null)
+assertEq(t.echoStringOrIntNullable(undefined), null)
+assertEq(t.echoStringOrIntNullable('hi'), 'hi')
+assertEq(t.echoStringOrIntNullable(456), 456)
+
+threw = false
+try {
+  t.echoStringOrIntNullable(1.5)
+} catch (e4) {
+  threw = true
+}
+assert(threw, 'expected TypeError for echoStringOrIntNullable(1.5)')
+
 {
   var obj = { a: 1 }
   var ret = t.echoAny(obj)

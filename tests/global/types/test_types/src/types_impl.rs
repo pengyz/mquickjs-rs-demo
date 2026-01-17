@@ -38,6 +38,20 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         let scope = h.enter_scope();
         mquickjs_rs::handles::global::Global::new(&scope, v)
     }
+
+    fn echo_string_or_int(
+        &mut self,
+        v: crate::api::global::union::UnionIntString,
+    ) -> crate::api::global::union::UnionIntString {
+        v
+    }
+
+    fn echo_string_or_int_nullable(
+        &mut self,
+        v: Option<crate::api::global::union::UnionIntString>,
+    ) -> Option<crate::api::global::union::UnionIntString> {
+        v
+    }
 }
 
 pub fn create_test_types_singleton() -> Box<dyn TestTypesSingleton> {

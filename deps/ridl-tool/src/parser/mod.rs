@@ -7,11 +7,13 @@ use pest_derive::Parser;
 pub struct IDLParser;
 
 pub mod ast;
+mod normalize;
 
 use ast::{
     Class, Enum, EnumValue, Field, Function, IDLItem, Interface, Method, ModuleDeclaration, Param,
     Property, PropertyModifier, SerializationFormat, StructDef, Type,
 };
+use normalize::normalize_idl_items;
 
 fn pair_pos(pair: &pest::iterators::Pair<Rule>) -> ast::SourcePos {
     let (line, column) = pair.line_col();
@@ -72,6 +74,7 @@ pub fn parse_idl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Er
         }
     }
 
+    let items = normalize_idl_items(items)?;
     Ok(ParsedIDL { module, mode, items })
 }
 
@@ -1010,7 +1013,34 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                 return parse_nullable_type(inner_pair);
             }
             Rule::custom_type => {
-                return Ok(Type::Custom(inner_pair.as_str().to_string()));
+                let s = inner_pair.as_str();
+
+                // Generic fallback: sometimes grouped expressions like `(A | B)` may be captured
+                // as a single `custom_type` token. Recover the structured type so downstream
+                // generators can normalize unions properly.
+                if s.starts_with('(') && s.ends_with(')') && s.contains('|') {
+                    // First try to parse as a group_type; if pest doesn't accept it here
+                    // (due to tokenization), fall back to parsing the inner as a union_type.
+                    if let Ok(mut ps) = IDLParser::parse(Rule::group_type, s) {
+                        if let Some(p) = ps.next() {
+                            if let Ok(t) = parse_type(p) {
+                                return Ok(t);
+                            }
+                        }
+                    }
+
+                    let inner = &s[1..s.len() - 1];
+                    let union_src = format!("{};", inner);
+                    if let Ok(mut ps) = IDLParser::parse(Rule::union_type, &union_src) {
+                        if let Some(p) = ps.next() {
+                            if let Ok(t) = parse_union_type(p) {
+                                return Ok(Type::Group(Box::new(t)));
+                            }
+                        }
+                    }
+                }
+
+                return Ok(Type::Custom(s.to_string()));
             }
             Rule::callback_type => {
                 let mut params = Vec::new();
@@ -1028,13 +1058,20 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                 return Ok(Type::CallbackWithParams(params));
             }
             Rule::group_type => {
+                // group_type = '(' ~ WS ~ type ~ WS ~ ')'
+                // Keep the inner `type` structured (e.g. union_type) instead of collapsing to Custom.
+                let mut inner_type: Option<Type> = None;
                 for p in inner_pair.into_inner() {
-                    if p.as_rule() != Rule::WS {
-                        let inner_type = parse_type(p)?;
-                        return Ok(Type::Group(Box::new(inner_type)));
+                    match p.as_rule() {
+                        Rule::r#type | Rule::union_type | Rule::nullable_type | Rule::primary_type => {
+                            inner_type = Some(parse_type(p)?);
+                        }
+                        Rule::WS => {}
+                        _ => {}
                     }
                 }
-                return Err("Group has no inner type".into());
+                let inner_type = inner_type.ok_or("Group has no inner type")?;
+                return Ok(Type::Group(Box::new(inner_type)));
             }
             Rule::primary_type => {
                 // 递归解析primary_type
@@ -1106,11 +1143,10 @@ fn parse_union_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn s
 fn parse_nullable_type(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<Type, Box<dyn std::error::Error>> {
-    // nullable_type由一个基础类型和?组成
-    let inner_pairs = pair.into_inner();
+    // nullable_type = (basic|array|map|custom|callback|group) ~ '?' ~ (!'?')
+    let mut base: Option<Type> = None;
 
-    // 找到基础类型
-    for inner_pair in inner_pairs {
+    for inner_pair in pair.into_inner() {
         match inner_pair.as_rule() {
             Rule::basic_type
             | Rule::array_type
@@ -1118,15 +1154,23 @@ fn parse_nullable_type(
             | Rule::custom_type
             | Rule::callback_type
             | Rule::group_type => {
-                let base_type = parse_type(inner_pair)?;
-                return Ok(Type::Optional(Box::new(base_type)));
+                base = Some(parse_type(inner_pair)?);
             }
-            Rule::WS => { /* 跳过空白 */ }
-            _ => { /* 其他规则，继续寻找类型 */ }
+            Rule::WS => { /* skip */ }
+            _ => { /* skip */ }
         }
     }
 
-    Err("Nullable type has no base type".into())
+    let base = base.ok_or("Nullable type has no base type")?;
+
+    // Strategy A: `(A|B)?` should remain structured so codegen can normalize it.
+    // Unwrap Group(...) wrappers created by `group_type`.
+    let base = match base {
+        Type::Group(inner) => *inner,
+        other => other,
+    };
+
+    Ok(Type::Optional(Box::new(base)))
 }
 
 #[allow(dead_code)]

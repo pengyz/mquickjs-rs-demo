@@ -14,6 +14,36 @@ pub fn length<T>(slice: &[T]) -> ::askama::Result<usize> {
 }
 
 
+pub fn rust_ident(name: &str) -> String {
+    let mut out: String = name
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .collect();
+
+    if out.is_empty() {
+        out.push('_');
+    }
+
+    if out.chars().next().is_some_and(|c| c.is_ascii_digit()) {
+        out.insert(0, '_');
+    }
+
+    // Keep list minimal; extend when needed.
+    const KW: &[&str] = &[
+        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
+        "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+        "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super",
+        "trait", "true", "type", "unsafe", "use", "where", "while", "async", "await",
+        "dyn",
+    ];
+
+    if KW.iter().any(|&kw| kw == out) {
+        out.push('_');
+    }
+
+    out
+}
+
 pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
     let rust_type = match idl_type {
         Type::Bool => "bool".to_string(),
@@ -35,6 +65,12 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
 
         Type::Custom(name) => name.clone(),
+
+        Type::Union(_types) => {
+            return Err(askama::Error::Custom(
+                "union rust type generation is not implemented yet".into(),
+            ));
+        }
 
         // Keep explicit: fail fast for types we haven't implemented yet.
         other => {
@@ -84,7 +120,18 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
     Ok(w.into_string())
 }
 
+#[allow(dead_code)]
 pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::Result<String> {
+    // Backward compatible entry: use type-derived rust type.
+    let rust_ty = rust_type_from_idl(return_type)?;
+    emit_return_convert_typed(&rust_ty, return_type, result_name)
+}
+
+pub fn emit_return_convert_typed(
+    result_rust_ty: &str,
+    return_type: &Type,
+    result_name: &str,
+) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
     match return_type {
@@ -123,8 +170,33 @@ pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::R
         Type::Any => {
             w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
+        Type::Union(_types) => {
+            // v1 union return encoding: match enum variants.
+            // NOTE: enum type path is precomputed and passed via `result_rust_ty`.
+            w.push_line(format!("match {result_name} {{", result_name = result_name));
+            w.push_line(format!(
+                "    {ty}::String(s) => {{",
+                ty = result_rust_ty
+            ));
+            w.push_line(
+                "        let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap());"
+                    .to_string(),
+            );
+            w.push_line("        unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
+            w.push_line("    }".to_string());
+            w.push_line(format!(
+                "    {ty}::Int(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
+                ty = result_rust_ty
+            ));
+            w.push_line("}".to_string());
+        }
         Type::Optional(inner) => {
-            match inner.as_ref() {
+            let mut cur: &Type = inner;
+            while let Type::Group(g) = cur {
+                cur = g;
+            }
+
+            match cur {
                 Type::String => {
                     w.push_line(format!(
                         "match {result_name} {{",
@@ -165,6 +237,32 @@ pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::R
                     ));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v) },".to_string());
+                    w.push_line("}".to_string());
+                }
+                Type::Union(_types) => {
+                    // Optional(union) is normalized from `A | B | null` and `(A|B)?`.
+                    // NOTE: `result_rust_ty` is `Option<Enum>`, so we need the inner enum path.
+                    let enum_ty = result_rust_ty
+                        .trim_start_matches("Option<")
+                        .trim_end_matches('>');
+
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(u) => {".to_string());
+                    w.push_line("        match u {".to_string());
+                    w.push_line(format!("            {ty}::String(s) => {{", ty = enum_ty));
+                    w.push_line(
+                        "                let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap());"
+                            .to_string(),
+                    );
+                    w.push_line("                unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
+                    w.push_line("            }".to_string());
+                    w.push_line(format!(
+                        "            {ty}::Int(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
+                        ty = enum_ty
+                    ));
+                    w.push_line("        }".to_string());
+                    w.push_line("    }".to_string());
                     w.push_line("}".to_string());
                 }
                 _ => {
@@ -299,12 +397,12 @@ pub fn emit_param_extract(
     idx1: &usize,
 ) -> ::askama::Result<String> {
     if param.variadic {
-        return emit_varargs_collect(&param.name, &param.ty, param.file_mode, *idx0);
+        return emit_varargs_collect(&param.rust_name, &param.ty, param.file_mode, *idx0);
     }
 
     if let Type::Optional(inner) = &param.ty {
         let mut w = CodeWriter::new();
-        emit_missing_arg(&mut w, *idx1, &param.name);
+        emit_missing_arg(&mut w, *idx1, &param.rust_name);
         emit_argv_v_let(&mut w, *idx0);
 
         // V1: Optional(T) parameter decoding
@@ -313,37 +411,162 @@ pub fn emit_param_extract(
         w.push_line(
             "let __ridl_tag = mquickjs_rs::mquickjs_ffi::js_value_special_tag(v);".to_string(),
         );
+        let opt_inner_ty = param
+            .rust_ty
+            .strip_prefix("Option<")
+            .and_then(|s| s.strip_suffix('>'))
+            .unwrap_or(param.rust_ty.as_str());
+
         w.push_line(format!(
             "let mut __ridl_opt_{name}: Option<{ty}> = None;",
-            name = param.name,
-            ty = rust_type_from_idl(inner)?
+            name = param.rust_name,
+            ty = opt_inner_ty
         ));
 
         w.push_line(format!(
             "if __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_NULL as u32) || __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_UNDEFINED as u32) {{"
         ));
-        w.push_line(format!("    __ridl_opt_{name} = None;", name = param.name));
+        w.push_line(format!("    __ridl_opt_{name} = None;", name = param.rust_name));
         w.push_line("} else {".to_string());
 
         // Decode inner into a local temp, then wrap Some(...)
-        let inner_name = format!("{name}_inner", name = param.name);
-        let inner_extract = emit_single_param_extract(&inner_name, inner.as_ref(), param.file_mode, *idx0, *idx1)?;
-        for line in inner_extract.lines() {
-            w.push_line(format!("    {line}"));
+        let inner_name = format!("{name}_inner", name = param.rust_name);
+
+        // Reuse the already extracted JSValue `v` for optional inner decoding.
+        // (Do not emit another `let v = ...` shadowing; it would also lose the original JSValue.)
+        if matches!(inner.as_ref(), Type::Union(_)) {
+            // For Optional(Union), decode from the already-extracted `v`.
+            let inner_extract = emit_union_param_extract_from_jsvalue(&inner_name, inner.as_ref(), opt_inner_ty)?;
+            for line in inner_extract.lines() {
+                w.push_line(format!("    {line}"));
+            }
+        } else {
+            // For Optional(T), decode from the already-extracted `v`.
+            let inner_extract = emit_single_param_extract_from_jsvalue(&inner_name, inner.as_ref(), param.file_mode)?;
+            for line in inner_extract.lines() {
+                w.push_line(format!("    {line}"));
+            }
         }
-        w.push_line(format!("    __ridl_opt_{name} = Some({inner_name});", name = param.name, inner_name = inner_name));
+
+        w.push_line(format!(
+            "    __ridl_opt_{name} = Some({inner_name});",
+            name = param.rust_name,
+            inner_name = inner_name
+        ));
         w.push_line("}".to_string());
 
-        w.push_line(format!("let {name}: Option<{ty}> = __ridl_opt_{name};", name = param.name, ty = rust_type_from_idl(inner)?));
+        // Optional(T) decoding always yields `Option<Inner>`.
+        // For union types, rust_ty might have been overridden to `Enum` or `Option<Enum>`;
+        // here we must bind the final param as `Option<Enum>`.
+        let final_rust_ty = if param.rust_ty.starts_with("Option<") {
+            param.rust_ty.clone()
+        } else {
+            format!("Option<{}>", param.rust_ty)
+        };
+
+        w.push_line(format!(
+            "let {name}: {ty} = __ridl_opt_{name};",
+            name = param.rust_name,
+            ty = final_rust_ty
+        ));
 
         return Ok(w.into_string());
     }
 
-    emit_single_param_extract(&param.name, &param.ty, param.file_mode, *idx0, *idx1)
+    if matches!(&param.ty, Type::Union(_)) {
+        return emit_union_param_extract(&param.rust_name, &param.ty, &param.rust_ty, param.file_mode, *idx0, *idx1);
+    }
+
+    emit_single_param_extract(&param.rust_name, &param.ty, param.file_mode, *idx0, *idx1)
+}
+
+fn emit_union_param_extract(
+    name: &str,
+    ty: &Type,
+    rust_ty: &str,
+    _file_mode: FileMode,
+    idx0: usize,
+    idx1: usize,
+) -> ::askama::Result<String> {
+    let mut w = CodeWriter::new();
+
+    emit_missing_arg(&mut w, idx1, name);
+    emit_argv_v_let(&mut w, idx0);
+
+    let inner = emit_union_param_extract_from_jsvalue(name, ty, rust_ty)?;
+    for line in inner.lines() {
+        w.push_line(line.to_string());
+    }
+
+    Ok(w.into_string())
+}
+
+fn emit_union_param_extract_from_jsvalue(
+    name: &str,
+    ty: &Type,
+    rust_ty: &str,
+) -> ::askama::Result<String> {
+    let mut w = CodeWriter::new();
+
+    // Avoid shadowing the already-extracted JSValue `v`.
+    let out_name = format!("__ridl_union_{name}", name = name);
+
+    let Type::Union(types) = ty else {
+        w.push_line(format!(
+            "compile_error!(\"v1 glue: emit_union_param_extract called for non-union {name}\");",
+            name = name
+        ));
+        return Ok(w.into_string());
+    };
+
+    // v1 supports only discriminable unions. Numeric unions are rejected by validator.
+    // Try members in a fixed order for determinism.
+    let want_string = types.iter().any(|t| matches!(t, Type::String));
+    let want_int = types.iter().any(|t| matches!(t, Type::Int));
+
+    w.push_line(format!("let mut {out_name}: {rust_ty};", out_name = out_name, rust_ty = rust_ty));
+
+    if want_string {
+        w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) } != 0 {".to_string());
+        w.indent();
+        emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &format!("\"invalid union argument: {name}\""));
+        w.push_line("let s = unsafe { core::ffi::CStr::from_ptr(ptr) };".to_string());
+        w.push_line(format!("{out_name} = {rust_ty}::String(s.to_string_lossy().into_owned());", out_name = out_name, rust_ty = rust_ty));
+        w.push_line("} else".to_string());
+        w.dedent();
+    }
+
+    if want_int {
+        w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) } != 0 {".to_string());
+        w.indent();
+        emit_to_i32_expr(&mut w, "v", "out", &format!("\"invalid union argument: {name}\""));
+        w.push_line(format!("{out_name} = {rust_ty}::Int(out);", out_name = out_name, rust_ty = rust_ty));
+        w.dedent();
+        w.push_line("} else {".to_string());
+        w.indent();
+        w.push_line(format!("return js_throw_type_error(ctx, \"invalid union argument: {name}\");", name = name));
+        w.dedent();
+        w.push_line("}".to_string());
+    } else {
+        w.push_line("{".to_string());
+        w.indent();
+        w.push_line(format!("return js_throw_type_error(ctx, \"invalid union argument: {name}\");", name = name));
+        w.dedent();
+        w.push_line("}".to_string());
+    }
+
+    w.push_line(format!(
+        "let {name}: {rust_ty} = {out_name};",
+        name = name,
+        rust_ty = rust_ty,
+        out_name = out_name
+    ));
+
+    Ok(w.into_string())
 }
 
 pub fn emit_call_arg(param: &TemplateParam) -> ::askama::Result<String> {
-    Ok(param.name.clone())
+    Ok(param.rust_name.clone())
 }
 
 fn emit_missing_arg(w: &mut CodeWriter, idx1: usize, name: &str) {
@@ -483,16 +706,32 @@ fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_
 fn emit_single_param_extract(
     name: &str,
     ty: &Type,
-    _file_mode: FileMode,
+    file_mode: FileMode,
     idx0: usize,
     idx1: usize,
 ) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
+    emit_missing_arg(&mut w, idx1, name);
+    emit_argv_v_let(&mut w, idx0);
+
+    let inner = emit_single_param_extract_from_jsvalue(name, ty, file_mode)?;
+    for line in inner.lines() {
+        w.push_line(line.to_string());
+    }
+
+    Ok(w.into_string())
+}
+
+fn emit_single_param_extract_from_jsvalue(
+    name: &str,
+    ty: &Type,
+    _file_mode: FileMode,
+) -> ::askama::Result<String> {
+    let mut w = CodeWriter::new();
+
     match ty {
         Type::String => {
-            emit_missing_arg(&mut w, idx1, name);
-            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid string argument: {name}");
             emit_check_is_string_expr(&mut w, "v", &format!("\"{}\"", err));
             emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &format!("\"{}\"", err));
@@ -506,31 +745,30 @@ fn emit_single_param_extract(
             ));
         }
         Type::Int => {
-            emit_missing_arg(&mut w, idx1, name);
-            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid int argument: {name}");
             emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
             emit_to_i32_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Bool => {
-            emit_missing_arg(&mut w, idx1, name);
-            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid bool argument: {name}");
             emit_extract_bool_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Double => {
-            emit_missing_arg(&mut w, idx1, name);
-            emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid double argument: {name}");
             emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
             emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Any => {
-            emit_missing_arg(&mut w, idx1, name);
             w.push_line(format!(
-                "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value({v});",
-                name = name,
-                v = emit_argv_v(idx0)
+                "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
+                name = name
+            ));
+        }
+
+        Type::Union(_types) => {
+            w.push_line(format!(
+                "compile_error!(\"v1 glue: union decoding must be generated via emit_param_extract (needs rust_ty) for {name}\");",
+                name = name
             ));
         }
 
