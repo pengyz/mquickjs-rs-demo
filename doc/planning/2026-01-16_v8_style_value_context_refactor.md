@@ -35,7 +35,7 @@
 
 - RIDL v1 glue 映射：
   - `any` 入参：`Local<Value>`（借用）
-  - `any` 返回：`Global<Value>`（拥有/已 root）
+  - `any` 返回：`Global<Value>`（拥有/已 root；对外以 `Global::new/reset` 表达）
 
 ### 1.2 非目标
 
@@ -118,7 +118,7 @@ impl<'ctx> Scope<'ctx> {
 
 ### 2.4 Global（拥有句柄 / Persistent）
 
-Global 用于跨 Scope 保存/返回。底层使用 GCRef/root。
+Global 用于跨 Scope 保存/返回。底层使用 GCRef/root（实现细节），对外 API 采用 V8 风格：通过构造与 `reset` 表达“持久引用”的语义，弱化/隐藏 `pin` 概念。
 
 ```rust
 pub struct Global<T = Value> {
@@ -127,17 +127,23 @@ pub struct Global<T = Value> {
     gc_ref: Pin<Box<UnsafeCell<JSGCRef>>>,
     _ty: PhantomData<T>,
 }
-```
 
-构造：由 Scope 从 Local pin 得到：
+impl<T> Global<T> {
+    // v8::Global<T> g(isolate, local)
+    pub fn new<'ctx>(scope: &Scope<'ctx>, v: Local<'ctx, T>) -> Self { /* root */ }
 
-```rust
-impl<'ctx, T> Local<'ctx, T> {
-    pub fn pin(self, scope: &Scope<'ctx>) -> Global<T> { /* JS_AddGCRef(scope.ctx.ctx, ...) */ }
+    // g.Reset(isolate, local)
+    pub fn reset<'ctx>(&mut self, scope: &Scope<'ctx>, v: Local<'ctx, T>) { /* re-root */ }
+
+    // g.Reset(); 释放
+    pub fn reset_empty(&mut self) { /* unroot */ }
 }
 ```
 
-注意：这里的签名可优化为 `scope.pin(local)`，避免 Local 暴露 pin。
+说明：
+- `Local` 仍然是借用句柄，只能在 `Scope` 生命周期内存在。
+- 需要跨作用域/跨边界保存时，显式构造 `Global` 或调用 `reset`。
+- 旧的 `pin()` 仅作为内部实现细节存在，不在公开 API 中强调。
 
 ---
 
@@ -156,7 +162,8 @@ thread_local! { static TLS_CURRENT: RefCell<Vec<CurrentEntry>> = ...; }
 ```
 
 - `EnterGuard` push/pop CurrentEntry。
-- 提供 `Context::current()` 仅用于 glue 内部（返回 raw ctx + id），不用于构造 Local（Local 必须通过 Scope）。
+- 对外 API 不依赖 TLS 来构造 `Local`（Local 必须通过 `Scope`）。
+- TLS 仅作为 glue/FFI 的内部便利：在深层 helper 需要 `JSContext*` 时可取栈顶，但必须与当前 `Scope` 的 `ContextId` 做一致性断言。
 
 ---
 
@@ -176,8 +183,8 @@ thread_local! { static TLS_CURRENT: RefCell<Vec<CurrentEntry>> = ...; }
 ### 5.1 参数
 
 - 基础类型（bool/i32/f64/String/...）：按现有规则从 JSValue 转换。
-- `any` 入参：生成 `Local<'_, Value>`（或 `Local<'_, Value>` 的别名）传给用户实现。
-  - 用户侧若要跨调用保存，必须 `.pin(&scope)` 得到 `Global`。
+- `any` 入参：生成 `Local<'_, Value>`（或别名）传给用户实现。
+  - 用户侧若要跨调用保存：`let g = Global::new(&scope, v);` 或复用一个 `Global` 并 `reset(&scope, v)`。
 
 ### 5.2 返回
 
