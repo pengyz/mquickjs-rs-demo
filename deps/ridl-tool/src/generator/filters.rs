@@ -123,9 +123,59 @@ pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::R
         Type::Any => {
             w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
+        Type::Optional(inner) => {
+            match inner.as_ref() {
+                Type::String => {
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(s) => {".to_string());
+                    w.push_line(
+                        "        let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap());"
+                            .to_string(),
+                    );
+                    w.push_line("        unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
+                    w.push_line("    }".to_string());
+                    w.push_line("}".to_string());
+                }
+                Type::Int => {
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) },".to_string());
+                    w.push_line("}".to_string());
+                }
+                Type::Bool => {
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => mquickjs_rs::mquickjs_ffi::js_mkbool(v),".to_string());
+                    w.push_line("}".to_string());
+                }
+                Type::Double | Type::Float => {
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v) },".to_string());
+                    w.push_line("}".to_string());
+                }
+                _ => {
+                    w.push_line("compile_error!(\"v1 glue: unsupported return type\");".to_string());
+                    w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
+                }
+            }
+        }
         _ => {
-            w.push_line("compile_error!(\"v1 glue: unsupported return type\");");
-            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED");
+            w.push_line("compile_error!(\"v1 glue: unsupported return type\");".to_string());
+            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
         }
     }
 
@@ -252,26 +302,39 @@ pub fn emit_param_extract(
         return emit_varargs_collect(&param.name, &param.ty, param.file_mode, *idx0);
     }
 
-    // v1 glue: minimal support for `any?` (Optional(Any)) used by tests.
-    if matches!(&param.ty, Type::Optional(inner) if matches!(inner.as_ref(), Type::Any)) {
+    if let Type::Optional(inner) = &param.ty {
         let mut w = CodeWriter::new();
         emit_missing_arg(&mut w, *idx1, &param.name);
         emit_argv_v_let(&mut w, *idx0);
 
-        match param.file_mode {
-            FileMode::Default => {
-                w.push_line(format!(
-                    "let {name}: Option<JSValue> = if mquickjs_rs::mquickjs_ffi::JS_IsNull(_v) == 1 || mquickjs_rs::mquickjs_ffi::JS_IsUndefined(_v) == 1 {{ None }} else {{ Some(_v) }};",
-                    name = param.name
-                ));
-            }
-            FileMode::Strict => {
-                w.push_line(format!(
-                    "let {name}: Option<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = if mquickjs_rs::mquickjs_ffi::JS_IsNull(_v) == 1 || mquickjs_rs::mquickjs_ffi::JS_IsUndefined(_v) == 1 {{ None }} else {{ Some(scope.value(_v)) }};",
-                    name = param.name
-                ));
-            }
+        // V1: Optional(T) parameter decoding
+        // - null/undefined => None
+        // - otherwise decode as T (no implicit type conversions)
+        w.push_line(
+            "let __ridl_tag = mquickjs_rs::mquickjs_ffi::js_value_special_tag(v);".to_string(),
+        );
+        w.push_line(format!(
+            "let mut __ridl_opt_{name}: Option<{ty}> = None;",
+            name = param.name,
+            ty = rust_type_from_idl(inner)?
+        ));
+
+        w.push_line(format!(
+            "if __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_NULL as u32) || __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_UNDEFINED as u32) {{"
+        ));
+        w.push_line(format!("    __ridl_opt_{name} = None;", name = param.name));
+        w.push_line("} else {".to_string());
+
+        // Decode inner into a local temp, then wrap Some(...)
+        let inner_name = format!("{name}_inner", name = param.name);
+        let inner_extract = emit_single_param_extract(&inner_name, inner.as_ref(), param.file_mode, *idx0, *idx1)?;
+        for line in inner_extract.lines() {
+            w.push_line(format!("    {line}"));
         }
+        w.push_line(format!("    __ridl_opt_{name} = Some({inner_name});", name = param.name, inner_name = inner_name));
+        w.push_line("}".to_string());
+
+        w.push_line(format!("let {name}: Option<{ty}> = __ridl_opt_{name};", name = param.name, ty = rust_type_from_idl(inner)?));
 
         return Ok(w.into_string());
     }
@@ -301,7 +364,9 @@ fn emit_argv_v_expr(idx0_expr: &str) -> String {
 
 fn emit_argv_v_let(w: &mut CodeWriter, idx0: usize) {
     // The extracted JSValue may only be needed for type checks/conversions.
+    // Keep the binding name stable so downstream templates can reference `v`.
     w.push_line(format!("let _v = unsafe {{ *argv.add({idx0}) }};", idx0 = idx0));
+    w.push_line("let v: JSValue = _v;".to_string());
 }
 
 fn emit_check_is_string_expr(w: &mut CodeWriter, value_expr: &str, err_expr: &str) {
@@ -322,23 +387,61 @@ fn emit_check_is_number_expr(w: &mut CodeWriter, value_expr: &str, err_expr: &st
 
 
 fn emit_to_i32_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_expr: &str) {
+    // V1: RIDL is strict even in default mode. Do not normalize number->int by truncation.
+    // Accept only integer numbers.
+    let value_raw = format!("{value_expr}_raw");
+    w.push_line(format!("let {value_raw}: JSValue = {value_expr};", value_raw = value_raw, value_expr = value_expr));
+
+    w.push_line(format!(
+        "let mut {out}_n: f64 = 0.0;",
+        out = out_name
+    ));
+    w.push_line(format!(
+        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {out}_n as *mut _, {v}) }} < 0 {{ return js_throw_type_error(ctx, {err}); }}",
+        out = out_name,
+        v = value_raw,
+        err = err_expr
+    ));
+    w.push_line(format!(
+        "if !{out}_n.is_finite() || ({out}_n.fract() != 0.0) {{ return js_throw_type_error(ctx, {err}); }}",
+        out = out_name,
+        err = err_expr
+    ));
+
     w.push_line(format!("let mut {out}: i32 = 0;", out = out_name));
     w.push_line(format!(
         "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToInt32(ctx, &mut {out} as *mut _, {v}) }} < 0 {{ return js_throw_type_error(ctx, {err}); }}",
         out = out_name,
-        v = value_expr,
+        v = value_raw,
         err = err_expr
     ));
+
+    // Shadow the JSValue binding with the converted i32 for downstream use.
+    // If the source name is not used after extraction, use `_`-prefixed name to avoid unused-variable warnings.
+    let shadow_name = format!("_{value_expr}");
+    w.push_line(format!("let {shadow}: i32 = {out};", shadow = shadow_name, out = out_name));
 }
 
 fn emit_to_f64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_expr: &str) {
+    let value_raw = format!("{value_expr}_raw");
+    w.push_line(format!(
+        "let {value_raw}: JSValue = {value_expr};",
+        value_raw = value_raw,
+        value_expr = value_expr
+    ));
+
     w.push_line(format!("let mut {out}: f64 = 0.0;", out = out_name));
     w.push_line(format!(
         "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {out} as *mut _, {v}) }} < 0 {{ return js_throw_type_error(ctx, {err}); }}",
         out = out_name,
-        v = value_expr,
+        v = value_raw,
         err = err_expr
     ));
+
+    // Shadow the JSValue binding with the converted f64 for downstream use.
+    // If the source name is not used after extraction, use `_`-prefixed name to avoid unused-variable warnings.
+    let shadow_name = format!("_{value_expr}");
+    w.push_line(format!("let {shadow}: f64 = {out};", shadow = shadow_name, out = out_name));
 }
 
 
@@ -391,30 +494,36 @@ fn emit_single_param_extract(
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid string argument: {name}");
-            emit_check_is_string_expr(&mut w, "_v", &format!("\"{}\"", err));
-            emit_to_cstring_ptr_expr(&mut w, "_v", "ptr", &format!("\"{}\"", err));
-            w.push_line(format!("let {name}: *const c_char = ptr;", name = name));
-            w.push_line(format!("let _ = {name};", name = name));
+            emit_check_is_string_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &format!("\"{}\"", err));
+
+            // In this mquickjs fork, JS_ToCString returns a borrowed pointer.
+            // Convert immediately into an owned Rust String, truncating at NUL.
+            w.push_line("let s = unsafe { core::ffi::CStr::from_ptr(ptr) };".to_string());
+            w.push_line(format!(
+                "let {name}: String = s.to_string_lossy().into_owned();",
+                name = name
+            ));
         }
         Type::Int => {
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid int argument: {name}");
-            emit_check_is_number_expr(&mut w, "_v", &format!("\"{}\"", err));
-            emit_to_i32_expr(&mut w, "_v", name, &format!("\"{}\"", err));
+            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_i32_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Bool => {
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid bool argument: {name}");
-            emit_extract_bool_expr(&mut w, "_v", name, &format!("\"{}\"", err));
+            emit_extract_bool_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Double => {
             emit_missing_arg(&mut w, idx1, name);
             emit_argv_v_let(&mut w, idx0);
             let err = format!("invalid double argument: {name}");
-            emit_check_is_number_expr(&mut w, "_v", &format!("\"{}\"", err));
-            emit_to_f64_expr(&mut w, "_v", name, &format!("\"{}\"", err));
+            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Any => {
             emit_missing_arg(&mut w, idx1, name);

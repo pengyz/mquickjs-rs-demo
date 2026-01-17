@@ -8,6 +8,7 @@
 - RIDL class id 命名规范：若 class 属于全局注册，则 module_name 使用固定值 GLOBAL；若有 module 声明，则用 module path normalize（非 [A-Za-z0-9_] 替换为 _）后参与 class id 拼接；class id 全大写。
 - 禁止在 build.rs 等处为 rerun-if-changed 写死相对路径（例如 println!("cargo:rerun-if-changed=../../deps/ridl-tool")）；修复必须走通用机制，不得用临时硬编码绕过。
 - 关键引擎约束（mquickjs）：JSValue 指向对象/字符串等堆内存的生命周期由 tracing GC 管理，不使用引用计数；因此公开 API 中没有 JS_FreeValue/JS_DupValue。生成/FFI 代码一般不需要显式释放 JSValue；只要对象从根（如 global、prototype、对象属性、栈/GCRef）可达就会存活，不可达会被 GC 回收。临时值在通过 JS_SetPropertyStr 等写入可达对象后即可视为被引擎接管。
+- 本仓库执行顺序：每个工作项先明确测试矩阵并给出完整 RIDL 示例写入文档供审阅；用户确认后再实施（写用例/修实现/跑测试/修 bug 直到收敛验收）。另外：允许省略 mode 表示 default，strict 必须显式写。
 
 ## Working Conventions
 - For any requirement, think deeply first and produce a concrete plan. Store plans under `doc/planning/` (one plan per requirement) and mark the plan as completed when done.

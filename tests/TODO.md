@@ -26,7 +26,12 @@
   - `tests/global/test_struct_enum` 纳入 app 依赖
   - 新增/恢复 JS 用例并通过。
 
-### 4. class glue：修复生成代码错误与 constructor hook 约定
+### 4. V1 types：补齐 union/nullable/string 等类型支持（ridl-tool + v1 glue）
+- union：当前 ridl-tool 无法生成 Rust 类型（`unsupported ridl type in rust_type_from_idl: Union(...)`）
+- nullable 参数（Option<T>）：v1 glue 当前无法生成参数转换
+- string 参数：v1 glue 当前把 string param 转为 `*const c_char`，但生成 trait 使用 `String`，导致不匹配
+
+### 5. class glue：修复生成代码错误与 constructor hook 约定
 - 现象：生成的 glue 出现 `_argc/_argv` 与 `argc/argv` 使用不一致的编译错误；并且要求 `crate::impls::<class>_constructor()` 等 hook。
 - 产出：
   - glue 生成可编译
