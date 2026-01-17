@@ -619,35 +619,63 @@ fn validate_strict_any_usage(idl: &IDL) -> Result<(), Box<dyn std::error::Error>
     // functions
     for f in &idl.functions {
         validate_strict_any_params(&f.name, &f.params)?;
+        validate_strict_any_return(&f.name, &f.return_type)?;
     }
 
     // interfaces
     for i in &idl.interfaces {
         for m in &i.methods {
-            validate_strict_any_params(&format!("{}.{}", i.name, m.name), &m.params)?;
+            let ctx = format!("{}.{}", i.name, m.name);
+            validate_strict_any_params(&ctx, &m.params)?;
+            validate_strict_any_return(&ctx, &m.return_type)?;
         }
     }
 
     // singletons
     for s in &idl.singletons {
         for m in &s.methods {
-            validate_strict_any_params(&format!("{}.{}", s.name, m.name), &m.params)?;
+            let ctx = format!("{}.{}", s.name, m.name);
+            validate_strict_any_params(&ctx, &m.params)?;
+            validate_strict_any_return(&ctx, &m.return_type)?;
+        }
+
+        for p in &s.properties {
+            let ctx = format!("{}.{}", s.name, p.name);
+            validate_strict_any_type(&ctx, &p.property_type)?;
         }
     }
 
     // classes (methods/ctor)
     for c in &idl.classes {
         if let Some(ctor) = &c.constructor {
-            validate_strict_any_params(&format!("{}::constructor", c.name), &ctor.params)?;
+            let ctx = format!("{}::constructor", c.name);
+            validate_strict_any_params(&ctx, &ctor.params)?;
+            validate_strict_any_return(&ctx, &ctor.return_type)?;
         }
         for m in &c.methods {
-            validate_strict_any_params(&format!("{}::{}", c.name, m.name), &m.params)?;
+            let ctx = format!("{}::{}", c.name, m.name);
+            validate_strict_any_params(&ctx, &m.params)?;
+            validate_strict_any_return(&ctx, &m.return_type)?;
+        }
+        for p in &c.properties {
+            let ctx = format!("{}::{}", c.name, p.name);
+            validate_strict_any_type(&ctx, &p.property_type)?;
+        }
+    }
+
+    // structs
+    for st in &idl.structs {
+        for f in &st.fields {
+            let ctx = format!("{}.{}", st.name, f.name);
+            validate_strict_any_type(&ctx, &f.field_type)?;
         }
     }
 
     // callbacks
     for cb in &idl.callbacks {
-        validate_strict_any_params(&format!("callback {}", cb.name), &cb.params)?;
+        let ctx = format!("callback {}", cb.name);
+        validate_strict_any_params(&ctx, &cb.params)?;
+        validate_strict_any_return(&ctx, &cb.return_type)?;
     }
 
     Ok(())
@@ -660,11 +688,33 @@ fn validate_strict_any_params(
     for p in params {
         if matches!(p.param_type, Type::Any) && !p.variadic {
             return Err(format!(
-                "strict mode forbids `any` outside variadic parameters: {} param '{}'",
+                "strict 模式下禁止使用 any（仅允许可变参 ...args: any）: {} param '{}'",
                 ctx, p.name
             )
             .into());
         }
+    }
+    Ok(())
+}
+
+fn validate_strict_any_type(ctx: &str, ty: &Type) -> Result<(), Box<dyn std::error::Error>> {
+    if matches!(ty, Type::Any) {
+        return Err(format!(
+            "strict 模式下禁止使用 any（仅允许可变参 ...args: any）: {}",
+            ctx
+        )
+        .into());
+    }
+    Ok(())
+}
+
+fn validate_strict_any_return(ctx: &str, ty: &Type) -> Result<(), Box<dyn std::error::Error>> {
+    if matches!(ty, Type::Any) {
+        return Err(format!(
+            "strict 模式下禁止使用 any（仅允许可变参 ...args: any）: {} return",
+            ctx
+        )
+        .into());
     }
     Ok(())
 }
