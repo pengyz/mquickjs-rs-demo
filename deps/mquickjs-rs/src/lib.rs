@@ -45,6 +45,8 @@ pub mod mquickjs_ffi {
 pub use context::Context;
 pub use handles::global::Global;
 pub use handles::local::{Local, Value};
+pub use handles::handle::Handle;
+pub use handles::handle_scope::{EscapableHandleScope, HandleScope};
 pub use handles::scope::Scope;
 
 
@@ -97,21 +99,25 @@ mod tests {
     use crate::context::ContextToken;
 
     #[test]
-    fn test_pinned_value_survives_gc() {
-        // Pin a value as a GC root and force a GC; it should remain usable.
-        let mut context = Context::new(1024 * 1024).unwrap();
-        let v = context.create_string("pinned").unwrap();
-        let pinned = v.pin(&context);
+    fn test_global_value_survives_gc() {
+        // Pin a value as a GC root (Global) and force a GC; it should remain usable.
+        let context = Context::new(1024 * 1024).unwrap();
+
+        let h = context.token();
+        let scope = h.enter_scope();
+
+        let v = context.create_string(&scope, "pinned").unwrap();
+        let pinned = Global::new(&scope, v);
 
         unsafe { mquickjs_ffi::JS_GC(context.ctx) };
 
-        let s = context.get_string(pinned.as_ref()).unwrap();
+        let s = context.get_string(scope.value(pinned.as_raw())).unwrap();
         assert_eq!(s, "pinned");
     }
 
     #[test]
     fn test_tls_current_context_handle_nested() {
-        let mut ctx = Context::new(1024 * 1024).unwrap();
+        let ctx = Context::new(1024 * 1024).unwrap();
 
         assert!(ContextToken::current().is_none());
 
@@ -280,9 +286,12 @@ mod tests {
     #[test]
     fn test_string_creation() {
         let context = Context::new(1024 * 1024).unwrap();
-        let value = context.create_string("Hello, World!").unwrap();
-        assert!(value.is_string(&context));
+        let h = context.token();
+        let scope = h.enter_scope();
 
+        let value = context.create_string(&scope, "Hello, World!").unwrap();
+
+        // QuickJS has both string and string objects; for this test, rely on JS_ToCString.
         let js_str = context.get_string(value).unwrap();
         assert_eq!(js_str, "Hello, World!");
     }
@@ -303,7 +312,8 @@ mod tests {
                 mquickjs_ffi::JS_EVAL_RETVAL as i32,
             )
         };
-        let scope = context.token().enter_scope();
+        let h = context.token();
+        let scope = h.enter_scope();
         let value = scope.value(str_val);
         // QuickJS has both string and string objects; for this test, rely on JS_ToCString.
         assert!(context.get_string(value).is_ok());

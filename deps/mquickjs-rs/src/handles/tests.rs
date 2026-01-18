@@ -27,7 +27,7 @@ mod tests {
             g
         };
 
-        let res = std::panic::catch_unwind(|| drop(leaked));
+        let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| drop(leaked)));
         assert!(res.is_err());
     }
 }
