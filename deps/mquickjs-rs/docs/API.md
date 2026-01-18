@@ -14,7 +14,7 @@
 - `unsafe ContextToken::from_js_ctx(ctx: *mut JSContext) -> Option<ContextToken>`
 - `ContextToken::current() -> Option<ContextToken>`（仅作为 glue 内部便利，不是生命周期锚点）
 
-## 2. JS 值：Local / Handle / Global
+## 2. JS 值：Local / Handle / Any / Global
 
 mquickjs 的 JSValue 指向对象/字符串等堆内存的生命周期由 tracing GC 管理。
 
@@ -52,7 +52,13 @@ let escaped = hs.escapable(|mut inner| {
 });
 ```
 
-### 2.3 Global<T>
+### 2.3 Any<'hs, 'ctx>
+
+- `Any` 是 `Value` 的语义特化（newtype）：表达“业务层动态值”。
+- 当前实现中，`Any` 内部持有 `Handle<'hs,'ctx,Value>`，因此它在所在 `HandleScope` 生命周期内是 GC-safe 的。
+- RIDL glue/native 代码都推荐用 `Any` 承载 `any` 参数与动态返回值。
+
+### 2.4 Global<T>
 
 - `Global` 是可保存型句柄：内部通过 `JSGCRef` 将 JSValue 作为 GC root 持久化。
 - `Global::new(&scope, local)`：从 `Local<T>` 创建。

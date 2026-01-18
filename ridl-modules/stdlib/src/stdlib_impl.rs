@@ -64,22 +64,20 @@ impl Default for DefaultConsoleSingleton {
 }
 
 impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
-    fn log(&mut self, args: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>>) {
+    fn log(&mut self, _env: &mut mquickjs_rs::Env<'_>, args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>) {
         // Keep v1 behavior: format via QuickJS C API.
-        // NOTE: Local<Value> is a borrowed view; we can pass through raw values.
-        // TODO: if we later want to avoid using C string conversion here, implement formatting in Rust.
         let Some(h) = mquickjs_rs::context::ContextToken::current() else {
             return;
         };
-        print_js_values(h.ctx, &args.iter().map(|v| v.as_raw()).collect::<Vec<_>>(), false);
+        print_js_values(h.ctx, &args, false);
         println!();
     }
 
-    fn error(&mut self, args: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>>) {
+    fn error(&mut self, _env: &mut mquickjs_rs::Env<'_>, args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>) {
         let Some(h) = mquickjs_rs::context::ContextToken::current() else {
             return;
         };
-        print_js_values(h.ctx, &args.iter().map(|v| v.as_raw()).collect::<Vec<_>>(), true);
+        print_js_values(h.ctx, &args, true);
         eprintln!();
     }
 

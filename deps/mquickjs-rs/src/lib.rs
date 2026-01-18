@@ -43,9 +43,11 @@ pub mod mquickjs_ffi {
 }
 
 pub use context::Context;
+pub use env::Env;
 pub use handles::global::Global;
 pub use handles::local::{Local, Value};
 pub use handles::handle::Handle;
+pub use handles::any::Any;
 pub use handles::handle_scope::{EscapableHandleScope, HandleScope};
 pub use handles::scope::Scope;
 
@@ -55,6 +57,8 @@ pub mod ridl_class_id {
 }
 
 pub mod context;
+
+pub mod env;
 
 pub mod handles;
 

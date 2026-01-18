@@ -6,6 +6,7 @@ use crate::mquickjs_ffi;
 pub struct Value;
 pub struct Object;
 pub struct Function;
+pub struct Array;
 
 #[derive(Copy, Clone)]
 pub struct Local<'ctx, T = Value> {

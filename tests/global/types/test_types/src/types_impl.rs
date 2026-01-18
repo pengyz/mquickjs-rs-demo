@@ -27,16 +27,8 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         v
     }
 
-    fn echo_any(
-        &mut self,
-        v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
-    ) -> mquickjs_rs::handles::global::Global<mquickjs_rs::handles::local::Value> {
-        // V1: any is passed through as a handle; do not normalize.
-        let Some(h) = mquickjs_rs::context::ContextToken::current() else {
-            panic!("echoAny must run inside JS context");
-        };
-        let scope = h.enter_scope();
-        mquickjs_rs::handles::global::Global::new(&scope, v)
+    fn echo_any(&mut self, _env: &mut mquickjs_rs::Env<'_>, v: mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue {
+        v
     }
 
     fn echo_string_or_int(

@@ -57,12 +57,9 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         Type::Optional(inner) => format!("Option<{}>", rust_type_from_idl(inner)?),
 
         // `any` at Rust boundary:
-        // - param: borrowed view (Local<Value>)
-        // - return: owned/rooted value (Global<Value>)
-        //
-        // Note: return-type mapping is handled at template level because it depends on whether
-        // the position is param vs return.
-        Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
+        // - keep it as raw JSValue (no Rust lifetime parameters) so traits can be implemented ergonomically.
+        // - glue will still inject `&mut Env` for methods needing `any`, enabling convenient helpers.
+        Type::Any => "mquickjs_rs::mquickjs_ffi::JSValue".to_string(),
 
         Type::Custom(name) => name.clone(),
 
@@ -168,7 +165,7 @@ pub fn emit_return_convert_typed(
             ));
         }
         Type::Any => {
-            w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
+            w.push_line(format!("{result_name}", result_name = result_name));
         }
         Type::Union(_types) => {
             // v1 union return encoding: match enum variants.
@@ -760,7 +757,7 @@ fn emit_single_param_extract_from_jsvalue(
         }
         Type::Any => {
             w.push_line(format!(
-                "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
+                "let {name}: mquickjs_rs::mquickjs_ffi::JSValue = v;",
                 name = name
             ));
         }
@@ -872,12 +869,12 @@ fn emit_varargs_collect(
         Type::Any => {
             let _ = file_mode;
             w.push_line(format!(
-                "let mut {name}: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = Vec::new();",
+                "let mut {name}: Vec<mquickjs_rs::mquickjs_ffi::JSValue> = Vec::new();",
                 name = name
             ));
             emit_varargs_loop_header(&mut w, start_idx0, false);
             w.push_line(format!(
-                "{name}.push(scope.value({v}));",
+                "{name}.push({v});",
                 name = name,
                 v = emit_argv_v_expr("i")
             ));
