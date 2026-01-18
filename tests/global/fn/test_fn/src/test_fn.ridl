@@ -1,6 +1,15 @@
-mode strict;
+// default mode: allow `any` in params/returns for integration tests
 
 singleton TestFn {
     // v1 glue currently supports primitive conversions for strict mode.
-    fn addInt(a: int, b: int) -> void;
+    fn addInt(a: int, b: int) -> int;
+
+    fn echoAny(v: any) -> any;
+    fn makeAnyString(s: string) -> any;
+    fn anyToString(v: any) -> string;
+
+    fn makeArrayWithLen(len: int) -> any;
+    fn arrLen(arr: any) -> int;
+    fn arrPush(arr: any, v: any) -> int;
+    fn arrSet(arr: any, index: int, v: any) -> void;
 }

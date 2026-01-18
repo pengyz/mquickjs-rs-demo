@@ -27,8 +27,21 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         v
     }
 
-    fn echo_any(&mut self, _env: &mut mquickjs_rs::Env<'_>, v: mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue {
-        v
+    fn echo_any(
+        &mut self,
+        _env: &mut mquickjs_rs::Env<'_>,
+        _v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
+    ) -> () {
+        unreachable!("any-return must use echo_any_out")
+    }
+
+    fn echo_any_out<'ctx>(
+        &mut self,
+        env: &mut mquickjs_rs::Env<'ctx>,
+        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        v: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>,
+    ) -> () {
+        out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)))
     }
 
     fn echo_string_or_int(

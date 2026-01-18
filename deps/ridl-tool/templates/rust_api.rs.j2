@@ -24,7 +24,30 @@ pub trait {{ itf.name|to_upper_camel_case }}Interface {
         {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endfor %}
+    {%- if method.return_type == Type::Any %}
+    ) -> ();
+
+    fn {{ method.name|to_snake_case }}_out<'ctx>(
+        &mut self,
+        {%- if method.needs_scope %}
+        env: &mut mquickjs_rs::Env<'ctx>,
+        {%- endif %}
+        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        {%- for p in method.params %}
+        {%- if p.variadic %}
+        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
+        {%- else %}
+        {%- if p.ty == Type::Any %}
+        {{ p.name|lower }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
+        {%- else %}
+        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {%- endif %}
+        {%- endif %}
+        {%- endfor %}
+    ) -> ();
+    {%- else %}
     ) -> {{ method.return_rust_ty|safe }};
+    {%- endif %}
     {%- endfor %}
 }
 {%- endfor %}
@@ -46,7 +69,30 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
         {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endfor %}
+    {%- if method.return_type == Type::Any %}
+    ) -> ();
+
+    fn {{ method.name|to_snake_case }}_out<'ctx>(
+        &mut self,
+        {%- if method.needs_scope %}
+        env: &mut mquickjs_rs::Env<'ctx>,
+        {%- endif %}
+        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        {%- for p in method.params %}
+        {%- if p.variadic %}
+        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
+        {%- else %}
+        {%- if p.ty == Type::Any %}
+        {{ p.name|lower }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
+        {%- else %}
+        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {%- endif %}
+        {%- endif %}
+        {%- endfor %}
+    ) -> ();
+    {%- else %}
     ) -> {{ method.return_rust_ty|safe }};
+    {%- endif %}
     {%- endfor %}
 
     {%- for prop in s.properties %}
@@ -96,7 +142,30 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
         {%- for p in method.params %}
         {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endfor %}
+    {%- if method.return_type == Type::Any %}
+    ) -> ();
+
+    fn {{ method.name|to_snake_case }}_out<'ctx>(
+        &mut self,
+        {%- if method.needs_scope %}
+        env: &mut mquickjs_rs::Env<'ctx>,
+        {%- endif %}
+        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        {%- for p in method.params %}
+        {%- if p.variadic %}
+        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
+        {%- else %}
+        {%- if p.ty == Type::Any %}
+        {{ p.name|lower }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
+        {%- else %}
+        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {%- endif %}
+        {%- endif %}
+        {%- endfor %}
+    ) -> ();
+    {%- else %}
     ) -> {{ method.return_rust_ty|safe }};
+    {%- endif %}
 {%- endfor %}
 
 {%- for prop in class.properties %}

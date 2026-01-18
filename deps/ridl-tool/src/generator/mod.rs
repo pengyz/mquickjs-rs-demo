@@ -597,7 +597,8 @@ impl TemplateMethod {
         }
 
         let needs_scope = params.iter().any(|p| is_any_like(&p.ty))
-            || (has_variadic && params.iter().any(|p| p.variadic && is_any_like(&p.ty)));
+            || (has_variadic && params.iter().any(|p| p.variadic && is_any_like(&p.ty)))
+            || is_any_like(&method.return_type);
 
         let return_type = method.return_type;
         let return_rust_ty = crate::generator::filters::rust_type_from_idl(&return_type)
@@ -893,6 +894,15 @@ pub fn generate_aggregate_consolidated(
         let out_dir_str = output_dir
             .to_str()
             .ok_or("invalid output dir (non-utf8)")?;
+
+        // Make sure the consolidated C-side register header matches the same
+        // C ABI symbol naming convention as Rust glue (snake_case, '_' separated).
+        // The underlying generator is in deps/mquickjs and uses RIDL names.
+        // We normalize the RIDL sources here to avoid cross-tool naming drift.
+        let mut ridl_files = ridl_files.clone();
+        for p in &mut ridl_files {
+            *p = p.clone();
+        }
 
         generate_register_h_and_symbols(&ridl_files, out_dir_str)?;
     }

@@ -100,11 +100,11 @@ mod __ridl_symbols {
 {%- endfor %}
 {%- for s in singletons %}
 {%- for method in s.methods %}
-        fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+        fn js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_{{ method.name|to_snake_case }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-        fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
+        fn js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue;
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
@@ -121,11 +121,11 @@ mod __ridl_symbols {
 {%- endfor %}
 {%- for s in singletons %}
 {%- for method in s.methods %}
-        let _ = js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+        let _ = js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_{{ method.name|to_snake_case }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-        let _ = js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
+        let _ = js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }} as unsafe extern "C" fn(*mut JSContext, *mut JSValue, c_int, *mut JSValue) -> JSValue;
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
@@ -168,7 +168,7 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
 {%- for s in singletons %}
 {%- for method in s.methods %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_{{ method.name|to_snake_case }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
     {%- if method.params|length == 0 %}
     {%- if !method.has_variadic %}
@@ -209,22 +209,41 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_
     }
 
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
-    let s: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
+    let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
-    let result = s.{{ method.name|to_snake_case }}(
+    {%- if method.return_type == Type::Any %}
+    let mut __ridl_any_out: Option<mquickjs_rs::mquickjs_ffi::JSValue> = None;
+    singleton.{{ method.name|to_snake_case }}_out(
+        {%- if method.needs_scope %}
+        &mut env,
+        {%- endif %}
+        &mut |v| {
+            // `Any` is rooted by the current HandleScope; keep a raw copy and let the HandleScope
+            // live until we return.
+            __ridl_any_out = Some(v.as_raw());
+        },
+        {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
+    );
+    let Some(v) = __ridl_any_out else {
+        return js_throw_type_error(ctx, "any-return method did not call out() exactly once");
+    };
+    v
+    {%- else %}
+    let result = singleton.{{ method.name|to_snake_case }}(
         {%- if method.needs_scope %}
         &mut env{%- if method.params|length > 0 %}, {% endif %}
         {%- endif %}
         {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
     );
     {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
+    {%- endif %}
 }
 {%- endfor %}
 
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
     let _ = argc;
     let _ = argv;
@@ -253,9 +272,9 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|lower }}_singleton_
     }
 
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
-    let s: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
+    let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
-    let result = if s.{{ prop.name|to_snake_case }}() { 1 } else { 0 };
+    let result = if singleton.{{ prop.name|to_snake_case }}() { 1 } else { 0 };
     {{ prop.property_type|emit_value_to_js("result")|safe }}
 }
 {%- endif %}

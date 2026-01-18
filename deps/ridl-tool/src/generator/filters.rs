@@ -57,9 +57,12 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         Type::Optional(inner) => format!("Option<{}>", rust_type_from_idl(inner)?),
 
         // `any` at Rust boundary:
-        // - keep it as raw JSValue (no Rust lifetime parameters) so traits can be implemented ergonomically.
-        // - glue will still inject `&mut Env` for methods needing `any`, enabling convenient helpers.
-        Type::Any => "mquickjs_rs::mquickjs_ffi::JSValue".to_string(),
+        // - Keep representation consistent across file modes.
+        // - `FileMode::Strict` only limits where `any` may appear; it must not change the ABI.
+        //
+        // any param is a borrowed view.
+        // any return is handled at template/method level (see generator/mod.rs overrides).
+        Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
 
         Type::Custom(name) => name.clone(),
 
@@ -165,7 +168,8 @@ pub fn emit_return_convert_typed(
             ));
         }
         Type::Any => {
-            w.push_line(format!("{result_name}", result_name = result_name));
+            // any return is a Handle<Value> at the Rust boundary.
+            w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
         Type::Union(_types) => {
             // v1 union return encoding: match enum variants.
@@ -309,6 +313,10 @@ pub fn to_snake_case(s: &str) -> ::askama::Result<String> {
 
 pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
     Ok(crate::generator::naming::to_upper_camel_case(s))
+}
+
+pub fn to_lower_camel_case(s: &str) -> ::askama::Result<String> {
+    Ok(crate::generator::naming::to_lower_camel_case(s))
 }
 
 #[allow(dead_code)]
@@ -481,7 +489,7 @@ fn emit_union_param_extract(
     name: &str,
     ty: &Type,
     rust_ty: &str,
-    _file_mode: FileMode,
+    file_mode: FileMode,
     idx0: usize,
     idx1: usize,
 ) -> ::askama::Result<String> {
@@ -723,7 +731,7 @@ fn emit_single_param_extract(
 fn emit_single_param_extract_from_jsvalue(
     name: &str,
     ty: &Type,
-    _file_mode: FileMode,
+    file_mode: FileMode,
 ) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
@@ -756,8 +764,9 @@ fn emit_single_param_extract_from_jsvalue(
             emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Any => {
+            let _ = file_mode;
             w.push_line(format!(
-                "let {name}: mquickjs_rs::mquickjs_ffi::JSValue = v;",
+                "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
                 name = name
             ));
         }
@@ -869,12 +878,12 @@ fn emit_varargs_collect(
         Type::Any => {
             let _ = file_mode;
             w.push_line(format!(
-                "let mut {name}: Vec<mquickjs_rs::mquickjs_ffi::JSValue> = Vec::new();",
+                "let mut {name}: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = Vec::new();",
                 name = name
             ));
             emit_varargs_loop_header(&mut w, start_idx0, false);
             w.push_line(format!(
-                "{name}.push({v});",
+                "{name}.push(scope.value({v}));",
                 name = name,
                 v = emit_argv_v_expr("i")
             ));

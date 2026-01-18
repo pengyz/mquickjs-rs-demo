@@ -64,19 +64,29 @@ impl Default for DefaultConsoleSingleton {
 }
 
 impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
-    fn log(&mut self, _env: &mut mquickjs_rs::Env<'_>, args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>) {
+    fn log(
+        &mut self,
+        _env: &mut mquickjs_rs::Env<'_>,
+        args: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>>,
+    ) {
         // Keep v1 behavior: format via QuickJS C API.
         let Some(h) = mquickjs_rs::context::ContextToken::current() else {
             return;
         };
+        let args: Vec<mquickjs_rs::mquickjs_ffi::JSValue> = args.into_iter().map(|v| v.as_raw()).collect();
         print_js_values(h.ctx, &args, false);
         println!();
     }
 
-    fn error(&mut self, _env: &mut mquickjs_rs::Env<'_>, args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>) {
+    fn error(
+        &mut self,
+        _env: &mut mquickjs_rs::Env<'_>,
+        args: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>>,
+    ) {
         let Some(h) = mquickjs_rs::context::ContextToken::current() else {
             return;
         };
+        let args: Vec<mquickjs_rs::mquickjs_ffi::JSValue> = args.into_iter().map(|v| v.as_raw()).collect();
         print_js_values(h.ctx, &args, true);
         eprintln!();
     }

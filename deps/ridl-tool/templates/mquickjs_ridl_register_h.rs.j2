@@ -64,11 +64,11 @@ int js_{{ interface.name|lower }}_init(JSContext *ctx, JSModuleDef *m);
 {%- for module in modules %}
 {%- for s in module.singletons %}
 {%- for method in s.methods %}
-JSValue js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_{{ method.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-JSValue js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
@@ -86,11 +86,11 @@ JSValue js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normali
 {%- for s in module.singletons %}
     static const JSPropDef js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_props[] = { \
 {%- for method in s.methods %}
-        JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_{{ method.name|lower }}), \
+        JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_{{ method.name|to_snake_case }}), \
 {%- endfor %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
-        JS_CGETSET_DEF("{{ prop.name }}", js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_get_{{ prop.name|lower }}, NULL), \
+        JS_CGETSET_DEF("{{ prop.name }}", js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}, NULL), \
 {%- endif %}
 {%- endfor %}
         JS_PROP_END, \
