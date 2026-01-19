@@ -1,0 +1,18 @@
+// default mode
+// This RIDL file intentionally uses Rust keywords / tricky names to ensure
+// Rust-side identifiers are always sanitized by the generator.
+
+singleton RustIdent {
+    // Rust keywords (as RIDL identifiers)
+    fn type(type: int, match: int) -> int;
+    fn ref(ref: int) -> int;
+    fn self(self: int) -> int;
+    fn crate(crate: int) -> int;
+    fn super(super: int) -> int;
+    fn dyn(dyn: int) -> int;
+
+    // Non-identifier characters and leading digits (expect sanitized)
+    // NOTE: if RIDL grammar rejects these identifiers, adjust to the nearest
+    // accepted syntax and keep this test focused on Rust keyword sanitization.
+    fn foo_bar(foo_bar: int, _1st: int) -> int;
+}

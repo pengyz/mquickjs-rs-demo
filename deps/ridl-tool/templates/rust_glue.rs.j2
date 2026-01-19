@@ -213,7 +213,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
 
     {%- if method.return_type == Type::Any %}
     let mut __ridl_any_out: Option<mquickjs_rs::mquickjs_ffi::JSValue> = None;
-    singleton.{{ method.name|to_snake_case }}_out(
+    singleton.{{ method.name|to_snake_case|rust_ident }}_out(
         {%- if method.needs_scope %}
         &mut env,
         {%- endif %}
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     };
     v
     {%- else %}
-    let result = singleton.{{ method.name|to_snake_case }}(
+    let result = singleton.{{ method.name|to_snake_case|rust_ident }}(
         {%- if method.needs_scope %}
         &mut env{%- if method.params|length > 0 %}, {% endif %}
         {%- endif %}
@@ -239,7 +239,9 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     {%- endif %}
 }
 {%- endfor %}
+{%- endfor %}
 
+{%- for s in singletons %}
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
 #[unsafe(no_mangle)]
@@ -274,7 +276,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
     let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
-    let result = if singleton.{{ prop.name|to_snake_case }}() { 1 } else { 0 };
+    let result = if singleton.{{ prop.name|to_snake_case|rust_ident }}() { 1 } else { 0 };
     {{ prop.property_type|emit_value_to_js("result")|safe }}
 }
 {%- endif %}
@@ -305,12 +307,41 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
 // Store a pointer to a Box<dyn Trait> (thin pointer), so it can round-trip through c_void safely.
 // Contract: JSValue receiver must be validated via JS_GetClassID prior to dereferencing.
 
+#[inline]
+unsafe fn ridl_boxed_{{ class.name|to_snake_case }}_to_js(
+    ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    inst: Box<dyn crate::api::{{ class.name }}Class>,
+) -> mquickjs_rs::mquickjs_ffi::JSValue {
+    // Create JS object of the RIDL class.
+    let obj = unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
+            ctx,
+            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 + {{ class.class_id }},
+        )
+    };
+    if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
+        == (mquickjs_rs::mquickjs_ffi::JS_TAG_EXCEPTION as u32)
+    {
+        return obj;
+    }
+
+    let holder: Box<Box<dyn crate::api::{{ class.name }}Class>> = Box::new(inst);
+    let holder_ptr: *mut Box<dyn crate::api::{{ class.name }}Class> = Box::into_raw(holder);
+
+    unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_SetOpaque(ctx, obj, holder_ptr as *mut core::ffi::c_void);
+    }
+
+    // NOTE: boxed-return path does not install JS-only instance fields.
+    obj
+}
+
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
     this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
-    _argc: c_int,
-    _argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+    argc: c_int,
+    argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
 ) -> mquickjs_rs::mquickjs_ffi::JSValue {
     let _ = this_val;
 
@@ -327,7 +358,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     let obj = unsafe {
         mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
             ctx,
-            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32,
+            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 + {{ class.class_id }},
         )
     };
     if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
@@ -405,7 +436,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 
 {%- for method in class.methods %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|lower }}(
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|to_snake_case }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
     this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
@@ -431,7 +462,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {%- endfor %}
 
     let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };
-    let result = inst.{{ method.name|to_snake_case }}(
+    let result = inst.{{ method.name|to_snake_case|rust_ident }}(
         {%- if method.needs_scope %}
         &mut env{%- if method.params|length > 0 %}, {% endif %}
         {%- endif %}
@@ -445,7 +476,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 {%- if !(prop.modifiers|is_proto_prop) %}
 // Instance property {{ prop.name }}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|lower }}(
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
     this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
@@ -467,13 +498,13 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     }
 
     let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };
-    let result = inst.get_{{ prop.name|to_snake_case }}();
+    let result = inst.get_{{ prop.name|to_snake_case|rust_ident }}();
     {{ prop.property_type|emit_value_to_js("result")|safe }}
 }
 
 {%- if !(prop.modifiers|is_readonly_prop) %}
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|lower }}(
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|to_snake_case }}(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
     this_val: *mut mquickjs_rs::mquickjs_ffi::JSValue,
     argc: c_int,
@@ -550,7 +581,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
         return js_throw_type_error(ctx, "missing proto state");
     }
 
-    let cstr_ptr = unsafe { crate::api::ridl_proto_get_{{ class.name|to_snake_case }}_{{ prop.name|to_snake_case }}(proto) };
+    let cstr_ptr = unsafe { crate::api::ridl_proto_get_{{ class.name|to_snake_case|rust_ident }}_{{ prop.name|to_snake_case|rust_ident }}(proto) };
     if cstr_ptr.is_null() {
         return js_throw_type_error(ctx, "invalid string");
     }

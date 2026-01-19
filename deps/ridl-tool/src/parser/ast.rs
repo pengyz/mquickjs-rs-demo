@@ -195,7 +195,13 @@ pub enum Type {
     Map(Box<Type>, Box<Type>),
     Union(Vec<Type>),
     Optional(Box<Type>),
+
+    /// Reference to a RIDL `class` defined in the same IDL file.
+    ClassRef(String),
+
+    /// Other named types (e.g. aliases / external types) not modeled explicitly.
     Custom(String),
+
     Callback,
     CallbackWithParams(Vec<Param>),
     Group(Box<Type>),
@@ -220,6 +226,7 @@ impl fmt::Display for Type {
                 write!(f, "{}", type_strs.join(" | "))
             }
             Type::Optional(t) => write!(f, "{}?", t),
+            Type::ClassRef(name) => write!(f, "{}", name),
             Type::Custom(name) => write!(f, "{}", name),
             Type::Callback => write!(f, "callback"),
             Type::CallbackWithParams(params) => {

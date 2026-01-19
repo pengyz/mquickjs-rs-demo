@@ -5,53 +5,222 @@
 #include "mquickjs.h"
 #include "mquickjs_build.h"
 
+#include "mquickjs_ridl_api.h"
 
-// Function declarations for all RIDL-defined functions
-{%- for module in modules %}
-{%- for function in module.functions %}
-JSValue js_{{ function.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
-{%- endfor %}
-{%- endfor %}
+/*
+ * ============================
+ * RIDL register (definitions)
+ *
+ * This header defines the static roots used by the ROM build tool.
+ * It is NOT a public header for general runtime compilation.
+ * ============================
+ */
 
-{%- for module in modules %}
-{%- for interface in module.interfaces -%}
-{%- for method in interface.methods -%}
-JSValue js_{{ interface.name|lower }}_{{ method.name }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
-{%- endfor -%}
-{%- endfor %}
-{%- endfor %}
-
-// Property definition arrays
-{%- for module in modules %}
-{%- for interface in module.interfaces -%}
-extern const JSCFunctionListEntry js_{{ interface.name|lower }}_defs[];
-{%- endfor %}
-{%- endfor %}
-
-// Interface object class definition (not user classes)
-{%- for module in modules %}
-{%- for interface in module.interfaces -%}
-extern const JSClassDef js_{{ interface.name|lower }}_class_def;
-{%- endfor %}
-{%- endfor %}
-
-// RIDL user classes
+/* ----------------------------
+ * RIDL class ids & keepalive entrypoints
+ * ----------------------------
+ */
 //
 // JS class ids (JS_CLASS_*) must be compile-time constants for mquickjs-build to
 // generate the ROM table. Numeric IDs are allocated starting from JS_CLASS_USER.
 {%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+#define JS_CLASS_{{ module.require_full_name|normalize_ident|upper }}_MODULE (JS_CLASS_USER + {{ module.module_class_id }})
+
+void js_{{ module.require_full_name|normalize_ident|lower }}_module_class(void);
+{%- endif %}
 {%- for class in module.classes %}
-#define JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} (JS_CLASS_USER + {{ loop.index0 }})
+#define JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} (JS_CLASS_USER + {{ class.class_id }})
 
 void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class(void);
 {%- endfor %}
 {%- endfor %}
 
 #ifndef JS_CLASS_COUNT
-#define JS_CLASS_COUNT (JS_CLASS_USER + {{ classes|length }})
+#define JS_CLASS_COUNT (JS_CLASS_USER + {{ next_class_id }})
 #endif
 
-{{ class_defs }}
+/* ----------------------------
+ * RIDL module/user class definitions
+ * (JSPropDef/JSClassDef/constructor stubs)
+ * ----------------------------
+ */
+
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+{%- for class in module.classes %}
+extern const JSClassDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def;
+{%- endfor %}
+
+static const JSPropDef js_{{ module.require_full_name|normalize_ident|lower }}_module_props[] = {
+{%- for function in module.functions %}
+    JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}),
+{%- endfor %}
+{%- for class in module.classes %}
+    JS_PROP_CLASS_DEF("{{ class.name }}", &js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def),
+{%- endfor %}
+    JS_PROP_END,
+};
+
+JSValue js_{{ module.require_full_name|normalize_ident|lower }}_module_constructor(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+) {
+    (void)ctx;
+    (void)this_val;
+    (void)argc;
+    (void)argv;
+
+    // The instance is allocated by the engine; exports are on prototype.
+    // The constructor is not exported to JS (require() creates instances).
+    return JS_UNDEFINED;
+}
+
+static const JSPropDef js_{{ module.require_full_name|normalize_ident|lower }}_module_proto_props[] = {
+    /* exports live on the module instance via prototype */
+{%- for function in module.functions %}
+    JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}),
+{%- endfor %}
+{%- for class in module.classes %}
+    JS_PROP_CLASS_DEF("{{ class.name }}", &js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def),
+{%- endfor %}
+    JS_PROP_END,
+};
+
+const JSClassDef js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def =
+    JS_CLASS_DEF(
+        "{{ module.require_base }}",
+        0,
+        js_{{ module.require_full_name|normalize_ident|lower }}_module_constructor,
+        JS_CLASS_{{ module.require_full_name|normalize_ident|upper }}_MODULE,
+        NULL,
+        js_{{ module.require_full_name|normalize_ident|lower }}_module_proto_props,
+        NULL,
+        NULL
+    );
+
+void js_{{ module.require_full_name|normalize_ident|lower }}_module_class(void) {
+    (void)&js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def;
+    (void)&js_{{ module.require_full_name|normalize_ident|lower }}_module_proto_props;
+    (void)&js_{{ module.require_full_name|normalize_ident|lower }}_module_constructor;
+}
+{%- endif %}
+
+{%- for class in module.classes %}
+
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer(
+    JSContext *ctx,
+    void *opaque
+);
+
+{%- for method in class.methods %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- endfor %}
+
+{%- for prop in class.properties %}
+{%- if prop.modifiers|is_proto_prop %}
+{%- if prop.modifiers|is_readonly_prop %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_proto_{{ prop.name|lower }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- else %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_proto_{{ prop.name|lower }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_proto_{{ prop.name|lower }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- endif %}
+{%- else %}
+{%- if prop.modifiers|is_readonly_prop %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- else %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+
+static const JSPropDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs[] = {
+{%- for method in class.methods %}
+    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|to_snake_case }}),
+{%- endfor %}
+{%- for prop in class.properties %}
+{%- if prop.modifiers|is_proto_prop %}
+{%- if prop.modifiers|is_readonly_prop %}
+    JS_CGETSET_DEF("{{ prop.name }}", js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_proto_{{ prop.name|lower }}, NULL),
+{%- else %}
+    JS_CGETSET_DEF("{{ prop.name }}", js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_proto_{{ prop.name|lower }}, js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_proto_{{ prop.name|lower }}),
+{%- endif %}
+{%- else %}
+{%- if prop.modifiers|is_readonly_prop %}
+    JS_CGETSET_DEF("{{ prop.name }}", js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}, NULL),
+{%- else %}
+    JS_CGETSET_DEF("{{ prop.name }}", js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}, js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|to_snake_case }}),
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+    JS_PROP_END,
+};
+
+const JSClassDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class_def =
+    JS_CLASS_DEF(
+        "{{ class.name }}",
+        {{ class.methods|length }},
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor,
+        JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }},
+        NULL,
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs,
+        NULL,
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer
+    );
+
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class(void) {
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class_def;
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs;
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor;
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer;
+}
+{%- endfor %}
+{%- endfor %}
 
 // Module initialization functions
 {%- for module in modules %}
@@ -82,6 +251,17 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 
 // File-scope declarations/definitions for RIDL extensions
 #define JS_RIDL_DECLS \
+    static const JSPropDef js_ridl_modules_ns_props[] = { \
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+        JS_PROP_CLASS_DEF("{{ module.require_full_name }}", &js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def), \
+{%- endif %}
+{%- endfor %}
+        JS_PROP_END, \
+    }; \
+    static const JSClassDef js_ridl_modules_ns_obj = \
+        JS_OBJECT_DEF("RidlModules", js_ridl_modules_ns_props); \
+
 {%- for module in modules %}
 {%- for s in module.singletons %}
     static const JSPropDef js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_props[] = { \
@@ -99,13 +279,39 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
         JS_OBJECT_DEF("{{ s.name|capitalize }}", js_{{ s.module_name|normalize_ident|lower }}_singleton_{{ s.name|normalize_ident|lower }}_props); \
 {%- endfor %}
 {%- endfor %}
-    /* empty */
+    /* empty */ \
 
-/* Ensure `JS_RIDL_DECLS` can be used as a statement in C code. */
-#define JS_RIDL_DECLS_STMT do { } while (0)
+/*
+ * Expand RIDL file-scope declarations/definitions.
+ *
+ * Call sites should use `JS_RIDL_DECLS_EXPAND;`.
+ */
+#define JS_RIDL_DECLS_EXPAND JS_RIDL_DECLS
+
+// RIDL module require-table (generated)
+//
+// V1: `module_class_id` uses the JS_CLASS_* compile-time constants generated above.
+// `module_full_name` contains `base@version` exactly as in RIDL source (no normalize).
+// `module_base` is the substring before '@'.
+//
+// This table is only meaningful when the application opts into ridl-extensions.
+const RidlRequireEntry js_ridl_require_table[] = {
+{%- for m in modules %}
+{%- if m.module_decl.is_some() %}
+    { "{{ m.require_full_name }}", "{{ m.require_base }}", {{ m.require_v_major }}, {{ m.require_v_minor }}, {{ m.require_v_patch }}, JS_CLASS_{{ m.require_full_name|normalize_ident|upper }}_MODULE },
+{%- endif %}
+{%- endfor %}
+};
+
+const int js_ridl_require_table_len = (int)(sizeof(js_ridl_require_table) / sizeof(js_ridl_require_table[0]));
 
 // Entries injected into `js_global_object[]`
+// NOTE: stdlib template expects `JS_RIDL_EXTENSIONS`.
+#define JS_RIDL_EXTENSIONS JS_STDLIB_EXTENSIONS_{{ module_name|upper }}
+
 #define JS_STDLIB_EXTENSIONS_{{ module_name|upper }} \
+    JS_CFUNC_DEF("require", 1, js_ridl_require), \
+    JS_PROP_CLASS_DEF("__ridl_modules", &js_ridl_modules_ns_obj), \
 {%- for module in modules %}
 {%- for function in module.functions %}
     JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}), \
@@ -124,8 +330,5 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
     JS_PROP_CLASS_DEF("{{ class.name }}", &js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def), \
 {%- endfor %}
 {%- endfor %}
-
-#define JS_RIDL_EXTENSIONS \
-    JS_STDLIB_EXTENSIONS_{{ module_name|upper }}
 
 #endif // MJS_RIDL_REGISTER_H

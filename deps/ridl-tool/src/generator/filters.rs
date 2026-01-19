@@ -13,8 +13,7 @@ pub fn length<T>(slice: &[T]) -> ::askama::Result<usize> {
     Ok(slice.len())
 }
 
-
-pub fn rust_ident(name: &str) -> String {
+pub fn rust_ident(name: &str) -> ::askama::Result<String> {
     let mut out: String = name
         .chars()
         .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
@@ -41,7 +40,7 @@ pub fn rust_ident(name: &str) -> String {
         out.push('_');
     }
 
-    out
+    Ok(out)
 }
 
 pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
@@ -64,7 +63,16 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         // any return is handled at template/method level (see generator/mod.rs overrides).
         Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
 
-        Type::Custom(name) => name.clone(),
+        // For class refs, treat them as trait objects at Rust boundary.
+        Type::ClassRef(name) => format!("Box<dyn crate::api::{}Class>", name),
+
+        // Custom types are not supported as typed returns/params in v1.
+        // They should be lowered to `any` by higher-level generator logic if needed.
+        Type::Custom(_name) => {
+            return Err(askama::Error::Custom(
+                "v1 rust_type_from_idl: unsupported Custom named type".into(),
+            ))
+        }
 
         Type::Union(_types) => {
             return Err(askama::Error::Custom(
@@ -171,6 +179,13 @@ pub fn emit_return_convert_typed(
             // any return is a Handle<Value> at the Rust boundary.
             w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
+        Type::ClassRef(name) => {
+            w.push_line(format!(
+                "unsafe {{ ridl_boxed_{}_to_js(ctx, {result_name}) }}",
+                crate::generator::naming::to_snake_case(name),
+                result_name = result_name
+            ));
+        }
         Type::Union(_types) => {
             // v1 union return encoding: match enum variants.
             // NOTE: enum type path is precomputed and passed via `result_rust_ty`.
@@ -198,6 +213,17 @@ pub fn emit_return_convert_typed(
             }
 
             match cur {
+                Type::ClassRef(name) => {
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => {".to_string());
+                    w.push_line(format!(
+                        "        unsafe {{ ridl_boxed_{}_to_js(ctx, v) }}",
+                        crate::generator::naming::to_snake_case(name)
+                    ));
+                    w.push_line("    }".to_string());
+                    w.push_line("}".to_string());
+                }
                 Type::String => {
                     w.push_line(format!(
                         "match {result_name} {{",
@@ -266,6 +292,7 @@ pub fn emit_return_convert_typed(
                     w.push_line("    }".to_string());
                     w.push_line("}".to_string());
                 }
+                // ClassRef is handled at the top-level return_type match.
                 _ => {
                     w.push_line("compile_error!(\"v1 glue: unsupported return type\");".to_string());
                     w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
@@ -315,9 +342,6 @@ pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
     Ok(crate::generator::naming::to_upper_camel_case(s))
 }
 
-pub fn to_lower_camel_case(s: &str) -> ::askama::Result<String> {
-    Ok(crate::generator::naming::to_lower_camel_case(s))
-}
 
 #[allow(dead_code)]
 pub fn proto_module_ns(
@@ -401,11 +425,9 @@ pub fn emit_param_extract(
     idx0: &usize,
     idx1: &usize,
 ) -> ::askama::Result<String> {
-    if param.variadic {
-        return emit_varargs_collect(&param.rust_name, &param.ty, param.file_mode, *idx0);
-    }
-
-    if let Type::Optional(inner) = &param.ty {
+    let raw = if param.variadic {
+        emit_varargs_collect(&param.rust_name, &param.ty, param.file_mode, *idx0)?
+    } else if let Type::Optional(inner) = &param.ty {
         let mut w = CodeWriter::new();
         emit_missing_arg(&mut w, *idx1, &param.rust_name);
         emit_argv_v_let(&mut w, *idx0);
@@ -431,7 +453,7 @@ pub fn emit_param_extract(
         w.push_line(format!(
             "if __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_NULL as u32) || __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_UNDEFINED as u32) {{"
         ));
-        w.push_line(format!("    __ridl_opt_{name} = None;", name = param.rust_name));
+        w.push_line(format!("__ridl_opt_{name} = None;", name = param.rust_name));
         w.push_line("} else {".to_string());
 
         // Decode inner into a local temp, then wrap Some(...)
@@ -441,15 +463,17 @@ pub fn emit_param_extract(
         // (Do not emit another `let v = ...` shadowing; it would also lose the original JSValue.)
         if matches!(inner.as_ref(), Type::Union(_)) {
             // For Optional(Union), decode from the already-extracted `v`.
-            let inner_extract = emit_union_param_extract_from_jsvalue(&inner_name, inner.as_ref(), opt_inner_ty)?;
+            let inner_extract =
+                emit_union_param_extract_from_jsvalue(&inner_name, inner.as_ref(), opt_inner_ty)?;
             for line in inner_extract.lines() {
-                w.push_line(format!("    {line}"));
+                w.push_line(line.to_string());
             }
         } else {
             // For Optional(T), decode from the already-extracted `v`.
-            let inner_extract = emit_single_param_extract_from_jsvalue(&inner_name, inner.as_ref(), param.file_mode)?;
+            let inner_extract =
+                emit_single_param_extract_from_jsvalue(&inner_name, inner.as_ref(), param.file_mode)?;
             for line in inner_extract.lines() {
-                w.push_line(format!("    {line}"));
+                w.push_line(line.to_string());
             }
         }
 
@@ -475,14 +499,35 @@ pub fn emit_param_extract(
             ty = final_rust_ty
         ));
 
-        return Ok(w.into_string());
-    }
+        w.into_string()
+    } else if matches!(&param.ty, Type::Union(_)) {
+        emit_union_param_extract(
+            &param.rust_name,
+            &param.ty,
+            &param.rust_ty,
+            param.file_mode,
+            *idx0,
+            *idx1,
+        )?
+    } else {
+        emit_single_param_extract(&param.rust_name, &param.ty, param.file_mode, *idx0, *idx1)?
+    };
 
-    if matches!(&param.ty, Type::Union(_)) {
-        return emit_union_param_extract(&param.rust_name, &param.ty, &param.rust_ty, param.file_mode, *idx0, *idx1);
+    // The template site uses 4-space indentation and expects this filter to emit aligned code.
+    // Normalize inner emitters (legacy) by stripping one indent layer if present, then add ours.
+    const INDENT: &str = "    ";
+    let mut out = String::new();
+    for (i, line) in raw.lines().enumerate() {
+        if i > 0 {
+            out.push('\n');
+        }
+        let line = line.trim_start_matches(|c: char| c == ' ' || c == '\t');
+        out.push_str(INDENT);
+        out.push_str(line);
     }
+    out.push('\n');
 
-    emit_single_param_extract(&param.rust_name, &param.ty, param.file_mode, *idx0, *idx1)
+    Ok(out)
 }
 
 fn emit_union_param_extract(
@@ -620,19 +665,16 @@ fn emit_to_i32_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     let value_raw = format!("{value_expr}_raw");
     w.push_line(format!("let {value_raw}: JSValue = {value_expr};", value_raw = value_raw, value_expr = value_expr));
 
+    // Use a stable, reserved-name-safe temp variable to avoid triggering non_snake_case
+    // warnings when the source identifier is a keyword (e.g. `type_`).
+    w.push_line("let mut __ridl_num: f64 = 0.0;".to_string());
     w.push_line(format!(
-        "let mut {out}_n: f64 = 0.0;",
-        out = out_name
-    ));
-    w.push_line(format!(
-        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {out}_n as *mut _, {v}) }} < 0 {{ return js_throw_type_error(ctx, {err}); }}",
-        out = out_name,
+        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut __ridl_num as *mut _, {v}) }} < 0 {{ return js_throw_type_error(ctx, {err}); }}",
         v = value_raw,
         err = err_expr
     ));
     w.push_line(format!(
-        "if !{out}_n.is_finite() || ({out}_n.fract() != 0.0) {{ return js_throw_type_error(ctx, {err}); }}",
-        out = out_name,
+        "if !__ridl_num.is_finite() || (__ridl_num.fract() != 0.0) {{ return js_throw_type_error(ctx, {err}); }}",
         err = err_expr
     ));
 

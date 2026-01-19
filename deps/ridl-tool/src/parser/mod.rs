@@ -7,12 +7,16 @@ use pest_derive::Parser;
 pub struct IDLParser;
 
 pub mod ast;
+mod class_ref_rewrite;
 mod normalize;
+
+pub mod require_spec;
 
 use ast::{
     Class, Enum, EnumValue, Field, Function, IDLItem, Interface, Method, ModuleDeclaration, Param,
     Property, PropertyModifier, SerializationFormat, StructDef, Type,
 };
+use class_ref_rewrite::rewrite_item_class_refs;
 use normalize::normalize_idl_items;
 
 fn pair_pos(pair: &pest::iterators::Pair<Rule>) -> ast::SourcePos {
@@ -74,7 +78,24 @@ pub fn parse_idl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Er
         }
     }
 
-    let items = normalize_idl_items(items)?;
+    let mut items = normalize_idl_items(items)?;
+
+    // Convert custom named types that refer to classes defined in the same file
+    // into a dedicated `ClassRef` variant so downstream codegen can be strict.
+    let class_names: std::collections::HashSet<String> = items
+        .iter()
+        .filter_map(|it| match it {
+            IDLItem::Class(c) => Some(c.name.clone()),
+            _ => None,
+        })
+        .collect();
+
+    if !class_names.is_empty() {
+        for it in &mut items {
+            rewrite_item_class_refs(it, &class_names);
+        }
+    }
+
     Ok(ParsedIDL { module, mode, items })
 }
 
@@ -242,15 +263,14 @@ fn parse_module_decl(
     let module_path_pair = inner_pairs.next().ok_or("Module declaration has no path")?;
     let module_path = parse_module_path(module_path_pair)?;
 
-    // version (optional)
-    let mut version = None;
-    if let Some(version_pair) = inner_pairs.next() {
-        version = Some(version_pair.as_str().to_string());
-    }
+    // version (required)
+    let version_pair = inner_pairs
+        .next()
+        .ok_or("Module declaration has no version")?;
 
     Ok(ModuleDeclaration {
         module_path,
-        version,
+        version: Some(version_pair.as_str().to_string()),
         pos,
     })
 }
@@ -944,6 +964,9 @@ fn parse_field(pair: pest::iterators::Pair<Rule>) -> Result<Field, Box<dyn std::
 }
 
 fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::error::Error>> {
+    // Rule-of-thumb: if this `type` text matches a class name declared in this IDL file,
+    // it should be represented as `Type::ClassRef` instead of `Type::Custom`.
+    // We do this in a post-pass where we have the full IDL context.
     // 检查是否是nullable类型
     if pair.as_rule() == Rule::nullable_type {
         return parse_nullable_type(pair);
@@ -1873,7 +1896,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
                     assert_eq!(global_fn.params[0].param_type, Type::String);
                     assert_eq!(
                         global_fn.return_type,
-                        Type::Custom("ConsoleLogger".to_string())
+                        Type::ClassRef("ConsoleLogger".to_string())
                     );
                 } else {
                     panic!("Expected function definition");
@@ -1893,7 +1916,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
                     }
                     assert_eq!(
                         global_fn.return_type,
-                        Type::Custom("ConsoleLogger".to_string())
+                        Type::ClassRef("ConsoleLogger".to_string())
                     );
                 } else {
                     panic!("Expected second function definition");
@@ -2281,10 +2304,18 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
     }
 
     #[test]
+    fn test_module_reject_spaces_around_at() {
+        for input in [r#"module a @1.0"#, r#"module a@ 1.0"#] {
+            let result = IDLParser::parse(Rule::module_decl, input);
+            assert!(result.is_err(), "{input}");
+        }
+    }
+
+    #[test]
     fn test_module_without_version() {
         let input = r#"module b"#;
         let result = IDLParser::parse(Rule::module_decl, input);
-        assert!(result.is_ok());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -2298,7 +2329,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
     fn test_module_without_version_with_semicolon() {
         let input = r#"module d;"#;
         let result = IDLParser::parse(Rule::module_decl, input);
-        assert!(result.is_ok());
+        assert!(result.is_err());
     }
 
     #[test]
@@ -2334,21 +2365,19 @@ interface Test {}"#; // 版本格式错误，包含过多的版本号部分
 
     #[test]
     fn test_module_with_three_part_version() {
-        // 测试三部分版本号（应该失败）
+        // 测试三部分版本号（应该成功）
         let input = r#"module test@1.2.3"#;
         let result = IDLParser::parse(Rule::module_decl, input);
-        // 这种情况下，pest会解析 "1.2" 部分，但因为是module_decl规则，只解析到能匹配的部分
-        // 所以这个测试可能仍然通过，因此我们使用idl规则来测试
         assert!(result.is_ok());
     }
 
     #[test]
     fn test_module_with_three_part_version_with_idl_rule() {
-        // 使用idl规则测试三部分版本号（应该失败）
+        // 使用idl规则测试三部分版本号（应该成功）
         let input = r#"module test@1.2.3
 interface Test {}"#;
         let result = IDLParser::parse(Rule::idl, input);
-        assert!(result.is_err());
+        assert!(result.is_ok());
     }
 
     #[test]

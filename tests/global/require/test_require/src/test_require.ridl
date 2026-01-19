@@ -1,0 +1,7 @@
+module test.require@1.0
+
+fn ping() -> int;
+
+class Foo {
+    fn value() -> int;
+}

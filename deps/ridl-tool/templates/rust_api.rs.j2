@@ -11,7 +11,7 @@
 // Interface {{ itf.name }}
 pub trait {{ itf.name|to_upper_camel_case }}Interface {
     {%- for method in itf.methods %}
-    fn {{ method.name|to_snake_case }}(
+    fn {{ method.name|to_snake_case|rust_ident }}(
         &mut self,
         {%- if method.needs_scope %}
         env: &mut mquickjs_rs::Env<'_>{%- if method.params|length > 0 %},
@@ -19,15 +19,15 @@ pub trait {{ itf.name|to_upper_camel_case }}Interface {
         {%- endif %}
         {%- for p in method.params %}
         {%- if p.variadic %}
-        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>
+        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>
         {%- else %}
-        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endfor %}
     {%- if method.return_type == Type::Any %}
     ) -> ();
 
-    fn {{ method.name|to_snake_case }}_out<'ctx>(
+    fn {{ method.name|to_snake_case|rust_ident }}_out<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
         env: &mut mquickjs_rs::Env<'ctx>,
@@ -35,12 +35,12 @@ pub trait {{ itf.name|to_upper_camel_case }}Interface {
         out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
         {%- for p in method.params %}
         {%- if p.variadic %}
-        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
         {%- else %}
         {%- if p.ty == Type::Any %}
-        {{ p.name|lower }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
         {%- else %}
-        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endif %}
         {%- endfor %}
@@ -56,7 +56,7 @@ pub trait {{ itf.name|to_upper_camel_case }}Interface {
 // Singleton {{ s.name }}
 pub trait {{ s.name|to_upper_camel_case }}Singleton {
     {%- for method in s.methods %}
-    fn {{ method.name|to_snake_case }}(
+    fn {{ method.name|to_snake_case|rust_ident }}(
         &mut self,
         {%- if method.needs_scope %}
         env: &mut mquickjs_rs::Env<'_>{%- if method.params|length > 0 %},
@@ -64,15 +64,15 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
         {%- endif %}
         {%- for p in method.params %}
         {%- if p.variadic %}
-        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>
+        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>
         {%- else %}
-        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endfor %}
     {%- if method.return_type == Type::Any %}
     ) -> ();
 
-    fn {{ method.name|to_snake_case }}_out<'ctx>(
+    fn {{ method.name|to_snake_case|rust_ident }}_out<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
         env: &mut mquickjs_rs::Env<'ctx>,
@@ -80,12 +80,12 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
         out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
         {%- for p in method.params %}
         {%- if p.variadic %}
-        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
         {%- else %}
         {%- if p.ty == Type::Any %}
-        {{ p.name|lower }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
         {%- else %}
-        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endif %}
         {%- endfor %}
@@ -97,7 +97,7 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
 
     {%- for prop in s.properties %}
     {%- if prop.modifiers|is_readonly_prop %}
-    fn {{ prop.name|to_snake_case }}(&self) -> {{ prop.property_type|rust_type_from_idl|safe }};
+    fn {{ prop.name|to_snake_case|rust_ident }}(&self) -> {{ prop.property_type|rust_type_from_idl|safe }};
     {%- endif %}
     {%- endfor %}
 }
@@ -133,19 +133,19 @@ pub mod {{ d.domain }} {
 // Class {{ class.name }}
 pub trait {{ class.name|to_upper_camel_case }}Class {
 {%- for method in class.methods %}
-    fn {{ method.name|to_snake_case }}(
+    fn {{ method.name|to_snake_case|rust_ident }}(
         &mut self,
         {%- if method.needs_scope %}
         env: &mut mquickjs_rs::Env<'_>{%- if method.params|length > 0 %},
         {%- endif %}
         {%- endif %}
         {%- for p in method.params %}
-        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endfor %}
     {%- if method.return_type == Type::Any %}
     ) -> ();
 
-    fn {{ method.name|to_snake_case }}_out<'ctx>(
+    fn {{ method.name|to_snake_case|rust_ident }}_out<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
         env: &mut mquickjs_rs::Env<'ctx>,
@@ -153,12 +153,12 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
         out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
         {%- for p in method.params %}
         {%- if p.variadic %}
-        {{ p.name|lower }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
         {%- else %}
         {%- if p.ty == Type::Any %}
-        {{ p.name|lower }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
         {%- else %}
-        {{ p.name|lower }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endif %}
         {%- endfor %}

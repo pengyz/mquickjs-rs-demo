@@ -12,4 +12,5 @@ singleton TestFn {
     fn arrLen(arr: any) -> int;
     fn arrPush(arr: any, v: any) -> int;
     fn arrSet(arr: any, index: int, v: any) -> void;
+    fn arrGet(arr: any, index: int) -> any;
 }

@@ -1,0 +1,4 @@
+module m1@1.0
+
+class UserA {
+}

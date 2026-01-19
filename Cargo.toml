@@ -17,6 +17,8 @@ members = [
     "tests/global/singleton/test_singleton",
     "tests/global/import_using/test_import_using",
     "tests/global/diagnostics/test_diagnostics",
+    "tests/global/require/test_require",
+    "tests/global/rust_ident/test_rust_ident",
 ]
 
 # NOTE: test RIDL modules live under tests/global/. They are workspace members but
@@ -58,6 +60,9 @@ path = "tests/global/fn/test_fn"
 [dependencies.ridl_test_g_js_fields]
 path = "tests/global/js_fields/test_js_fields"
 
+[dependencies.ridl_test_g_class]
+path = "tests/global/class/test_class"
+
 [dependencies.ridl_test_g_singleton]
 path = "tests/global/singleton/test_singleton"
 
@@ -66,6 +71,12 @@ path = "tests/global/import_using/test_import_using"
 
 [dependencies.ridl_test_g_diagnostics]
 path = "tests/global/diagnostics/test_diagnostics"
+
+[dependencies.ridl_test_g_require]
+path = "tests/global/require/test_require"
+
+[dependencies.ridl_test_g_rust_ident]
+path = "tests/global/rust_ident/test_rust_ident"
 
 [features]
 # Demo app defaults to having RIDL stdlib extensions enabled.

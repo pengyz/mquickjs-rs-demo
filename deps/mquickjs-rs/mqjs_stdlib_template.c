@@ -32,8 +32,9 @@
 /* Include RIDL-generated standard library extensions (from build.rs copied into mquickjs/) */
 #include "mquickjs_ridl_register.h"
 
+
 /* File-scope declarations/definitions for RIDL extensions */
-JS_RIDL_DECLS;
+JS_RIDL_DECLS_EXPAND;
 
 /* defined in mqjs_example.c */
 //#define CONFIG_CLASS_EXAMPLE

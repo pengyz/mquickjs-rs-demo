@@ -1,27 +1,20 @@
-use crate::api::{TestclassSingleton, UserClass};
+use crate::api::{TestClassSingleton, UserClass};
 
 pub struct DefaultTestClassSingleton;
 
-impl TestclassSingleton for DefaultTestClassSingleton {
-    fn makeuser(
-        &mut self,
-        _ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-        _args: Vec<mquickjs_rs::mquickjs_ffi::JSValue>,
-    ) {
+impl TestClassSingleton for DefaultTestClassSingleton {
+    fn make_user(&mut self, name: String) -> Box<dyn crate::api::UserClass> {
+        Box::new(DefaultUser { name })
     }
 }
 
-struct DefaultUser {
-    name: String,
+pub struct DefaultUser {
+    pub name: String,
 }
 
 impl UserClass for DefaultUser {
-    fn getname(&mut self) -> String {
+    fn get_name(&mut self) -> String {
         self.name.clone()
     }
 }
 
-#[unsafe(no_mangle)]
-pub extern "C" fn ridl_create_testclass_singleton() -> Box<dyn TestclassSingleton> {
-    Box::new(DefaultTestClassSingleton)
-}

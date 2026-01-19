@@ -21,9 +21,10 @@ definition = { interface_def | class_def | enum_def | struct_def | global_functi
 mode_decl = { "mode" ~ WS ~ mode_name ~ WS? ~ ";" }
 mode_name = { identifier }
 
-module_decl = { "module" ~ WS ~ module_path ~ ("@" ~ WS ~ version)? ~ WS? ~ ";"? }
+module_decl = { "module" ~ WS ~ module_path ~ "@" ~ version ~ WS? ~ ";"? }
 module_path = { identifier ~ ("." ~ identifier)* }
-version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? }
+// Version format for module declaration: MAJOR[.MINOR[.PATCH]]
+version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? )? }
 
 interface_def = { WS? ~ "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ method_def ~ WS ~ ";")* ~ WS ~ "}" }
 class_def = { WS? ~ "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ class_member ~ WS ~ ";")* ~ WS ~ "}" }

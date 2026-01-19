@@ -194,6 +194,9 @@ impl SemanticValidator {
     /// 验证单个类型
     fn validate_type(&mut self, idl_type: &Type) {
         match idl_type {
+            Type::ClassRef(_name) => {
+                // class 引用的定义校验需要全局上下文；暂不在这里做。
+            }
             Type::Custom(_name) => {
                 // 检查自定义类型是否已定义
                 // 这里需要更复杂的逻辑来检查类型是否已定义

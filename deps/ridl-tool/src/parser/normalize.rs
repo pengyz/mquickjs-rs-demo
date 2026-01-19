@@ -96,6 +96,7 @@ fn normalize_type(ty: Type) -> Result<Type, Box<dyn std::error::Error>> {
             }
             Type::CallbackWithParams(params)
         }
+        Type::ClassRef(name) => Type::ClassRef(name),
         other => other,
     };
 

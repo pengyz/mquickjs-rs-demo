@@ -104,27 +104,60 @@ impl TestFnSingleton for DefaultTestFnSingleton {
         index: i32,
         v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
     ) {
-        let index: u32 = index.try_into().expect("index must be non-negative");
         let arr_local = arr
             .try_into_array(env.scope())
             .expect("arrSet expects an array");
-        // Strategy A: let engine throw for index > len (no holes).
-        // We must NOT panic here: this function is called from a C ABI trampoline.
-        let len = arr_local.len(env).expect("arrSet expects array len");
-        if index > len {
-            // Strategy A: index > len is forbidden (would create holes): throw.
-            unsafe {
-                mquickjs_rs::mquickjs_ffi::JS_SetPropertyUint32(
-                    env.scope().ctx_raw(),
-                    arr_local.as_raw(),
-                    index,
-                    v.as_raw(),
-                );
-            }
-            return;
-        }
 
-        arr_local.set(env, index, v).expect("arrSet should succeed within bounds");
+        // Per current project policy: do not enforce a specific OOB/negative strategy here.
+        // But we MUST NOT panic across C ABI.
+        let Ok(index) = u32::try_from(index) else {
+            // Negative index: ignore.
+            return;
+        };
+
+        // Let QuickJS decide semantics for index > len (may create holes / may throw depending on engine state).
+        unsafe {
+            let _ = mquickjs_rs::mquickjs_ffi::JS_SetPropertyUint32(
+                env.scope().ctx_raw(),
+                arr_local.as_raw(),
+                index,
+                v.as_raw(),
+            );
+        }
+    }
+
+    fn arr_get(
+        &mut self,
+        _env: &mut mquickjs_rs::Env<'_>,
+        _arr: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
+        _index: i32,
+    ) -> () {
+        unreachable!("any-return must use arr_get_out")
+    }
+
+    fn arr_get_out<'ctx>(
+        &mut self,
+        env: &mut mquickjs_rs::Env<'ctx>,
+        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        arr: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>,
+        index: i32,
+    ) -> () {
+        let arr_local = arr
+            .try_into_array(env.scope())
+            .expect("arrGet expects an array");
+
+        let Ok(index) = u32::try_from(index) else {
+            // Negative index: return undefined.
+            let v = env.scope().value(mquickjs_rs::mquickjs_ffi::JS_UNDEFINED);
+            out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)));
+            return;
+        };
+
+        let raw = unsafe {
+            mquickjs_rs::mquickjs_ffi::JS_GetPropertyUint32(env.scope().ctx_raw(), arr_local.as_raw(), index)
+        };
+        let v = env.scope().value(raw);
+        out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)));
     }
 }
 

@@ -12,6 +12,11 @@ mod __ridl_agg_symbols {
 
     // externs for all js_* functions
 {%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+    unsafe extern "C" {
+        pub fn js_{{ module.require_full_name|normalize_ident|lower }}_module_class();
+    }
+{%- endif %}
 {%- for f in module.functions %}
     unsafe extern "C" {
         pub fn js_{{ f.name|lower }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
@@ -29,7 +34,7 @@ mod __ridl_agg_symbols {
 {%- for c in module.classes %}
 {%- for m in c.methods %}
     unsafe extern "C" {
-        pub fn js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_{{ m.name|lower }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
+        pub fn js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_{{ m.name|to_snake_case }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
     }
 {%- endfor %}
 {%- endfor %}
@@ -37,12 +42,24 @@ mod __ridl_agg_symbols {
 
     #[used]
     #[allow(non_upper_case_globals)]
-    pub static __ridl_keepalive_ptrs: [JsCFunction; 0
+    pub static __ridl_keepalive_ptrs: [
+        unsafe extern "C" fn(
+            ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+            this_val: mquickjs_rs::mquickjs_ffi::JSValue,
+            argc: i32,
+            argv: *mut mquickjs_rs::mquickjs_ffi::JSValue,
+        ) -> mquickjs_rs::mquickjs_ffi::JSValue;
+        0
 {%- for module in modules %}
-+ {{ module.functions|length }}
-+ {{ module.interfaces|methods_total_filter(module.classes) }}
+{%- if module.functions|length > 0 %}
+        + {{ module.functions|length }}
+{%- endif %}
+{%- set mt = module.interfaces|methods_total_filter(module.classes) %}
+{%- if mt > 0 %}
+        + {{ mt }}
+{%- endif %}
 {%- endfor %}
-] = [
+    ] = [
 {%- for module in modules %}
 {%- for f in module.functions %}
         js_{{ f.name|lower }},
@@ -54,9 +71,30 @@ mod __ridl_agg_symbols {
 {%- endfor %}
 {%- for c in module.classes %}
 {%- for m in c.methods %}
-        js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_{{ m.name|lower }},
+        js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_{{ m.name|to_snake_case }},
+{%- endfor %}
+{%- for p in c.properties %}
+{%- if !(p.modifiers|is_proto_prop) && (p.modifiers|is_readonly_prop) %}
+        js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_get_{{ p.name|to_snake_case }},
+{%- endif %}
 {%- endfor %}
 {%- endfor %}
+{%- endfor %}
+    ];
+
+    #[used]
+    #[allow(non_upper_case_globals)]
+    pub static __ridl_module_keepalive_ptrs: [unsafe extern "C" fn(); 0
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+        + 1
+{%- endif %}
+{%- endfor %}
+    ] = [
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+        js_{{ module.require_full_name|normalize_ident|lower }}_module_class,
+{%- endif %}
 {%- endfor %}
     ];
 }

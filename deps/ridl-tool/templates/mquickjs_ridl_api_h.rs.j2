@@ -1,0 +1,166 @@
+#ifndef MJS_RIDL_API_H
+#define MJS_RIDL_API_H
+
+#include "mquickjs.h"
+#include "mquickjs_build.h"
+
+/*
+ * ============================
+ * RIDL C API (declarations only)
+ *
+ * This header is the ONLY public entry for runtime C compilation.
+ * It must NOT contain any static definitions.
+ *
+ * - Runtime TU (mqjs_stdlib_impl.c / require.c / generated glue) include this.
+ * - Host ROM tool should include mquickjs_ridl_register.h instead.
+ * ============================
+ */
+
+// Built-in stdlib extensions (mquickjs-rs)
+// require() exists only when ridl-extensions is enabled.
+JSValue js_ridl_require(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+
+/* ----------------------------
+ * RIDL global functions
+ * ----------------------------
+ */
+{%- for module in modules %}
+{%- for function in module.functions %}
+JSValue js_{{ function.name|lower }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+{%- endfor %}
+{%- endfor %}
+
+{%- for module in modules %}
+{%- for interface in module.interfaces -%}
+{%- for method in interface.methods -%}
+JSValue js_{{ interface.name|lower }}_{{ method.name }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+{%- endfor -%}
+{%- endfor %}
+{%- endfor %}
+
+/* ----------------------------
+ * RIDL interfaces
+ * ----------------------------
+ */
+
+// Property definition arrays
+{%- for module in modules %}
+{%- for interface in module.interfaces -%}
+extern const JSCFunctionListEntry js_{{ interface.name|lower }}_defs[];
+{%- endfor %}
+{%- endfor %}
+
+// Interface object class definition (not user classes)
+{%- for module in modules %}
+{%- for interface in module.interfaces -%}
+extern const JSClassDef js_{{ interface.name|lower }}_class_def;
+{%- endfor %}
+{%- endfor %}
+
+/* ----------------------------
+ * RIDL module & user class ids
+ * ----------------------------
+ */
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+#define JS_CLASS_{{ module.require_full_name|normalize_ident|upper }}_MODULE (JS_CLASS_USER + {{ module.module_class_id }})
+extern const JSClassDef js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def;
+void js_{{ module.require_full_name|normalize_ident|lower }}_module_class(void);
+{%- endif %}
+{%- for class in module.classes %}
+#define JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} (JS_CLASS_USER + {{ class.class_id }})
+extern const JSClassDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def;
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class(void);
+{%- endfor %}
+{%- endfor %}
+
+#ifndef JS_CLASS_COUNT
+#define JS_CLASS_COUNT (JS_CLASS_USER + {{ next_class_id }})
+#endif
+
+/* ----------------------------
+ * RIDL module constructors
+ * (instances are created by require())
+ * ----------------------------
+ */
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+JSValue js_{{ module.require_full_name|normalize_ident|lower }}_module_constructor(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- endif %}
+{%- endfor %}
+
+/* ----------------------------
+ * RIDL user classes
+ * (constructors/methods/getters/finalizers)
+ * ----------------------------
+ */
+{%- for module in modules %}
+{%- for class in module.classes %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+
+{%- for method in class.methods %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- endfor %}
+
+{%- for prop in class.properties %}
+{%- if prop.modifiers|is_readonly_prop %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+{%- endif %}
+{%- endfor %}
+
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer(
+    JSContext *ctx,
+    void *opaque
+);
+{%- endfor %}
+{%- endfor %}
+
+// Singletons
+{%- for module in modules %}
+{%- for s in module.singletons %}
+{%- for method in s.methods %}
+JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_{{ method.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+{%- endfor %}
+{%- for prop in s.properties %}
+{%- if prop.modifiers|is_readonly_prop %}
+JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
+{%- endfor %}
+
+// RIDL module require-table (generated)
+
+typedef struct {
+    const char *module_full_name;
+    const char *module_base;
+    uint16_t v_major;
+    uint16_t v_minor;
+    uint16_t v_patch;
+    int module_class_id;
+} RidlRequireEntry;
+
+extern const RidlRequireEntry js_ridl_require_table[];
+extern const int js_ridl_require_table_len;
+
+#endif // MJS_RIDL_API_H
