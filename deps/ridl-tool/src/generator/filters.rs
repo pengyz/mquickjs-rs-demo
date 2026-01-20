@@ -471,7 +471,7 @@ pub fn emit_param_extract(
         } else {
             // For Optional(T), decode from the already-extracted `v`.
             let inner_extract =
-                emit_single_param_extract_from_jsvalue(&inner_name, inner.as_ref(), param.file_mode)?;
+                emit_single_param_extract_from_jsvalue(&inner_name, inner.as_ref())?;
             for line in inner_extract.lines() {
                 w.push_line(line.to_string());
             }
@@ -534,7 +534,7 @@ fn emit_union_param_extract(
     name: &str,
     ty: &Type,
     rust_ty: &str,
-    file_mode: FileMode,
+    _file_mode: FileMode,
     idx0: usize,
     idx1: usize,
 ) -> ::askama::Result<String> {
@@ -625,10 +625,6 @@ fn emit_missing_arg(w: &mut CodeWriter, idx1: usize, name: &str) {
         idx1 = idx1,
         name = name
     ));
-}
-
-fn emit_argv_v(idx0: usize) -> String {
-    format!("unsafe {{ *argv.add({idx0}) }}", idx0 = idx0)
 }
 
 fn emit_argv_v_expr(idx0_expr: &str) -> String {
@@ -753,7 +749,7 @@ fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_
 fn emit_single_param_extract(
     name: &str,
     ty: &Type,
-    file_mode: FileMode,
+    _file_mode: FileMode,
     idx0: usize,
     idx1: usize,
 ) -> ::askama::Result<String> {
@@ -762,7 +758,7 @@ fn emit_single_param_extract(
     emit_missing_arg(&mut w, idx1, name);
     emit_argv_v_let(&mut w, idx0);
 
-    let inner = emit_single_param_extract_from_jsvalue(name, ty, file_mode)?;
+    let inner = emit_single_param_extract_from_jsvalue(name, ty)?;
     for line in inner.lines() {
         w.push_line(line.to_string());
     }
@@ -773,7 +769,6 @@ fn emit_single_param_extract(
 fn emit_single_param_extract_from_jsvalue(
     name: &str,
     ty: &Type,
-    file_mode: FileMode,
 ) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
@@ -806,7 +801,6 @@ fn emit_single_param_extract_from_jsvalue(
             emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Any => {
-            let _ = file_mode;
             w.push_line(format!(
                 "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
                 name = name

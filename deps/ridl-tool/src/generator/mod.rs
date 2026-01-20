@@ -198,23 +198,6 @@ fn group_union_types_by_domain(union_types: Vec<TemplateUnionType>) -> Vec<Templ
     out
 }
 
-fn to_upper_camel_case(s: &str) -> String {
-    let mut out = String::new();
-    let mut upper_next = true;
-    for ch in s.chars() {
-        if ch.is_ascii_alphanumeric() {
-            if upper_next {
-                out.extend(ch.to_uppercase());
-                upper_next = false;
-            } else {
-                out.push(ch);
-            }
-        } else {
-            upper_next = true;
-        }
-    }
-    if out.is_empty() { "X".to_string() } else { out }
-}
 use askama::Template;
 use std::path::Path;
 
@@ -418,6 +401,14 @@ fn generate_register_h_and_symbols(
         .render()?,
     )?;
 
+    std::fs::write(
+        out_dir.join("mquickjs_ridl_register.c"),
+        MquickjsRidlRegisterCTemplate {
+            modules: ridl_register_all.modules.clone(),
+        }
+        .render()?,
+    )?;
+
     // Aggregated symbols (extern declarations + keep-alive references).
     let agg_symbols = AggSymbolsTemplate { modules };
 
@@ -431,7 +422,7 @@ fn generate_register_h_and_symbols(
 pub mod singleton_aggregate;
 
 #[derive(Template)]
-#[template(path = "mquickjs_ridl_register_h.rs.j2", escape = "none")]
+#[template(path = "mquickjs_ridl_register.h.j2", escape = "none")]
 struct MquickjsRidlRegisterHeaderTemplate {
     // Used only for stdlib macro namespace (JS_STDLIB_EXTENSIONS_<...>).
     module_name: String,
@@ -443,10 +434,16 @@ struct MquickjsRidlRegisterHeaderTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "mquickjs_ridl_api_h.rs.j2", escape = "none")]
+#[template(path = "mquickjs_ridl_api.h.j2", escape = "none")]
 struct MquickjsRidlApiHeaderTemplate {
     modules: Vec<TemplateModule>,
     next_class_id: u32,
+}
+
+#[derive(Template)]
+#[template(path = "mquickjs_ridl_register.c.j2", escape = "none")]
+struct MquickjsRidlRegisterCTemplate {
+    modules: Vec<TemplateModule>,
 }
 
 trait RustGlueLikeTemplate {

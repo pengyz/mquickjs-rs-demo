@@ -2,7 +2,6 @@
 #define MJS_RIDL_API_H
 
 #include "mquickjs.h"
-#include "mquickjs_build.h"
 
 /*
  * ============================
@@ -51,11 +50,7 @@ extern const JSCFunctionListEntry js_{{ interface.name|lower }}_defs[];
 {%- endfor %}
 
 // Interface object class definition (not user classes)
-{%- for module in modules %}
-{%- for interface in module.interfaces -%}
-extern const JSClassDef js_{{ interface.name|lower }}_class_def;
-{%- endfor %}
-{%- endfor %}
+// NOTE: runtime must not reference JSClassDef (host-only). Kept out.
 
 /* ----------------------------
  * RIDL module & user class ids
@@ -64,12 +59,10 @@ extern const JSClassDef js_{{ interface.name|lower }}_class_def;
 {%- for module in modules %}
 {%- if module.module_decl.is_some() %}
 #define JS_CLASS_{{ module.require_full_name|normalize_ident|upper }}_MODULE (JS_CLASS_USER + {{ module.module_class_id }})
-extern const JSClassDef js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def;
 void js_{{ module.require_full_name|normalize_ident|lower }}_module_class(void);
 {%- endif %}
 {%- for class in module.classes %}
 #define JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} (JS_CLASS_USER + {{ class.class_id }})
-extern const JSClassDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def;
 void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class(void);
 {%- endfor %}
 {%- endfor %}
@@ -157,7 +150,11 @@ typedef struct {
     uint16_t v_major;
     uint16_t v_minor;
     uint16_t v_patch;
+
+    /* ensure_class_ids[0] must be module_class_id */
     int module_class_id;
+    const int *ensure_class_ids;
+    int ensure_class_ids_len;
 } RidlRequireEntry;
 
 extern const RidlRequireEntry js_ridl_require_table[];

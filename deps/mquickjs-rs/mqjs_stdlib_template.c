@@ -58,6 +58,7 @@ static const JSClassDef js_object_class =
     JS_CLASS_DEF("Object", 1, js_object_constructor, JS_CLASS_OBJECT,
                  js_object, js_object_proto, NULL, NULL);
 
+
 static const JSPropDef js_function_proto[] = {
     JS_CGETSET_DEF("prototype", js_function_get_prototype, js_function_set_prototype ),
     JS_CFUNC_DEF("call", 1, js_function_call ),

@@ -3,6 +3,7 @@
 #[allow(non_snake_case)]
 mod __ridl_agg_symbols {
     // NOTE: use a function pointer type so the keepalive table is `Sync`.
+    #[allow(dead_code)]
     type JsCFunction = unsafe extern "C" fn(
         ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
         this_val: mquickjs_rs::mquickjs_ffi::JSValue,

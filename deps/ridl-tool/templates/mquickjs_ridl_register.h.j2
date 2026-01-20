@@ -290,20 +290,11 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 
 // RIDL module require-table (generated)
 //
-// V1: `module_class_id` uses the JS_CLASS_* compile-time constants generated above.
-// `module_full_name` contains `base@version` exactly as in RIDL source (no normalize).
-// `module_base` is the substring before '@'.
+// Runtime will provide:
+//   - js_ridl_require_table
+//   - js_ridl_require_table_len
 //
-// This table is only meaningful when the application opts into ridl-extensions.
-const RidlRequireEntry js_ridl_require_table[] = {
-{%- for m in modules %}
-{%- if m.module_decl.is_some() %}
-    { "{{ m.require_full_name }}", "{{ m.require_base }}", {{ m.require_v_major }}, {{ m.require_v_minor }}, {{ m.require_v_patch }}, JS_CLASS_{{ m.require_full_name|normalize_ident|upper }}_MODULE },
-{%- endif %}
-{%- endfor %}
-};
-
-const int js_ridl_require_table_len = (int)(sizeof(js_ridl_require_table) / sizeof(js_ridl_require_table[0]));
+// (implemented in mquickjs_ridl_register.c)
 
 // Entries injected into `js_global_object[]`
 // NOTE: stdlib template expects `JS_RIDL_EXTENSIONS`.
@@ -312,6 +303,14 @@ const int js_ridl_require_table_len = (int)(sizeof(js_ridl_require_table) / size
 #define JS_STDLIB_EXTENSIONS_{{ module_name|upper }} \
     JS_CFUNC_DEF("require", 1, js_ridl_require), \
     JS_PROP_CLASS_DEF("__ridl_modules", &js_ridl_modules_ns_obj), \
+/* Ensure module classes are initialized by stdlib_init_class(), so that */ \
+/* ctx->class_proto[class_id] is set and module instances see exports. */ \
+{%- for module in modules %}
+{%- if module.module_decl.is_some() %}
+    JS_PROP_CLASS_DEF("{{ module.require_full_name }}", &js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def), \
+{%- endif %}
+{%- endfor %}
+/* (module namespaces are also exposed under __ridl_modules) */ \
 {%- for module in modules %}
 {%- for function in module.functions %}
     JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}), \

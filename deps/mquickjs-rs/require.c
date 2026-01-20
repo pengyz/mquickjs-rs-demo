@@ -6,10 +6,10 @@
  *
  * This file is compiled and linked only when ridl-extensions is enabled.
  * It relies on js_ridl_require_table emitted from the generated
- * mquickjs_ridl_register.h.
+ * mquickjs_ridl_register.c (declared in mquickjs_ridl_api.h).
  */
 
-#include "mquickjs_ridl_register.h"
+#include "mquickjs_ridl_api.h"
 
 static int parse_u16_no_ws(const char *s, uint16_t *out) {
     uint32_t v = 0;
@@ -250,6 +250,18 @@ static JSValue js_global_require(JSContext *ctx, JSValue *this_val, int argc, JS
     JSValue obj = JS_NewObjectClassUser(ctx, best->module_class_id);
     if (JS_IsException(obj)) {
         return obj;
+    }
+
+    /*
+     * RIDL module exports include ROMClass entries (JS_DEF_CLASS). They need to be
+     * materialized into ctor functions on the returned module instance so userland
+     * can do: new require("m").MyClass().
+     *
+     * Scope: instance + one-level prototype (write back as own property).
+     */
+    {
+        if (JS_MaterializeModuleClassExports(ctx, obj) < 0)
+            return JS_EXCEPTION;
     }
 
     return obj;

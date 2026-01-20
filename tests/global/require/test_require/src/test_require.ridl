@@ -5,3 +5,7 @@ fn ping() -> int;
 class Foo {
     fn value() -> int;
 }
+
+class Bar {
+    fn value() -> int;
+}

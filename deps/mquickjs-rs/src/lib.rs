@@ -56,6 +56,10 @@ pub mod ridl_class_id {
     include!(concat!(env!("OUT_DIR"), "/ridl_class_id.rs"));
 }
 
+pub mod ridl_js_class_id {
+    include!(concat!(env!("OUT_DIR"), "/ridl_js_class_id.rs"));
+}
+
 pub mod context;
 
 pub mod env;

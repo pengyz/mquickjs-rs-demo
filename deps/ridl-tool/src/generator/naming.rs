@@ -145,6 +145,7 @@ pub fn to_upper_camel_case(s: &str) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn to_lower_camel_case(s: &str) -> String {
     let mut out = to_upper_camel_case(s);
     if out.is_empty() {

@@ -154,6 +154,8 @@ fn js_throw_type_error(ctx: *mut JSContext, msg: &str) -> JSValue {
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     let _ = this_val;
+    let _ = argc;
+    let _ = argv;
     {%- for p in function.params %}
     {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
     {%- endfor %}
@@ -307,6 +309,7 @@ pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(c
 // Store a pointer to a Box<dyn Trait> (thin pointer), so it can round-trip through c_void safely.
 // Contract: JSValue receiver must be validated via JS_GetClassID prior to dereferencing.
 
+#[allow(dead_code)]
 #[inline]
 unsafe fn ridl_boxed_{{ class.name|to_snake_case }}_to_js(
     ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
@@ -316,7 +319,8 @@ unsafe fn ridl_boxed_{{ class.name|to_snake_case }}_to_js(
     let obj = unsafe {
         mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
             ctx,
-            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 + {{ class.class_id }},
+            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32
+                + mquickjs_rs::ridl_js_class_id::JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} as i32,
         )
     };
     if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
@@ -358,7 +362,8 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     let obj = unsafe {
         mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
             ctx,
-            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32 + {{ class.class_id }},
+            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32
+                + mquickjs_rs::ridl_js_class_id::JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} as i32,
         )
     };
     if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)

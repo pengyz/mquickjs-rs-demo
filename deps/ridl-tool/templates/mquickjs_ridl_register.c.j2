@@ -1,0 +1,32 @@
+#include "mquickjs.h"
+#include "mquickjs_ridl_api.h"
+#include "mquickjs_ridl_register.h"
+
+// RIDL module require-table (generated)
+//
+// This file is runtime-only (linked into libmquickjs.a). It intentionally stays out of
+// the host ROM-generation compilation path.
+
+{%- for m in modules %}
+{%- if m.module_decl.is_some() %}
+static const int js_{{ m.require_full_name|normalize_ident|lower }}_ensure_class_ids[] = {
+    JS_CLASS_{{ m.require_full_name|normalize_ident|upper }}_MODULE,
+{%- for class in m.classes %}
+    JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }},
+{%- endfor %}
+};
+{%- endif %}
+{%- endfor %}
+
+const RidlRequireEntry js_ridl_require_table[] = {
+{%- for m in modules %}
+{%- if m.module_decl.is_some() %}
+    { "{{ m.require_full_name }}", "{{ m.require_base }}", {{ m.require_v_major }}, {{ m.require_v_minor }}, {{ m.require_v_patch }},
+      JS_CLASS_{{ m.require_full_name|normalize_ident|upper }}_MODULE,
+      js_{{ m.require_full_name|normalize_ident|lower }}_ensure_class_ids,
+      (int)(sizeof(js_{{ m.require_full_name|normalize_ident|lower }}_ensure_class_ids) / sizeof(js_{{ m.require_full_name|normalize_ident|lower }}_ensure_class_ids[0])) },
+{%- endif %}
+{%- endfor %}
+};
+
+const int js_ridl_require_table_len = (int)(sizeof(js_ridl_require_table) / sizeof(js_ridl_require_table[0]));

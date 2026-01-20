@@ -174,6 +174,7 @@ fn union_name_from_members(member_types: &[Type]) -> String {
     format!("Union{}", keys.join(""))
 }
 
+#[allow(dead_code)]
 fn to_upper_camel_case(s: &str) -> String {
     let mut out = String::new();
     let mut upper_next = true;
