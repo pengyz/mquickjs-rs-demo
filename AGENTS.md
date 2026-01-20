@@ -1,27 +1,36 @@
-## Mi Code Added Memories
-- In this project, treat a crate as a RIDL module only if the dependency path's src/ directory contains at least one *.ridl file; otherwise exclude it from registry-driven RIDL aggregation.
-- In this project (mquickjs), C API registration cannot happen at runtime; registration must be done at compile time. This constraint is the root reason for the symbol keep-alive + build-time aggregation design; avoid suggesting runtime QuickJS C API registration.
-- User will close VSCode and work directly in terminal for this repo/session (to reduce concurrent cargo/rust-analyzer build conflicts like ETXTBSY).
-- 禁止做“简化硬编码”：任何聚合/注册/初始化逻辑不得通过硬编码 singleton 名称（例如 "console"）或模块白名单来实现，必须走标准、可扩展的通用机制（新增模块仅放入 ridl-modules/ 即可生效）。
-- In this repo, the build orchestrator crate currently named xtask should be renamed to ridl-builder, and the aggregated module selection snapshot should be named ridl-manifest.json (instead of ridl-plan.json).
-- For multi-app support: app-id normalization should replace any non [A-Za-z0-9_] characters with '_' (including '-' -> '_'), and select the app package by matching cargo metadata package.manifest_path exactly to the provided --cargo-toml (most stable rule).
-- RIDL class id 命名规范：若 class 属于全局注册，则 module_name 使用固定值 GLOBAL；若有 module 声明，则用 module path normalize（非 [A-Za-z0-9_] 替换为 _）后参与 class id 拼接；class id 全大写。
-- 禁止在 build.rs 等处为 rerun-if-changed 写死相对路径（例如 println!("cargo:rerun-if-changed=../../deps/ridl-tool")）；修复必须走通用机制，不得用临时硬编码绕过。
-- 关键引擎约束（mquickjs）：JSValue 指向对象/字符串等堆内存的生命周期由 tracing GC 管理，不使用引用计数；因此公开 API 中没有 JS_FreeValue/JS_DupValue。生成/FFI 代码一般不需要显式释放 JSValue；只要对象从根（如 global、prototype、对象属性、栈/GCRef）可达就会存活，不可达会被 GC 回收。临时值在通过 JS_SetPropertyStr 等写入可达对象后即可视为被引擎接管。
-- 本仓库执行顺序：每个工作项先明确测试矩阵并给出完整 RIDL 示例写入文档供审阅；用户确认后再实施（写用例/修实现/跑测试/修 bug 直到收敛验收）。另外：允许省略 mode 表示 default，strict 必须显式写。
-- 用户已授权：在本仓库会话中可直接执行命令行（默认允许任意 CLI 命令），后续无需再就运行命令行征询；但仍需遵守安全规则：对会修改文件系统/代码库/系统状态的命令先简要说明其目的与影响。
+# Repository Rules (Source of Truth)
+
+## Core Constraints
+- Treat a crate as a RIDL module **only if** the dependency path's `src/` directory contains at least one `*.ridl` file; otherwise exclude it from registry-driven RIDL aggregation.
+- mquickjs constraint: QuickJS C API registration cannot happen at runtime; registration must be compile-time.
+- No hardcoding / no degraded implementations:
+  - Never implement aggregation/registration/initialization via hardcoded singleton names (e.g. "console") or module allowlists.
+  - Never introduce temporary modifications, ad-hoc hacks, or other degraded implementations.
+  - If experiments/validation/comparison tests are needed, **clone a separate copy in a parallel directory** and run experiments there; do not contaminate the current workspace.
+- `build.rs` rule: do not hardcode relative paths for `rerun-if-changed` (e.g. `println!("cargo:rerun-if-changed=../../deps/ridl-tool")`); fixes must use a general mechanism.
+- RIDL class id naming:
+  - If globally registered: `module_name = GLOBAL`.
+  - If `module` is declared: use normalized module path (replace non `[A-Za-z0-9_]` with `_`) as part of the class id.
+  - Class ids must be ALL CAPS.
+- Multi-app support:
+  - Normalize app-id by replacing any non `[A-Za-z0-9_]` characters with `_` (including `-` -> `_`).
+  - Select the app package by matching `cargo metadata` package `manifest_path` **exactly** to the provided `--cargo-toml`.
+- Crate naming: the build orchestrator crate currently named `xtask` should be renamed to `ridl-builder`; the aggregated module selection snapshot must be `ridl-manifest.json` (not `ridl-plan.json`).
+- Engine constraint (mquickjs): `JSValue` heap objects/strings are managed by tracing GC (not ref-counting). Public API has no `JS_FreeValue` / `JS_DupValue`. Generated/FFI code typically must not explicitly free `JSValue`.
+- Convention: all RIDL modules (including RIDL test module crates under `tests/`) must set `edition = "2024"` in `Cargo.toml`.
 
 ## Working Conventions
 - For any requirement, think deeply first and produce a concrete plan. Store plans under `doc/planning/` (one plan per requirement) and mark the plan as completed when done.
-- After the plan is approved/confirmed, proceed to execute it by default. If you hit problems, think through solutions and iterate. If more than 5 attempts still can’t meaningfully unblock progress, stop and ask the user how they want to proceed.
 - Do not start implementation until the plan has been discussed and the user explicitly confirms the requirement is ready.
+- After the plan is approved/confirmed, proceed to execute it by default. If you hit problems, think through solutions and iterate. If more than 5 attempts still can’t meaningfully unblock progress, stop and ask the user how they want to proceed.
 - When blocked: reason first, avoid guessing. After several failed attempts, summarize the blocker clearly for user review and decide the next step together.
-- Every change requires tests. Write/review tests early and ask the user to review tests explicitly. All tests must pass; if tests fail, report the reason first and wait for the user's decision on how to proceed.
+- Every change requires tests. Write/review tests early and ask the user to review tests explicitly.
+- All tests must pass; if tests fail, report the reason first and wait for the user’s decision on how to proceed.
 - After finishing a feature, run JS integration cases under `tests/` (in addition to `cargo test`). Command: `cargo run -- tests`.
 - After completing a feature, update related docs to keep docs and code consistent. If you detect inconsistency, report it first and wait for user confirmation before making corrective doc changes.
-- 文档要求：项目内文档（尤其是 doc/planning/ 下的设计/规划文档）使用中文编写。
+- Documentation requirement: in-repo documents (especially design/planning docs under `doc/planning/`) must be written in Chinese.
 - For each large module, maintain a `README.md` describing purpose; add design/implementation docs when complexity warrants.
-- Default permission: shell commands are allowed (not limited to git/rmdir; any CLI tool is allowed).
+- Shell commands are allowed in this repo session (any CLI commands). Still follow safety rules: for commands that modify the filesystem/codebase/system state, briefly explain purpose and impact first.
 - Git commit message format: subject/title line < 50 columns; body lines < 88 columns.
 - After finishing a plan’s implementation, do not commit by default; ask the user whether they want a commit.
 - AGENTS.md is the single source of truth for working rules in this repo.
