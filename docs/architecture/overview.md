@@ -88,7 +88,7 @@ mquickjs-rs 采用模块化设计，每个功能模块都作为独立的 Rust cr
 > mquickjs 仅支持编译期将扩展注册进 stdlib 表，因此 RIDL 扩展的选择与聚合发生在构建期。
 
 1. **选择 registry source（app manifest）**：由 profile 决定（见 `mquickjs.build.toml`）
-2. **RIDL 解析/聚合**：`ridl-tool resolve/generate` 生成 `mquickjs_ridl_register.h`（含 `JS_RIDL_EXTENSIONS`）
+2. **RIDL 解析/聚合**：`ridl-tool resolve/generate` 生成 `mquickjs_ridl_register.h`（用于 C 侧编译期 stdlib 注入）
 3. **编译 C 静态库**：`mquickjs-build` 将扩展编译进 `libmquickjs.a`
 4. **bindgen**：生成 Rust FFI bindings（Rust 2024 输出）
 
@@ -156,7 +156,7 @@ mquickjs-rs 采用模块化设计，每个功能模块都作为独立的 Rust cr
 ## 相关文档
 
 - [RIDL 语法与扩展](../ridl/syntax-and-extension.md)：RIDL 语言的语法定义和规范
-- [标准库扩展机制](../ridl/stdlib-extension-mechanism.md)：标准库扩展的实现机制和流程
+- [标准库扩展机制（已过时）](../legacy/stdlib-extension-mechanism.md)：历史机制记录；现行口径见 `../build/pipeline.md` / `../ridl/codegen-outputs.md`
 - [RIDL 模块设计](../ridl/module-design.md)：RIDL 模块的设计和实现细节
 
 ## 未来发展方向

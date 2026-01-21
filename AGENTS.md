@@ -20,7 +20,7 @@
 - Convention: all RIDL modules (including RIDL test module crates under `tests/`) must set `edition = "2024"` in `Cargo.toml`.
 
 ## Working Conventions
-- For any requirement, think deeply first and produce a concrete plan. Store plans under `doc/planning/` (one plan per requirement) and mark the plan as completed when done.
+- For any requirement, think deeply first and produce a concrete plan. Store plans under `docs/planning/` (one plan per requirement) and mark the plan as completed when done.
 - Do not start implementation until the plan has been discussed and the user explicitly confirms the requirement is ready.
 - After the plan is approved/confirmed, proceed to execute it by default. If you hit problems, think through solutions and iterate. If more than 5 attempts still can’t meaningfully unblock progress, stop and ask the user how they want to proceed.
 - When blocked: reason first, avoid guessing. After several failed attempts, summarize the blocker clearly for user review and decide the next step together.
@@ -28,7 +28,7 @@
 - All tests must pass; if tests fail, report the reason first and wait for the user’s decision on how to proceed.
 - After finishing a feature, run JS integration cases under `tests/` (in addition to `cargo test`). Command: `cargo run -- tests`.
 - After completing a feature, update related docs to keep docs and code consistent. If you detect inconsistency, report it first and wait for user confirmation before making corrective doc changes.
-- Documentation requirement: in-repo documents (especially design/planning docs under `doc/planning/`) must be written in Chinese.
+- Documentation requirement: in-repo documents (especially design/planning docs under `docs/planning/`) must be written in Chinese.
 - For each large module, maintain a `README.md` describing purpose; add design/implementation docs when complexity warrants.
 - Shell commands are allowed in this repo session (any CLI commands). Still follow safety rules: for commands that modify the filesystem/codebase/system state, briefly explain purpose and impact first.
 - Git commit message format: subject/title line < 50 columns; body lines < 88 columns.

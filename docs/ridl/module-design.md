@@ -170,14 +170,14 @@ pub extern "C" fn js_say_hello(ctx: *mut JSContext, argc: i32, argv: *mut JSValu
 ## 相关文档
 
 - [RIDL 语法与扩展](syntax-and-extension.md) - RIDL 语言的语法定义和规范
-- [标准库扩展机制](stdlib-extension-mechanism.md) - 标准库扩展的实现机制和流程
-- [Rust胶水代码演进](rust-glue-evolution.md) - 从C胶水代码到Rust胶水代码的演进过程
+- [标准库扩展机制（已过时）](../legacy/stdlib-extension-mechanism.md) - 历史机制记录；现行口径见 `docs/build/pipeline.md` / `docs/ridl/codegen-outputs.md`
+- [Rust胶水代码演进（历史/部分过时）](../legacy/rust-glue-evolution.md) - 演进记录（不作为现行规范）
 
 ## 未来发展方向
 
 ### 1. 动态模块加载
 
-> 备注：当前 mquickjs 的 stdlib 扩展注册必须发生在编译期（C 侧通过 `JS_RIDL_EXTENSIONS` 展开），因此**无法在运行时动态注册**标准库扩展项。
+> 备注：当前 mquickjs 的 stdlib 扩展注册必须发生在编译期（C 侧包含 `mquickjs_ridl_register.h` 并在 stdlib 表处展开），因此**无法在运行时动态注册**标准库扩展项。
 > 如果未来要支持“动态加载”，需要区分：
 > - JS 层面的模块加载（`require`/module system）
 > - C 侧 stdlib 扩展表的编译期注册（不可运行时变更）

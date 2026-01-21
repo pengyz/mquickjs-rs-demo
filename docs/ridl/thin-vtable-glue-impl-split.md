@@ -127,7 +127,7 @@ Rules:
 
 - `ridl_module_api.rs`
   - `initialize_module()` calls `symbols::ensure_symbols()`
-  - `ridl_module_context_init(w: &mut dyn RidlSlotWriter)` optional hook for module-provided slot filling
+  - `ridl_module_context_init(w: &mut dyn RidlSlotWriter)` 可选扩展点：允许模块侧对 slot 进行补充填充（不是 correctness gate）
 
 ### App crate (aggregated; generated into app `OUT_DIR`)
 

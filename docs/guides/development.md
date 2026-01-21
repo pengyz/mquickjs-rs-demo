@@ -31,7 +31,7 @@ mquickjs-demo/
 │   ├── mquickjs-rs/        # Rust 封装层（负责 bindgen + 链接 libmquickjs.a；提供 ridl_bootstrap! 宏）
 │   └── ridl-tool/          # RIDL 解析/校验/生成 CLI（crate: ridl-tool；bin: ridl-tool）
 ├── docs/                   # 项目文档
-└── doc/planning/           # 需求计划文档（每个需求一份计划）
+└── docs/planning/          # 需求计划/决策记录归档（每个需求一份计划）
 ```
 
 ## RIDL 模块开发
@@ -83,7 +83,7 @@ cargo build
 - **App `build.rs`** 解析 App manifest（根 `Cargo.toml` 的 `[dependencies]`），筛选出 `src/` 下包含 `*.ridl` 的依赖 crate 作为 RIDL modules。
 - App `build.rs` 通过 `ridl-tool` 生成：
   - `$OUT_DIR/ridl_bootstrap.rs`：聚合初始化入口（由 `mquickjs_rs::ridl_bootstrap!()` 引用）
-  - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期展开 `JS_RIDL_EXTENSIONS`
+  - `$OUT_DIR/mquickjs_ridl_register.h`：供 C 侧编译期注入到 stdlib 表（编译期展开）
 - **mquickjs-sys `build.rs`** 使用 `mquickjs-build` 产出 `libmquickjs.a`；当启用 feature `ridl-extensions` 时，会把上面的 `mquickjs_ridl_register.h` 纳入编译。
 
 > 注意：当前示例模块为 `ridl_module_demo_default` / `ridl_module_demo_strict`（位于 `ridl-modules/`），可参考其 `Cargo.toml` 与目录结构。
@@ -257,8 +257,8 @@ cargo build
 ## 相关文档
 
 - [RIDL 语法与扩展](../ridl/syntax-and-extension.md) - RIDL 语言的语法定义和规范
-- [标准库扩展机制](../ridl/stdlib-extension-mechanism.md) - 标准库扩展的实现机制和流程
-- [Rust胶水代码演进](../ridl/rust-glue-evolution.md) - 从C胶水代码到Rust胶水代码的演进过程
+- [标准库扩展机制（已过时）](../legacy/stdlib-extension-mechanism.md) - 历史机制记录；现行口径见 `../build/pipeline.md`
+- [Rust胶水代码演进（历史/部分过时）](../legacy/rust-glue-evolution.md) - 演进记录（不作为现行规范）
 - [RIDL 模块设计](../ridl/module-design.md) - RIDL 模块的设计和实现细节
 
 ## 测试策略

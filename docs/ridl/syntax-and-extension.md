@@ -768,4 +768,4 @@ pub enum RIDLErrorType {
 }
 ```
 
-有关 RIDL 标准库扩展机制的详细信息，请参见 [标准库扩展机制文档](stdlib-extension-mechanism.md)。
+有关 RIDL 标准库扩展机制的历史讨论，请参见 [标准库扩展机制文档（已过时）](../legacy/stdlib-extension-mechanism.md)。现行口径以 `docs/build/pipeline.md` 与 `docs/ridl/codegen-outputs.md` 为准。
