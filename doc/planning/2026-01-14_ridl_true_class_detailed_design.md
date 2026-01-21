@@ -34,7 +34,7 @@
   - `ridl_ext_ptr: UnsafeCell<*mut c_void>`
   - `ridl_ext_drop: UnsafeCell<Option<unsafe fn(*mut c_void)>>`
 - 应用侧（本 repo 的 `src/context.rs`）在创建 `Context` 后调用：
-  - `crate::ridl_runtime_support::ridl_context_init(ctx)`（仅 feature `ridl-extensions`）
+  - `crate::ridl_context_ext::ridl_context_init(ctx)`（仅 feature `ridl-extensions`）
 - `ridl_context_init`（生成物）负责：
   - 安装 `RidlCtxExtVTable`
   - 分配 `CtxExt` 并通过 `ContextInner::set_ridl_ext(ptr, drop_fn)` 存入

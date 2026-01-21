@@ -12,7 +12,7 @@ impl Context {
         // is built with ridl-extensions.
         #[cfg(feature = "ridl-extensions")]
         unsafe {
-            crate::ridl_runtime_support::ridl_context_init(inner.ctx as *mut mquickjs_ffi::JSContext);
+            crate::ridl_context_ext::ridl_context_init(inner.ctx as *mut mquickjs_ffi::JSContext);
         }
 
         Ok(Self { inner })

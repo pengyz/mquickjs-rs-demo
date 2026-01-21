@@ -177,7 +177,7 @@ cargo build
 此流程将：
 1. 构建工具（`ridl-tool` / `mquickjs-build`）
 2. 预构建 QuickJS base 产物（不含 RIDL extensions；供 core/单测链接）
-3. 生成 RIDL 聚合产物（`ridl_bootstrap.rs` / `ridl_runtime_support.rs` / `ridl_symbols.rs` / `mquickjs_ridl_register.h` 等）
+3. 生成 RIDL 聚合产物（`ridl_bootstrap.rs` / `ridl_context_ext.rs` / `ridl_symbols.rs` / `mquickjs_ridl_register.h` 等）
 4. 预构建 QuickJS ridl 产物（包含 RIDL extensions；供 App/集成用例运行）
 5. 执行 App `build.rs` 并完成最终编译链接
 

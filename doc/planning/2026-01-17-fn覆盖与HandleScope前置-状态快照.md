@@ -63,7 +63,7 @@
 - 之前生成：入参 any -> `Local<Value>`，返回 any -> `Global<Value>`，但 trait 不带 `&Scope`，导致 impl 无法实现。
 - 讨论结论：返回 any 应改为 `Local<Value>`，并且必须引入机制型临时根（对外 API）。
 
-2) **mquickjs-demo 生成的 ridl_runtime_support.rs 引用 strict ctx slot vtable 错误**
+2) **mquickjs-demo 生成的 ridl_context_ext.rs 引用 strict ctx slot vtable 错误**
 - 编译错误示例：引用 `ridl_test_g_fn::RIDL_TEST_FN_STRICT_CTX_SLOT_VT`，但正确应来自 `ridl_test_g_fn_strict`。
 - 需要在应用聚合/生成逻辑中修正符号来源。
 

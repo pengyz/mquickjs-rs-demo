@@ -60,7 +60,7 @@ pub fn emit() {
     }
 
     copy_required(&aggregate_dir, &out_dir, "ridl_symbols.rs");
-    copy_required(&aggregate_dir, &out_dir, "ridl_runtime_support.rs");
+    copy_required(&aggregate_dir, &out_dir, "ridl_context_ext.rs");
     copy_required(&aggregate_dir, &out_dir, "ridl_bootstrap.rs");
 
     println!("cargo:rerun-if-changed={}", cargo_toml.display());

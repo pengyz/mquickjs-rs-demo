@@ -96,14 +96,14 @@ pub fn write_ridl_shared_files_and_context_init(
         inputs: Vec::new(),
     };
 
-    // Consolidated aggregate outputs (ridl_symbols.rs + ridl_runtime_support.rs + ridl_bootstrap.rs)
+    // Consolidated aggregate outputs (ridl_symbols.rs + ridl_context_ext.rs + ridl_bootstrap.rs)
     ridl_tool::generator::generate_aggregate_consolidated(&plan, out_dir)
         .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e.to_string()))?;
 
     Ok((
         out_dir.join("mquickjs_ridl_register.h"),
         out_dir.join("ridl_symbols.rs"),
-        out_dir.join("ridl_runtime_support.rs"),
+        out_dir.join("ridl_context_ext.rs"),
         out_dir.join("ridl_bootstrap.rs"),
     ))
 }

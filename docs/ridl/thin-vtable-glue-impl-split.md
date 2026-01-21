@@ -131,7 +131,7 @@ Rules:
 
 ### App crate (aggregated; generated into app `OUT_DIR`)
 
-- `ridl_runtime_support.rs`
+- `ridl_context_ext.rs`
   - defines `CtxExt` with `ErasedSingletonSlot` fields
   - defines `ridl_ctx_ext_get_slot_by_name(ext_ptr, name_ptr, name_len)` used via `RidlCtxExtVTable`
   - defines `CtxExt::drop_all()`

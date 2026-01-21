@@ -99,7 +99,7 @@ Glue **不得**：构建/运行 ridl-builder、ridl-tool、mquickjs-build，或�
 - `ridl-manifest.json`
 - `mquickjs_ridl_register.h`
 - `ridl_symbols.rs`
-- `ridl_runtime_support.rs`
+- `ridl_context_ext.rs`
 - `ridl_bootstrap.rs`
 
 ### 5.3 新增“依赖图导出”产物（调试/审计）

@@ -42,7 +42,7 @@
 将 Rust 聚合文件收敛为 **3 个**：
 
 1) `ridl_symbols.rs`（保持独立）
-2) `ridl_runtime_support.rs`（新增，合并运行时结构与索引）
+2) `ridl_context_ext.rs`（新增，合并 context 扩展结构与 slot 索引，并提供 ridl_context_init 入口）
 3) `ridl_bootstrap.rs`（新增，合并初始化入口与上下文初始化）
 
 C 侧保持 1 个：
@@ -72,7 +72,7 @@ C 侧保持 1 个：
 
 二者高度耦合：CtxExt 的字段顺序/访问分支与 slot index 一一对应。
 
-结论：合并为 `ridl_runtime_support.rs`。
+结论：合并为 `ridl_context_ext.rs`。
 
 ### 3.3 启动/初始化（process 与 context）
 
@@ -89,7 +89,7 @@ C 侧保持 1 个：
 
 ## 4. 新文件的接口设计
 
-### 4.1 `ridl_runtime_support.rs`
+### 4.1 `ridl_context_ext.rs`
 
 内容包含：
 
@@ -98,7 +98,7 @@ C 侧保持 1 个：
 
 对外导出建议：
 
-- `pub use crate::ridl_runtime_support::CtxExt;`（如需要）
+- `pub use crate::ridl_context_ext::CtxExt;`（如需要）
 - （保持现有 ridl_context_init.rs 的 `mod ridl_ctx_ext { include!(...) }` 结构也可，但更推荐直接在同文件内引用）
 
 ### 4.2 `ridl_bootstrap.rs`
@@ -106,7 +106,7 @@ C 侧保持 1 个：
 内容包含：
 
 - modules initialize（原 `ridl_modules_initialize.rs`）
-- context init（原 `ridl_context_init.rs`，内部引用 `ridl_runtime_support::CtxExt`）
+- context init（原 `ridl_context_init.rs`，内部引用 `ridl_context_ext::CtxExt`）
 - process initialize（原 `ridl_bootstrap.rs`）
 
 对外 API：优先保持兼容，提供原调用点：
@@ -138,7 +138,7 @@ pub mod ridl_bootstrap {
 - 不生成旧文件名（`ridl_slot_indices.rs` / `ridl_ctx_ext.rs` / `ridl_context_init.rs` / `ridl_modules_initialize.rs` / `ridl_bootstrap.rs`）。
 - 同步修改所有消费方（root build.rs / mquickjs-ridl-glue / 任何 include 点）只依赖新文件：
   - `ridl_symbols.rs`
-  - `ridl_runtime_support.rs`
+  - `ridl_context_ext.rs`
   - `ridl_bootstrap.rs`
 
 验收要求：
@@ -160,7 +160,7 @@ pub mod ridl_bootstrap {
 目标改为：ridl-tool 直接生成以下最终文件：
 
 - `ridl_symbols.rs`（保留现状语义，可调整内部结构）
-- `ridl_runtime_support.rs`（合并 slot indices + CtxExt + slot getters）
+- `ridl_context_ext.rs`（合并 slot indices + CtxExt + slot getters，并提供 ridl_context_init）
 - `ridl_bootstrap.rs`（合并：modules initialize + process initialize + context init）
 
 实现要点：
@@ -178,7 +178,7 @@ pub mod ridl_bootstrap {
 - context init：设置 ridl ctx ext vtable、分配 CtxExt、并通过 runtime writer 写入各 singleton slots
 
 4) 文件依赖关系：
-- `ridl_bootstrap.rs` 引用 `ridl_runtime_support.rs` 的 `CtxExt` 与 slot getter。
+- `ridl_bootstrap.rs` 引用 `ridl_context_ext.rs` 的 `CtxExt` 与 slot getter。
 - `ridl_symbols.rs` 尽量自包含，避免额外 `use` 导致重复符号风险。
 
 > 关键决策：modules initialize 的生成位置。
@@ -193,7 +193,7 @@ pub mod ridl_bootstrap {
 - `aggregate.rs`：不再生成 `ridl_modules_initialize.rs` / `ridl_bootstrap.rs`。
 - 调用 ridl-tool 新的生成入口，写出：
   - `ridl_symbols.rs`
-  - `ridl_runtime_support.rs`
+  - `ridl_context_ext.rs`
   - `ridl_bootstrap.rs`
   - `mquickjs_ridl_register.h`
 
@@ -201,7 +201,7 @@ pub mod ridl_bootstrap {
 
 - copy 列表收敛为 3 个文件：
   - `ridl_symbols.rs`
-  - `ridl_runtime_support.rs`
+  - `ridl_context_ext.rs`
   - `ridl_bootstrap.rs`
 
 - 上层 include 点统一 include `ridl_bootstrap.rs`（或其导出的模块）。
@@ -215,7 +215,7 @@ pub mod ridl_bootstrap {
 
 - 集成：
   1) `cargo run -p ridl-builder -- aggregate ...` 后，检查 out_dir：
-     - `ridl_symbols.rs` / `ridl_runtime_support.rs` / `ridl_bootstrap.rs` 存在
+     - `ridl_symbols.rs` / `ridl_context_ext.rs` / `ridl_bootstrap.rs` 存在
      - 旧文件名不存在（验证“彻底消灭小文件”）
   2) `cargo test` 与 `cargo run -- tests` 通过。
 

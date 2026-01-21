@@ -3,10 +3,50 @@ use askama::Template;
 use std::collections::BTreeMap;
 use std::path::Path;
 
+fn find_register_class_id(
+    ir: Option<&super::AggregateIR>,
+    parsed: &crate::parser::ParsedIDL,
+    plan_module: &crate::plan::RidlModule,
+    class: &crate::parser::ast::Class,
+) -> Result<u32, Box<dyn std::error::Error>> {
+    let Some(ir) = ir else {
+        return Err("internal error: missing aggregate IR for class_id mapping".into());
+    };
+
+    let module_name = parsed
+        .module
+        .as_ref()
+        .map(|m| m.module_path.as_str())
+        .unwrap_or("GLOBAL");
+
+    let reg_cls = ir
+        .classes
+        .iter()
+        .find(|c| c.module_name == module_name && c.name == class.name)
+        .ok_or_else(|| {
+            let mut available: Vec<String> = ir
+                .classes
+                .iter()
+                .filter(|c| c.module_name == module_name)
+                .map(|c| c.name.clone())
+                .collect();
+            available.sort();
+            format!(
+                "internal error: class '{}::{}' not found in aggregate IR (crate={}). Available classes in module: [{}]",
+                module_name,
+                class.name,
+                plan_module.crate_name,
+                available.join(", ")
+            )
+        })?;
+
+    Ok(reg_cls.class_id)
+}
+
 
 #[derive(Template)]
-#[template(path = "ridl_runtime_support.rs.j2")]
-struct RidlRuntimeSupportTemplate {
+#[template(path = "ridl_context_ext.rs.j2")]
+struct RidlContextExtTemplate {
     slots: Vec<Slot>,
     slot_inits: Vec<SlotInit>,
     proto_vars: Vec<ProtoVarInit>,
@@ -14,7 +54,7 @@ struct RidlRuntimeSupportTemplate {
 
 #[derive(Debug, Clone)]
 struct ProtoVarInit {
-    class_name: String,
+    class_id: u32,
     field_name: String,
     field_type: crate::parser::ast::Type,
     init_literal: String,
@@ -36,9 +76,10 @@ struct Slot {
     index: u32,
 }
 
-pub fn generate_ridl_runtime_support(
+pub(super) fn generate_ridl_context_ext(
     plan: &RidlPlan,
     out_dir: &Path,
+    ir: Option<&super::AggregateIR>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // We share the same slot ordering and singleton init ordering with the legacy generator.
     // Slot indices are global within an app aggregate.
@@ -54,7 +95,7 @@ pub fn generate_ridl_runtime_support(
             let src = std::fs::read_to_string(ridl_file)?;
             let parsed = crate::parser::parse_ridl_file(&src)?;
 
-            for item in parsed.items {
+            for item in &parsed.items {
                 match item {
                     crate::parser::ast::IDLItem::Singleton(s) => {
                         let name = sanitize_ident(&s.name);
@@ -101,12 +142,14 @@ pub fn generate_ridl_runtime_support(
                         }
 
                         // Collect proto vars to be installed as JS prototype data properties.
+                        // We must reuse the same class_id allocation used by mquickjs_ridl_register.h.
+                        let class_id = find_register_class_id(ir, &parsed, m, &c)?;
                         for f in &c.js_fields {
                             if !f.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto) {
                                 continue;
                             }
                             proto_vars.push(ProtoVarInit {
-                                class_name: c.name.clone(),
+                                class_id,
                                 field_name: f.name.clone(),
                                 field_type: f.field_type.clone(),
                                 init_literal: f.init_literal.clone(),
@@ -217,12 +260,12 @@ pub fn generate_ridl_runtime_support(
         }
     }
 
-    let t = RidlRuntimeSupportTemplate {
+    let t = RidlContextExtTemplate {
         slots,
         slot_inits,
         proto_vars,
     };
-    std::fs::write(out_dir.join("ridl_runtime_support.rs"), t.render()?)?;
+    std::fs::write(out_dir.join("ridl_context_ext.rs"), t.render()?)?;
     Ok(())
 }
 
