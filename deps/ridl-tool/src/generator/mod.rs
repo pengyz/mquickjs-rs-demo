@@ -275,11 +275,27 @@ fn generate_register_h_and_symbols(
 
         for item in parsed.items {
             match item {
-                crate::parser::ast::IDLItem::Function(f) => {
-                    functions.push(TemplateFunction::from_with_mode(f, parsed.mode))
+                crate::parser::ast::IDLItem::Function(mut f) => {
+                    f.module = parsed.module.clone();
+                    let ridl_module_name = f
+                        .module
+                        .as_ref()
+                        .map(|m| m.module_path.clone())
+                        .unwrap_or_else(|| "GLOBAL".to_string());
+                    let module_name_normalized = crate::generator::filters::normalize_ident(&ridl_module_name)
+                        .unwrap_or_else(|_| "GLOBAL".to_string());
+                    functions.push(TemplateFunction::from_with_mode(f, parsed.mode, module_name_normalized))
                 }
-                crate::parser::ast::IDLItem::Interface(i) => {
-                    interfaces.push(TemplateInterface::from_with_mode(i, parsed.mode))
+                crate::parser::ast::IDLItem::Interface(mut i) => {
+                    i.module = parsed.module.clone();
+                    let ridl_module_name = i
+                        .module
+                        .as_ref()
+                        .map(|m| m.module_path.clone())
+                        .unwrap_or_else(|| "GLOBAL".to_string());
+                    let module_name_normalized = crate::generator::filters::normalize_ident(&ridl_module_name)
+                        .unwrap_or_else(|_| "GLOBAL".to_string());
+                    interfaces.push(TemplateInterface::from_with_mode(i, parsed.mode, module_name_normalized))
                 }
                 crate::parser::ast::IDLItem::Singleton(mut s) => {
                     s.module = parsed.module.clone();
@@ -291,6 +307,8 @@ fn generate_register_h_and_symbols(
                         .to_string();
                     singletons.push(TemplateSingleton {
                         name: s.name,
+                        module_name_normalized: crate::generator::filters::normalize_ident(&module_name)
+                            .unwrap_or_else(|_| "GLOBAL".to_string()),
                         module_name,
                         methods: s
                             .methods
@@ -301,8 +319,11 @@ fn generate_register_h_and_symbols(
                     })
                 }
                 crate::parser::ast::IDLItem::Class(c) => {
+                    let module_name_normalized = crate::generator::filters::normalize_ident(&module_name)
+                        .unwrap_or_else(|_| "GLOBAL".to_string());
                     classes.push(TemplateClass::from_with_mode(
                         module_name.clone(),
+                        module_name_normalized,
                         c,
                         parsed.mode,
                     ))
@@ -589,6 +610,7 @@ pub(super) struct TemplateModule {
 struct TemplateSingleton {
     name: String,
     module_name: String,
+    module_name_normalized: String,
     methods: Vec<TemplateMethod>,
     properties: Vec<crate::parser::ast::Property>,
 }
@@ -596,6 +618,7 @@ struct TemplateSingleton {
 #[derive(Debug, Clone)]
 struct TemplateInterface {
     name: String,
+    module_name_normalized: String,
     #[allow(dead_code)]
     slot_index: u32,
     methods: Vec<TemplateMethod>,
@@ -607,6 +630,7 @@ struct TemplateInterface {
 pub(super) struct TemplateClass {
     pub(super) name: String,
     pub(super) module_name: String,
+    pub(super) module_name_normalized: String,
     pub(super) class_id: u32,
     constructor: Option<TemplateFunction>,
     methods: Vec<TemplateMethod>,
@@ -649,15 +673,21 @@ pub(crate) struct TemplateParam {
 #[allow(dead_code)]
 struct TemplateFunction {
     name: String,
+    module_name_normalized: String,
     params: Vec<TemplateParam>,
     return_type: Type,
     return_rust_ty: String,
 }
 
 impl TemplateInterface {
-    fn from_with_mode(interface: Interface, file_mode: crate::parser::FileMode) -> Self {
+    fn from_with_mode(
+        interface: Interface,
+        file_mode: crate::parser::FileMode,
+        module_name_normalized: String,
+    ) -> Self {
         Self {
             name: interface.name,
+            module_name_normalized,
             slot_index: 0,
             methods: interface
                 .methods
@@ -726,7 +756,11 @@ impl TemplateParam {
 }
 
 impl TemplateFunction {
-    fn from_with_mode(function: Function, file_mode: crate::parser::FileMode) -> Self {
+    fn from_with_mode(
+        function: Function,
+        file_mode: crate::parser::FileMode,
+        module_name_normalized: String,
+    ) -> Self {
         let params: Vec<TemplateParam> = function
             .params
             .into_iter()
@@ -739,6 +773,7 @@ impl TemplateFunction {
 
         Self {
             name: function.name,
+            module_name_normalized,
             params,
             return_type,
             return_rust_ty,
@@ -749,16 +784,22 @@ impl TemplateFunction {
 impl TemplateClass {
     fn from_with_mode(
         module_name: String,
+        module_name_normalized: String,
         class: Class,
         file_mode: crate::parser::FileMode,
     ) -> Self {
+        let module_name_normalized_cloned = module_name_normalized.clone();
+
         Self {
             module_name,
+            module_name_normalized,
             name: class.name,
             class_id: 0,
             constructor: class
                 .constructor
-                .map(|c| TemplateFunction::from_with_mode(c, file_mode)),
+                .map(|c| {
+                    TemplateFunction::from_with_mode(c, file_mode, module_name_normalized_cloned.clone())
+                }),
             methods: class
                 .methods
                 .into_iter()
@@ -852,18 +893,39 @@ pub fn generate_module_files(
     for item in items {
         match item {
             crate::parser::ast::IDLItem::Function(f) => {
-                functions.push(TemplateFunction::from_with_mode(f.clone(), file_mode))
+                let ridl_module_name = module_decl
+                    .as_ref()
+                    .map(|m| m.module_path.as_str())
+                    .unwrap_or("GLOBAL");
+                functions.push(TemplateFunction::from_with_mode(
+                    f.clone(),
+                    file_mode,
+                    crate::generator::filters::normalize_ident(ridl_module_name)
+                        .unwrap_or_else(|_| "GLOBAL".to_string()),
+                ))
             }
             crate::parser::ast::IDLItem::Interface(i) => {
-                interfaces.push(TemplateInterface::from_with_mode(i.clone(), file_mode))
+                let ridl_module_name = module_decl
+                    .as_ref()
+                    .map(|m| m.module_path.as_str())
+                    .unwrap_or("GLOBAL");
+                interfaces.push(TemplateInterface::from_with_mode(
+                    i.clone(),
+                    file_mode,
+                    crate::generator::filters::normalize_ident(ridl_module_name)
+                        .unwrap_or_else(|_| "GLOBAL".to_string()),
+                ))
             }
             crate::parser::ast::IDLItem::Class(c) => {
                 let ridl_module_name = module_decl
                     .as_ref()
                     .map(|m| m.module_path.as_str())
                     .unwrap_or("GLOBAL");
+                let module_name_normalized = crate::generator::filters::normalize_ident(ridl_module_name)
+                    .unwrap_or_else(|_| "GLOBAL".to_string());
                 classes.push(TemplateClass::from_with_mode(
                     ridl_module_name.to_string(),
+                    module_name_normalized,
                     c.clone(),
                     file_mode,
                 ))
@@ -887,6 +949,8 @@ pub fn generate_module_files(
                 .to_string();
             singletons.push(TemplateSingleton {
                 name: s.name.clone(),
+                module_name_normalized: crate::generator::filters::normalize_ident(&singleton_module_name)
+                    .unwrap_or_else(|_| "GLOBAL".to_string()),
                 module_name: singleton_module_name,
                 methods: s
                     .methods

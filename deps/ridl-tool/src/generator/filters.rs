@@ -399,6 +399,7 @@ pub fn emit_param_extract(
     param: &TemplateParam,
     idx0: &usize,
     idx1: &usize,
+    module_name_normalized: &str,
 ) -> ::askama::Result<String> {
     let raw = if param.variadic {
         emit_varargs_collect(&param.rust_name, &param.ty, param.file_mode, *idx0)?
@@ -445,8 +446,11 @@ pub fn emit_param_extract(
             }
         } else {
             // For Optional(T), decode from the already-extracted `v`.
-            let inner_extract =
-                emit_single_param_extract_from_jsvalue(&inner_name, inner.as_ref())?;
+            let inner_extract = emit_single_param_extract_from_jsvalue(
+                &inner_name,
+                inner.as_ref(),
+                module_name_normalized,
+            )?;
             for line in inner_extract.lines() {
                 w.push_line(line.to_string());
             }
@@ -485,7 +489,14 @@ pub fn emit_param_extract(
             *idx1,
         )?
     } else {
-        emit_single_param_extract(&param.rust_name, &param.ty, param.file_mode, *idx0, *idx1)?
+        emit_single_param_extract(
+            &param.rust_name,
+            &param.ty,
+            param.file_mode,
+            *idx0,
+            *idx1,
+            module_name_normalized,
+        )?
     };
 
     // The template site uses 4-space indentation and expects this filter to emit aligned code.
@@ -727,13 +738,14 @@ fn emit_single_param_extract(
     _file_mode: FileMode,
     idx0: usize,
     idx1: usize,
+    module_name_normalized: &str,
 ) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
     emit_missing_arg(&mut w, idx1, name);
     emit_argv_v_let(&mut w, idx0);
 
-    let inner = emit_single_param_extract_from_jsvalue(name, ty)?;
+    let inner = emit_single_param_extract_from_jsvalue(name, ty, module_name_normalized)?;
     for line in inner.lines() {
         w.push_line(line.to_string());
     }
@@ -744,6 +756,7 @@ fn emit_single_param_extract(
 fn emit_single_param_extract_from_jsvalue(
     name: &str,
     ty: &Type,
+    module_name_normalized: &str,
 ) -> ::askama::Result<String> {
     let mut w = CodeWriter::new();
 
@@ -787,6 +800,55 @@ fn emit_single_param_extract_from_jsvalue(
                 "compile_error!(\"v1 glue: union decoding must be generated via emit_param_extract (needs rust_ty) for {name}\");",
                 name = name
             ));
+        }
+
+        Type::ClassRef(class_name) => {
+            // Class parameter: expect an instance of the RIDL class (boxed trait object stored in opaque).
+            // Contract: object was created by ridl_boxed_*_to_js (or constructor), which stores
+            // a `*mut Box<dyn Trait>` in opaque.
+            let class_snake = crate::generator::naming::to_snake_case(class_name);
+            let class_upper = crate::generator::naming::to_upper_camel_case(class_name);
+            // ridl_js_class_id.rs uses the normalized module name uppercased, then the class name.
+            let class_id_const = format!(
+                "JS_CLASS_{}_{}",
+                module_name_normalized.to_ascii_uppercase(),
+                class_upper.to_ascii_uppercase()
+            );
+
+            let err_invalid = format!("invalid class argument: {name}");
+
+            // Only objects can have class_id/opaque.
+            // We avoid relying on C macro tags (bindgen may not expose them).
+            w.push_line(format!(
+                "let __ridl_cid_{name} = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, v) }};",
+                name = name
+            ));
+            w.push_line(format!(
+                "if __ridl_cid_{name} != mquickjs_rs::ridl_js_class_id::{cid} {{ return js_throw_type_error(ctx, \"{err}\"); }}",
+                name = name,
+                cid = class_id_const,
+                err = err_invalid
+            ));
+
+            // Opaque layout: the JS object stores a pointer to a `Box<dyn Trait>`.
+            w.push_line(format!(
+                "let __ridl_ptr_{name} = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetOpaque(ctx, v) }} as *mut Box<dyn crate::api::{class}Class>;",
+                name = name,
+                class = class_name
+            ));
+            w.push_line(format!(
+                "if __ridl_ptr_{name}.is_null() {{ return js_throw_type_error(ctx, \"missing opaque\"); }}",
+                name = name
+            ));
+            w.push_line(format!(
+                "let {name}: Box<dyn crate::api::{class}Class> = unsafe {{ *Box::from_raw(__ridl_ptr_{name}) }};",
+                name = name,
+                class = class_name
+            ));
+            w.push_line(format!(
+                "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_SetOpaque(ctx, v, core::ptr::null_mut()) }};"
+            ));
+            w.push_line(format!("let _ = \"{class_snake}\";"));
         }
 
         _ => {

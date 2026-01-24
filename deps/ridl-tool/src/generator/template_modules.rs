@@ -24,6 +24,8 @@ pub(super) fn build_template_modules(
             .as_ref()
             .map(|m| m.module_path.clone())
             .unwrap_or_else(|| "GLOBAL".to_string());
+        let module_name_normalized = crate::generator::filters::normalize_ident(&module_name)
+            .unwrap_or_else(|_| "GLOBAL".to_string());
 
         let mut interfaces: Vec<TemplateInterface> = Vec::new();
         let mut functions: Vec<TemplateFunction> = Vec::new();
@@ -33,17 +35,30 @@ pub(super) fn build_template_modules(
         for item in &parsed.items {
             match item {
                 parser::ast::IDLItem::Function(f) => {
-                    functions.push(TemplateFunction::from_with_mode(f.clone(), parsed.mode))
+                    functions.push(TemplateFunction::from_with_mode(
+                        f.clone(),
+                        parsed.mode,
+                        module_name_normalized.clone(),
+                    ))
                 }
                 parser::ast::IDLItem::Interface(i) => {
-                    interfaces.push(TemplateInterface::from_with_mode(i.clone(), parsed.mode))
+                    interfaces.push(TemplateInterface::from_with_mode(
+                        i.clone(),
+                        parsed.mode,
+                        module_name_normalized.clone(),
+                    ))
                 }
                 parser::ast::IDLItem::Singleton(s) => {
                     // Singleton aggregation is not needed for mquickjs_ridl_register.c generation.
                     let _ = (s, &module_name);
                 }
                 parser::ast::IDLItem::Class(c) => {
-                    local_classes.push(TemplateClass::from_with_mode(module_name.clone(), c.clone(), parsed.mode))
+                    local_classes.push(TemplateClass::from_with_mode(
+                        module_name.clone(),
+                        module_name_normalized.clone(),
+                        c.clone(),
+                        parsed.mode,
+                    ))
                 }
                 _ => {}
             }

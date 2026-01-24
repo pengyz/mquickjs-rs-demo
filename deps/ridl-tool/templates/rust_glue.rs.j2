@@ -157,7 +157,7 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
     let _ = argc;
     let _ = argv;
     {%- for p in function.params %}
-    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {{ p|emit_param_extract(loop.index0, loop.index, function.module_name_normalized)|safe }}
     {%- endfor %}
 
     let result = {{ function.name|to_snake_case }}({%- for p in function.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
@@ -188,7 +188,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     {%- endif %}
 
     {%- for p in method.params %}
-    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {{ p|emit_param_extract(loop.index0, loop.index, s.module_name_normalized)|safe }}
     {%- endfor %}
 
 
@@ -291,7 +291,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|lower }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
     {%- for p in method.params %}
-    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {{ p|emit_param_extract(loop.index0, loop.index, interface.module_name_normalized)|safe }}
     {%- endfor %}
 
     let result = {{ interface.name|to_snake_case }}_{{ method.name|to_snake_case }}(this_val, {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %});
@@ -350,7 +350,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 
     {%- if class.constructor.is_some() %}
     {%- for p in class.constructor.as_ref().unwrap().params %}
-    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {{ p|emit_param_extract(loop.index0, loop.index, class.module_name_normalized)|safe }}
     {%- endfor %}
     {%- else %}
     let _ = argc;
@@ -461,7 +461,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     }
 
     {%- for p in method.params %}
-    {{ p|emit_param_extract(loop.index0, loop.index)|safe }}
+    {{ p|emit_param_extract(loop.index0, loop.index, class.module_name_normalized)|safe }}
     {%- endfor %}
 
     let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };

@@ -12,4 +12,15 @@ class MFoo {
     proto var px: int = 100;
 
     fn add(a: int, b: int) -> int;
+
+    // Phase 1: cross-class construction
+    fn make_bar(v: int) -> MBar;
+
+    // Phase 2: cross-class parameter passing
+    fn use_bar(b: MBar) -> int;
+}
+
+class MBar {
+    var v: int = 0;
+    fn get_v() -> int;
 }
