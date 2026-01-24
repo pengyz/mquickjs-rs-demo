@@ -32,6 +32,18 @@ assertEq(t.echoAny(1), 1)
 assertEq(t.echoAny(1.5), 1.5)
 assertEq(t.echoAny('hello'), 'hello')
 
+// Optional(any) return: null represents None
+assertEq(t.maybeAny(false), null)
+assertEq(t.maybeAny(true), 'ok')
+
+// allocation pressure: returned any? must remain valid
+{
+  var s = t.maybeAny(true)
+  var sink = []
+  for (var i = 0; i < 2000; i++) sink.push({ i: i, s: 'zzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz' + i })
+  assertEq(s, 'ok')
+}
+
 assertEq(t.echoString('hello'), 'hello')
 
 // NUL is allowed; passed string is truncated at NUL when crossing into Rust.
@@ -96,3 +108,15 @@ assert(threw, 'expected TypeError for echoStringOrIntNullable(1.5)')
   assert(ret === obj, 'echoAny(object) must preserve identity')
   assertEq(ret.a, 1)
 }
+
+// Optional(any) param + Optional(Union(string | int)) return
+assertEq(t.maybeUnionAny(null), null)
+assertEq(t.maybeUnionAny(undefined), null)
+assertEq(t.maybeUnionAny('hi'), 'hi')
+{
+  var out = t.maybeUnionAny(456)
+  // engine numeric tagging may vary; accept either (int) number or (double) string fallback
+  assert(out == 456, 'maybeUnionAny(int) must be loosely 456')
+}
+// object handling is engine-defined for number/string coercion; just ensure it doesn't crash
+assert(t.maybeUnionAny({}) !== undefined)

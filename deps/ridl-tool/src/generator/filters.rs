@@ -287,6 +287,17 @@ pub fn emit_return_convert_typed(
                     w.push_line("}".to_string());
                 }
                 // ClassRef is handled at the top-level return_type match.
+                Type::Any => {
+                    // Optional(any) is represented as Option<ReturnAny> at Rust boundary.
+                    // None => null; Some(v) => pin at the native->JS return boundary.
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => env.pin_return(v),".to_string());
+                    w.push_line("}".to_string());
+                }
                 _ => {
                     w.push_line("compile_error!(\"v1 glue: unsupported return type\");".to_string());
                     w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
@@ -794,6 +805,30 @@ fn emit_single_param_extract_from_jsvalue(
                 "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
                 name = name
             ));
+        }
+        Type::Optional(inner) => {
+            let mut cur: &Type = inner;
+            while let Type::Group(g) = cur {
+                cur = g;
+            }
+
+            match cur {
+                Type::Any => {
+                    // Optional(any) param decoding:
+                    // - null/undefined => None
+                    // - otherwise => Some(scope.value(v))
+                    w.push_line(format!(
+                        "let {name}: Option<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = if __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_NULL as u32) || __ridl_tag == (mquickjs_rs::mquickjs_ffi::JS_TAG_UNDEFINED as u32) {{ None }} else {{ Some(scope.value(v)) }};",
+                        name = name
+                    ));
+                }
+                _ => {
+                    w.push_line(format!(
+                        "compile_error!(\"v1 glue: unsupported parameter type for {name}\");",
+                        name = name
+                    ));
+                }
+            }
         }
 
         Type::Union(_types) => {

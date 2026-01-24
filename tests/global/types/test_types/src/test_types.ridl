@@ -8,6 +8,10 @@ singleton TestTypes {
     fn echoIntNullable(v: int?) -> int?;
 
     fn echoAny(v: any) -> any;
+    fn maybeAny(v: bool) -> any?;
+
+    // any? nested in union: Optional(Union(string | int)) where union itself is optional
+    fn maybeUnionAny(v: any?) -> (string | int)?;
 
     fn echoStringOrInt(v: string | int) -> string | int;
     fn echoStringOrIntNullable(v: string | int | null) -> (string | int)?;

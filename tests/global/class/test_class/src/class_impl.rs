@@ -16,5 +16,16 @@ impl UserClass for DefaultUser {
     fn get_name(&mut self) -> String {
         self.name.clone()
     }
+
+    fn echo_any<'ctx>(
+        &mut self,
+        env: &mut mquickjs_rs::Env<'ctx>,
+        v: Option<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>>,
+    ) -> Option<mquickjs_rs::handles::return_safe::ReturnAny> {
+        match v {
+            None => None,
+            Some(v) => Some(env.return_safe(env.scope().value(v.as_raw()))),
+        }
+    }
 }
 

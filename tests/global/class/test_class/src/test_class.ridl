@@ -2,6 +2,9 @@ mode strict;
 
 class User {
     fn getName() -> string;
+
+    // any? param/return coverage on class methods
+    fn echoAny(v: any?) -> any?;
 }
 
 singleton TestClass {
