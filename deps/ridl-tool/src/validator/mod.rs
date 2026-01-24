@@ -213,6 +213,8 @@ impl SemanticValidator {
                 self.validate_type(value_type);
             }
             Type::Union(types) => {
+                let mut numeric_count = 0;
+
                 for t in types {
                     if matches!(t, Type::Optional(_)) {
                         self.errors.push(RIDLError::new(
@@ -224,7 +226,21 @@ impl SemanticValidator {
                         ));
                     }
 
+                    if matches!(t, Type::I32 | Type::I64 | Type::F32 | Type::F64) {
+                        numeric_count += 1;
+                    }
+
                     self.validate_type(t);
+                }
+
+                if numeric_count >= 2 {
+                    self.errors.push(RIDLError::new(
+                        "Union 中数值类型（i32/i64/f32/f64）最多出现 1 个；如需更宽类型请直接声明更宽者（例如 i32 | i64 请改为 i64，f32 | f64 请改为 f64）".to_string(),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
                 }
             }
             Type::Group(inner_type) => {
