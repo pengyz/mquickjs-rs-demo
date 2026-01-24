@@ -51,10 +51,7 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         if !v {
             return None;
         }
-        let raw = env
-            .str("ok")
-            .expect("env.str should succeed")
-            .as_raw();
+        let raw = env.str("ok").expect("env.str should succeed").as_raw();
         Some(env.return_safe(env.scope().value(raw)))
     }
 
@@ -87,7 +84,9 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         // without relying on exact numeric tagging in this engine.
         let v_num2 = env.scope().value(raw);
         if let Ok(n) = env.get_number(v_num2) {
-            return Some(crate::api::global::union::UnionI32String::String(n.to_string()));
+            return Some(crate::api::global::union::UnionI32String::String(
+                n.to_string(),
+            ));
         }
 
         None
@@ -104,6 +103,20 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         &mut self,
         v: Option<crate::api::global::union::UnionI32String>,
     ) -> Option<crate::api::global::union::UnionI32String> {
+        v
+    }
+
+    fn echo_i32_or_f64(
+        &mut self,
+        v: crate::api::global::union::UnionF64I32,
+    ) -> crate::api::global::union::UnionF64I32 {
+        v
+    }
+
+    fn echo_i32_or_f64_nullable(
+        &mut self,
+        v: Option<crate::api::global::union::UnionF64I32>,
+    ) -> Option<crate::api::global::union::UnionF64I32> {
         v
     }
 }

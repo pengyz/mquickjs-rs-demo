@@ -123,6 +123,16 @@ try {
 }
 assert(threw, 'expected TypeError for echoStringOrI32Nullable(1.5)')
 
+// Union(i32 | f64)
+assertEq(t.echoI32OrF64(1), 1)
+assertNear(t.echoI32OrF64(1.25), 1.25, 1e-12)
+
+// Optional(Union(i32 | f64))
+assertEq(t.echoI32OrF64Nullable(null), null)
+assertEq(t.echoI32OrF64Nullable(undefined), null)
+assertEq(t.echoI32OrF64Nullable(2), 2)
+assertNear(t.echoI32OrF64Nullable(2.5), 2.5, 1e-12)
+
 {
   var obj = { a: 1 }
   var ret = t.echoAny(obj)

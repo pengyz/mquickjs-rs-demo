@@ -16,7 +16,13 @@ pub fn length<T>(slice: &[T]) -> ::askama::Result<usize> {
 pub fn rust_ident(name: &str) -> ::askama::Result<String> {
     let mut out: String = name
         .chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect();
 
     if out.is_empty() {
@@ -29,11 +35,10 @@ pub fn rust_ident(name: &str) -> ::askama::Result<String> {
 
     // Keep list minimal; extend when needed.
     const KW: &[&str] = &[
-        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false",
-        "fn", "for", "if", "impl", "in", "let", "loop", "match", "mod", "move",
-        "mut", "pub", "ref", "return", "self", "Self", "static", "struct", "super",
-        "trait", "true", "type", "unsafe", "use", "where", "while", "async", "await",
-        "dyn",
+        "as", "break", "const", "continue", "crate", "else", "enum", "extern", "false", "fn",
+        "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref",
+        "return", "self", "Self", "static", "struct", "super", "trait", "true", "type", "unsafe",
+        "use", "where", "while", "async", "await", "dyn",
     ];
 
     if KW.iter().any(|&kw| kw == out) {
@@ -63,7 +68,9 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         // any param is a borrowed view.
         // NOTE: params must NOT expose a free `'ctx` in API traits; methods that need to bind
         // lifetime to `Env<'ctx>` must do it at template level.
-        Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
+        Type::Any => {
+            "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string()
+        }
 
         // For class refs, treat them as trait objects at Rust boundary.
         Type::ClassRef(name) => format!("Box<dyn crate::api::{}Class>", name),
@@ -142,6 +149,33 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
     Ok(w.into_string())
 }
 
+fn emit_match_value_expr(scrutinee_expr: &str, arms: Vec<String>) -> String {
+    // Generate a single expression string to avoid brace drift across multi-line emission.
+    // NOTE: every arm is force-suffixed with `,`.
+    let mut out = String::new();
+    out.push_str("match ");
+    out.push_str(scrutinee_expr);
+    out.push_str(" {");
+
+    for mut arm in arms {
+        if !arm.trim_end().ends_with(',') {
+            arm.push(',');
+        }
+        out.push(' ');
+        out.push_str(&arm);
+    }
+
+    out.push_str(" }");
+    out
+}
+
+fn emit_match_return(w: &mut CodeWriter, scrutinee_expr: &str, arms: Vec<String>) {
+    w.push_line(format!(
+        "return {};",
+        emit_match_value_expr(scrutinee_expr, arms)
+    ));
+}
+
 pub fn emit_return_convert_typed(
     result_rust_ty: &str,
     return_type: &Type,
@@ -205,25 +239,49 @@ pub fn emit_return_convert_typed(
                 result_name = result_name
             ));
         }
-        Type::Union(_types) => {
-            // v1 union return encoding: match enum variants.
+        Type::Union(types) => {
+            // v1 union return encoding: `match` expression.
             // NOTE: enum type path is precomputed and passed via `result_rust_ty`.
-            w.push_line(format!("match {result_name} {{", result_name = result_name));
-            w.push_line(format!(
-                "    {ty}::String(s) => {{",
-                ty = result_rust_ty
-            ));
-            w.push_line(
-                "        let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap());"
-                    .to_string(),
-            );
-            w.push_line("        unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
-            w.push_line("    }".to_string());
-            w.push_line(format!(
-                "    {ty}::I32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
-                ty = result_rust_ty
-            ));
-            w.push_line("}".to_string());
+            let want_string = types.iter().any(|t| matches!(t, Type::String));
+            let want_i32 = types.iter().any(|t| matches!(t, Type::I32));
+            let want_i64 = types.iter().any(|t| matches!(t, Type::I64));
+            let want_f32 = types.iter().any(|t| matches!(t, Type::F32));
+            let want_f64 = types.iter().any(|t| matches!(t, Type::F64));
+
+            let mut arms: Vec<String> = Vec::new();
+
+            if want_string {
+                arms.push(format!(
+                    "{ty}::String(s) => {{ let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap()); unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }} }}",
+                    ty = result_rust_ty
+                ));
+            }
+            if want_i32 {
+                arms.push(format!(
+                    "{ty}::I32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }}",
+                    ty = result_rust_ty
+                ));
+            }
+            if want_i64 {
+                arms.push(format!(
+                    "{ty}::I64(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, v) }}",
+                    ty = result_rust_ty
+                ));
+            }
+            if want_f32 {
+                arms.push(format!(
+                    "{ty}::F32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, (v as f64)) }}",
+                    ty = result_rust_ty
+                ));
+            }
+            if want_f64 {
+                arms.push(format!(
+                    "{ty}::F64(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v) }}",
+                    ty = result_rust_ty
+                ));
+            }
+
+            emit_match_return(&mut w, result_name, arms);
         }
         Type::Optional(inner) => {
             let mut cur: &Type = inner;
@@ -244,10 +302,7 @@ pub fn emit_return_convert_typed(
                     w.push_line("}".to_string());
                 }
                 Type::String => {
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(s) => {".to_string());
                     w.push_line(
@@ -259,90 +314,110 @@ pub fn emit_return_convert_typed(
                     w.push_line("}".to_string());
                 }
                 Type::I32 => {
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
-                    w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) },".to_string());
+                    w.push_line(
+                        "    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) },"
+                            .to_string(),
+                    );
                     w.push_line("}".to_string());
                 }
                 Type::I64 => {
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
-                    w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, v) },".to_string());
+                    w.push_line(
+                        "    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, v) },"
+                            .to_string(),
+                    );
                     w.push_line("}".to_string());
                 }
                 Type::Bool => {
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
-                    w.push_line("    Some(v) => mquickjs_rs::mquickjs_ffi::js_mkbool(v),".to_string());
+                    w.push_line(
+                        "    Some(v) => mquickjs_rs::mquickjs_ffi::js_mkbool(v),".to_string(),
+                    );
                     w.push_line("}".to_string());
                 }
                 Type::F64 => {
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v) },".to_string());
                     w.push_line("}".to_string());
                 }
                 Type::F32 => {
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v as f64) },".to_string());
                     w.push_line("}".to_string());
                 }
-                Type::Union(_types) => {
+                Type::Union(types) => {
                     // Optional(union) is normalized from `A | B | null` and `(A|B)?`.
                     // NOTE: `result_rust_ty` is `Option<Enum>`, so we need the inner enum path.
                     let enum_ty = result_rust_ty
                         .trim_start_matches("Option<")
                         .trim_end_matches('>');
 
-                    w.push_line(format!("match {result_name} {{", result_name = result_name));
-                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
-                    w.push_line("    Some(u) => {".to_string());
-                    w.push_line("        match u {".to_string());
-                    w.push_line(format!("            {ty}::String(s) => {{", ty = enum_ty));
-                    w.push_line(
-                        "                let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap());"
-                            .to_string(),
-                    );
-                    w.push_line("                unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
-                    w.push_line("            }".to_string());
-                    w.push_line(format!(
-                        "            {ty}::I32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
-                        ty = enum_ty
+                    let want_string = types.iter().any(|t| matches!(t, Type::String));
+                    let want_i32 = types.iter().any(|t| matches!(t, Type::I32));
+                    let want_i64 = types.iter().any(|t| matches!(t, Type::I64));
+                    let want_f32 = types.iter().any(|t| matches!(t, Type::F32));
+                    let want_f64 = types.iter().any(|t| matches!(t, Type::F64));
+
+                    let mut inner_arms: Vec<String> = Vec::new();
+                    if want_string {
+                        inner_arms.push(format!(
+                            "{ty}::String(s) => {{ let cstr = CString::new(s).unwrap_or_else(|_| CString::new(\"\").unwrap()); unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }} }}",
+                            ty = enum_ty
+                        ));
+                    }
+                    if want_i32 {
+                        inner_arms.push(format!(
+                            "{ty}::I32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }}",
+                            ty = enum_ty
+                        ));
+                    }
+                    if want_i64 {
+                        inner_arms.push(format!(
+                            "{ty}::I64(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, v) }}",
+                            ty = enum_ty
+                        ));
+                    }
+                    if want_f32 {
+                        inner_arms.push(format!(
+                            "{ty}::F32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, (v as f64)) }}",
+                            ty = enum_ty
+                        ));
+                    }
+                    if want_f64 {
+                        inner_arms.push(format!(
+                            "{ty}::F64(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v) }}",
+                            ty = enum_ty
+                        ));
+                    }
+
+                    let mut outer_arms: Vec<String> = Vec::new();
+                    outer_arms.push("None => mquickjs_rs::mquickjs_ffi::JS_NULL".to_string());
+                    outer_arms.push(format!(
+                        "Some(u) => {{ {} }}",
+                        emit_match_value_expr("u", inner_arms)
                     ));
-                    w.push_line("        }".to_string());
-                    w.push_line("    }".to_string());
-                    w.push_line("}".to_string());
+
+                    emit_match_return(&mut w, result_name, outer_arms);
                 }
                 // ClassRef is handled at the top-level return_type match.
                 Type::Any => {
                     // Optional(any) is represented as Option<ReturnAny> at Rust boundary.
                     // None => null; Some(v) => pin at the native->JS return boundary.
-                    w.push_line(format!(
-                        "match {result_name} {{",
-                        result_name = result_name
-                    ));
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(v) => env.pin_return(v),".to_string());
                     w.push_line("}".to_string());
                 }
                 _ => {
-                    w.push_line("compile_error!(\"v1 glue: unsupported return type\");".to_string());
+                    w.push_line(
+                        "compile_error!(\"v1 glue: unsupported return type\");".to_string(),
+                    );
                     w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
                 }
             }
@@ -390,7 +465,6 @@ pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
     Ok(crate::generator::naming::to_upper_camel_case(s))
 }
 
-
 pub fn methods_total_filter(
     interfaces: &[crate::generator::TemplateInterface],
     classes: &[crate::generator::TemplateClass],
@@ -418,7 +492,10 @@ pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askam
     // Convert v0 into `v0` (Rust typed) in-place.
     match &prop.property_type {
         Type::Bool => {
-            w.push_line("let v0: bool = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToBool(ctx, v0) } != 0;".to_string());
+            w.push_line(
+                "let v0: bool = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToBool(ctx, v0) } != 0;"
+                    .to_string(),
+            );
         }
         Type::I32 => {
             emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
@@ -441,19 +518,24 @@ pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askam
         Type::String => {
             emit_check_is_string_expr(&mut w, "v0", "\"arg1: expected string\"");
             // Convert to C string pointer; in this mquickjs fork, JS_ToCString returns a borrowed pointer.
-            w.push_line("let mut buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };".to_string());
+            w.push_line(
+                "let mut buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };"
+                    .to_string(),
+            );
             w.push_line("let cptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v0, &mut buf as *mut _) };".to_string());
             w.push_line("if cptr.is_null() { return js_throw_type_error(ctx, \"arg1: failed to convert to string\"); }".to_string());
             w.push_line("let v0: *const core::ffi::c_char = cptr;".to_string());
         }
         _ => {
-            w.push_line("return js_throw_type_error(ctx, \"setter: unsupported property type\");".to_string());
+            w.push_line(
+                "return js_throw_type_error(ctx, \"setter: unsupported property type\");"
+                    .to_string(),
+            );
         }
     }
 
     Ok(w.into_string())
 }
-
 
 pub fn emit_param_extract(
     param: &TemplateParam,
@@ -605,8 +687,6 @@ fn emit_union_param_extract_from_jsvalue(
     let mut w = CodeWriter::new();
 
     // Avoid shadowing the already-extracted JSValue `v`.
-    let out_name = format!("__ridl_union_{name}", name = name);
-
     let Type::Union(types) = ty else {
         w.push_line(format!(
             "compile_error!(\"v1 glue: emit_union_param_extract called for non-union {name}\");",
@@ -615,48 +695,102 @@ fn emit_union_param_extract_from_jsvalue(
         return Ok(w.into_string());
     };
 
-    // v1 supports only discriminable unions. Numeric unions were previously rejected by validator.
-    // Try members in a fixed order for determinism.
+    // v1: discriminable unions, try members in a fixed order for determinism.
     let want_string = types.iter().any(|t| matches!(t, Type::String));
     let want_i32 = types.iter().any(|t| matches!(t, Type::I32));
+    let want_i64 = types.iter().any(|t| matches!(t, Type::I64));
+    let want_f32 = types.iter().any(|t| matches!(t, Type::F32));
+    let want_f64 = types.iter().any(|t| matches!(t, Type::F64));
 
-    w.push_line(format!("let mut {out_name}: {rust_ty};", out_name = out_name, rust_ty = rust_ty));
+    w.push_line(format!(
+        "let {name}: {rust_ty} = match (|| -> Result<{rust_ty}, JSValue> {{",
+        name = name,
+        rust_ty = rust_ty
+    ));
+    w.indent();
+
+    // NOTE: inside this closure, error paths must use `return Err(js_throw_type_error(...))`.
 
     if want_string {
-        w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) } != 0 {".to_string());
+        w.push_line(
+            "if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsString(ctx, v) } != 0 {".to_string(),
+        );
         w.indent();
-        emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &format!("\"invalid union argument: {name}\""));
+        // Inline string conversion so error path can return `Result::Err(...)` from this closure.
+        w.push_line("use std::os::raw::c_char;".to_string());
+        w.push_line(
+            "let mut ptr_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };"
+                .to_string(),
+        );
+        w.push_line("let ptr_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut ptr_buf as *mut _) };".to_string());
+        w.push_line(format!("if ptr_ptr.is_null() {{ return Err(js_throw_type_error(ctx, \"invalid union argument: {name}\")); }}", name = name));
+        w.push_line("let ptr: *const c_char = ptr_ptr;".to_string());
         w.push_line("let s = unsafe { core::ffi::CStr::from_ptr(ptr) };".to_string());
-        w.push_line(format!("{out_name} = {rust_ty}::String(s.to_string_lossy().into_owned());", out_name = out_name, rust_ty = rust_ty));
-        w.push_line("} else".to_string());
-        w.dedent();
-    }
-
-    if want_i32 {
-        w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) } != 0 {".to_string());
-        w.indent();
-        emit_to_i32_expr(&mut w, "v", "out", &format!("\"invalid union argument: {name}\""));
-        w.push_line(format!("{out_name} = {rust_ty}::I32(out);", out_name = out_name, rust_ty = rust_ty));
-        w.dedent();
-        w.push_line("} else {".to_string());
-        w.indent();
-        w.push_line(format!("return js_throw_type_error(ctx, \"invalid union argument: {name}\");", name = name));
+        w.push_line(format!(
+            "return Ok({rust_ty}::String(s.to_string_lossy().into_owned()));",
+            rust_ty = rust_ty
+        ));
         w.dedent();
         w.push_line("}".to_string());
-    } else {
-        w.push_line("{".to_string());
+    }
+
+    if want_i32 || want_i64 || want_f32 || want_f64 {
+        w.push_line(
+            "if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) } != 0 {".to_string(),
+        );
         w.indent();
-        w.push_line(format!("return js_throw_type_error(ctx, \"invalid union argument: {name}\");", name = name));
+
+        if want_i32 {
+            w.push_line("let mut __ridl_num: f64 = 0.0;".to_string());
+            w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut __ridl_num as *mut _, v) } < 0 { return Err(js_throw_type_error(ctx, \"invalid union argument: number\")); }".to_string());
+            w.push_line("if __ridl_num.is_finite() && (__ridl_num.fract() == 0.0) && (__ridl_num >= (i32::MIN as f64)) && (__ridl_num <= (i32::MAX as f64)) {".to_string());
+            w.indent();
+            w.push_line(format!(
+                "return Ok({rust_ty}::I32(__ridl_num as i32));",
+                rust_ty = rust_ty
+            ));
+            w.dedent();
+            w.push_line("}".to_string());
+        }
+
+        if want_i64 {
+            emit_to_i64_expr(&mut w, "v", "out", "\"invalid union argument: i64\"");
+            w.push_line(format!(
+                "return Ok({rust_ty}::I64(out));",
+                rust_ty = rust_ty
+            ));
+        }
+        if want_f32 {
+            // Inline numeric conversion here: this closure returns Result, while the shared helper
+            // emits `return js_throw_type_error(...)` for JSValue-returning glue.
+            w.push_line("let v_raw: JSValue = v;".to_string());
+            w.push_line("let mut out: f64 = 0.0;".to_string());
+            w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut out as *mut _, v_raw) } < 0 { return Err(js_throw_type_error(ctx, \"invalid union argument: f32\")); }".to_string());
+            w.push_line(format!(
+                "return Ok({rust_ty}::F32(out as f32));",
+                rust_ty = rust_ty
+            ));
+        }
+        if want_f64 {
+            w.push_line("let v_raw: JSValue = v;".to_string());
+            w.push_line("let mut out: f64 = 0.0;".to_string());
+            w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut out as *mut _, v_raw) } < 0 { return Err(js_throw_type_error(ctx, \"invalid union argument: f64\")); }".to_string());
+            w.push_line(format!(
+                "return Ok({rust_ty}::F64(out));",
+                rust_ty = rust_ty
+            ));
+        }
+
         w.dedent();
         w.push_line("}".to_string());
     }
 
     w.push_line(format!(
-        "let {name}: {rust_ty} = {out_name};",
-        name = name,
-        rust_ty = rust_ty,
-        out_name = out_name
+        "Err(js_throw_type_error(ctx, \"invalid union argument: {name}\"))",
+        name = name
     ));
+    w.dedent();
+    w.push_line("})() { Ok(v) => v, Err(e) => return e };".to_string());
 
     Ok(w.into_string())
 }
@@ -680,7 +814,10 @@ fn emit_argv_v_expr(idx0_expr: &str) -> String {
 fn emit_argv_v_let(w: &mut CodeWriter, idx0: usize) {
     // The extracted JSValue may only be needed for type checks/conversions.
     // Keep the binding name stable so downstream templates can reference `v`.
-    w.push_line(format!("let _v = unsafe {{ *argv.add({idx0}) }};", idx0 = idx0));
+    w.push_line(format!(
+        "let _v = unsafe {{ *argv.add({idx0}) }};",
+        idx0 = idx0
+    ));
     w.push_line("let v: JSValue = _v;".to_string());
 }
 
@@ -705,7 +842,11 @@ fn emit_to_i32_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     // V1: RIDL is strict even in default mode. Do not normalize number->int by truncation.
     // Accept only integer numbers.
     let value_raw = format!("{value_expr}_raw");
-    w.push_line(format!("let {value_raw}: JSValue = {value_expr};", value_raw = value_raw, value_expr = value_expr));
+    w.push_line(format!(
+        "let {value_raw}: JSValue = {value_expr};",
+        value_raw = value_raw,
+        value_expr = value_expr
+    ));
 
     // Use a stable, reserved-name-safe temp variable to avoid triggering non_snake_case
     // warnings when the source identifier is a keyword (e.g. `type_`).
@@ -731,7 +872,11 @@ fn emit_to_i32_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     // Shadow the JSValue binding with the converted i32 for downstream use.
     // If the source name is not used after extraction, use `_`-prefixed name to avoid unused-variable warnings.
     let shadow_name = format!("_{value_expr}");
-    w.push_line(format!("let {shadow}: i32 = {out};", shadow = shadow_name, out = out_name));
+    w.push_line(format!(
+        "let {shadow}: i32 = {out};",
+        shadow = shadow_name,
+        out = out_name
+    ));
 }
 
 fn emit_to_f64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_expr: &str) {
@@ -753,13 +898,21 @@ fn emit_to_f64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     // Shadow the JSValue binding with the converted f64 for downstream use.
     // If the source name is not used after extraction, use `_`-prefixed name to avoid unused-variable warnings.
     let shadow_name = format!("_{value_expr}");
-    w.push_line(format!("let {shadow}: f64 = {out};", shadow = shadow_name, out = out_name));
+    w.push_line(format!(
+        "let {shadow}: f64 = {out};",
+        shadow = shadow_name,
+        out = out_name
+    ));
 }
 
 fn emit_to_i64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_expr: &str) {
     // V1 rule: JS number -> i64 only accepts safe integers (|n| <= 2^53-1) and must be integer.
     let value_raw = format!("{value_expr}_raw");
-    w.push_line(format!("let {value_raw}: JSValue = {value_expr};", value_raw = value_raw, value_expr = value_expr));
+    w.push_line(format!(
+        "let {value_raw}: JSValue = {value_expr};",
+        value_raw = value_raw,
+        value_expr = value_expr
+    ));
 
     w.push_line(format!("let mut {out}: f64 = 0.0;", out = out_name));
     w.push_line(format!(
@@ -783,9 +936,12 @@ fn emit_to_i64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     w.push_line(format!("let {out}: i64 = {out} as i64;", out = out_name));
 
     let shadow_name = format!("_{value_expr}");
-    w.push_line(format!("let {shadow}: i64 = {out};", shadow = shadow_name, out = out_name));
+    w.push_line(format!(
+        "let {shadow}: i64 = {out};",
+        shadow = shadow_name,
+        out = out_name
+    ));
 }
-
 
 fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_expr: &str) {
     w.push_line("use std::os::raw::c_char;");
@@ -803,9 +959,11 @@ fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, er
         name = name,
         err = err_expr
     ));
-    w.push_line(format!("let {name}: *const c_char = {name}_ptr;", name = name));
+    w.push_line(format!(
+        "let {name}: *const c_char = {name}_ptr;",
+        name = name
+    ));
 }
-
 
 fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_expr: &str) {
     w.push_line(format!(
@@ -820,7 +978,6 @@ fn emit_extract_bool_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_
     ));
     w.push_line(format!("let {name}: bool = {name}_v != 3;", name = name));
 }
-
 
 fn emit_single_param_extract(
     name: &str,
@@ -1027,7 +1184,10 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::I32 => {
-            w.push_line(format!("let mut {name}: Vec<i32> = Vec::new();", name = name));
+            w.push_line(format!(
+                "let mut {name}: Vec<i32> = Vec::new();",
+                name = name
+            ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
@@ -1043,7 +1203,10 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::I64 => {
-            w.push_line(format!("let mut {name}: Vec<i64> = Vec::new();", name = name));
+            w.push_line(format!(
+                "let mut {name}: Vec<i64> = Vec::new();",
+                name = name
+            ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
@@ -1059,7 +1222,10 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::Bool => {
-            w.push_line(format!("let mut {name}: Vec<bool> = Vec::new();", name = name));
+            w.push_line(format!(
+                "let mut {name}: Vec<bool> = Vec::new();",
+                name = name
+            ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
@@ -1074,7 +1240,10 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::F64 => {
-            w.push_line(format!("let mut {name}: Vec<f64> = Vec::new();", name = name));
+            w.push_line(format!(
+                "let mut {name}: Vec<f64> = Vec::new();",
+                name = name
+            ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
@@ -1090,7 +1259,10 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::F32 => {
-            w.push_line(format!("let mut {name}: Vec<f32> = Vec::new();", name = name));
+            w.push_line(format!(
+                "let mut {name}: Vec<f32> = Vec::new();",
+                name = name
+            ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
@@ -1130,4 +1302,3 @@ fn emit_varargs_collect(
 
     Ok(w.into_string())
 }
-

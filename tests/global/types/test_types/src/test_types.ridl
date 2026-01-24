@@ -17,4 +17,7 @@ singleton TestTypes {
 
     fn echoStringOrI32(v: string | i32) -> string | i32;
     fn echoStringOrI32Nullable(v: string | i32 | null) -> (string | i32)?;
+
+    fn echoI32OrF64(v: i32 | f64) -> i32 | f64;
+    fn echoI32OrF64Nullable(v: i32 | f64 | null) -> (i32 | f64)?;
 }

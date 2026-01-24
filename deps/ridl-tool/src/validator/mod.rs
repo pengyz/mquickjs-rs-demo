@@ -213,12 +213,10 @@ impl SemanticValidator {
                 self.validate_type(value_type);
             }
             Type::Union(types) => {
-                let mut numeric_count = 0;
-
                 for t in types {
                     if matches!(t, Type::Optional(_)) {
                         self.errors.push(RIDLError::new(
-                            "Union 类型不允许成员级可空（例如 string? | int）。若需要可空，请写 (A | B)? 或 A | B | null".to_string(),
+                            "Union 类型不允许成员级可空（例如 string? | i32）。若需要可空，请写 (A | B)? 或 A | B | null".to_string(),
                             0,
                             0,
                             self.file_path.clone(),
@@ -226,21 +224,7 @@ impl SemanticValidator {
                         ));
                     }
 
-                    if matches!(t, Type::I32 | Type::I64 | Type::F32 | Type::F64) {
-                        numeric_count += 1;
-                    }
-
                     self.validate_type(t);
-                }
-
-                if numeric_count >= 2 {
-                    self.errors.push(RIDLError::new(
-                        "Union 不支持数值类型联合（例如 i32 | f64）。若不确定数值类型，请使用 f64".to_string(),
-                        0,
-                        0,
-                        self.file_path.clone(),
-                        RIDLErrorType::SemanticError,
-                    ));
                 }
             }
             Type::Group(inner_type) => {
@@ -366,11 +350,7 @@ impl SemanticValidator {
         for class in &idl.classes {
             // Disallow name collisions between js_fields and native properties/methods/ctor.
             for f in &class.js_fields {
-                let (line, col) = f
-                    .pos
-                    .as_ref()
-                    .map(|p| (p.line, p.column))
-                    .unwrap_or((0, 0));
+                let (line, col) = f.pos.as_ref().map(|p| (p.line, p.column)).unwrap_or((0, 0));
 
                 if class.properties.iter().any(|p| p.name == f.name) {
                     self.errors.push(RIDLError::new(
@@ -415,7 +395,13 @@ impl SemanticValidator {
                 // - Only primitive + null are supported for now.
                 // - Custom types may only be initialized with null.
                 match &f.field_type {
-                    Type::Bool | Type::I32 | Type::I64 | Type::F32 | Type::F64 | Type::String | Type::Null => {}
+                    Type::Bool
+                    | Type::I32
+                    | Type::I64
+                    | Type::F32
+                    | Type::F64
+                    | Type::String
+                    | Type::Null => {}
                     Type::Any => {
                         // any is allowed to be initialized with null (and other literals in the future).
                     }

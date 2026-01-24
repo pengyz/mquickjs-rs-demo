@@ -31,7 +31,14 @@ interface Test {
     fs::create_dir_all(&out_dir).unwrap();
 
     let parsed = parse_ridl_file(&fs::read_to_string(&ridl_path).unwrap()).unwrap();
-    generate_module_files(&parsed.items, parsed.module.clone(), parsed.mode, &out_dir, "m").unwrap();
+    generate_module_files(
+        &parsed.items,
+        parsed.module.clone(),
+        parsed.mode,
+        &out_dir,
+        "m",
+    )
+    .unwrap();
 
     let api = fs::read_to_string(out_dir.join("api.rs")).unwrap();
     let glue = fs::read_to_string(out_dir.join("glue.rs")).unwrap();
@@ -54,5 +61,14 @@ interface Test {
     assert!(
         glue.contains("Option<crate::api::test::union::UnionI32String>"),
         "expected Option<...UnionI32String> in glue.rs; got:\n{glue}"
+    );
+
+    // JS->Rust conversions must not use `?` (explicit match/early-return only).
+    assert!(!glue.contains('?'), "glue.rs must not contain `?`; got:\n{glue}");
+
+    // Error paths must use JS exceptions (no panics) when decode fails.
+    assert!(
+        glue.contains("js_throw_type_error"),
+        "glue.rs should use js_throw_type_error on decode errors; got:\n{glue}"
     );
 }

@@ -220,7 +220,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
         {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
     );
     {%- if method.return_type == Type::Any %}
-    env.pin_return(result)
+    return env.pin_return(result);
     {%- else %}
     {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
     {%- endif %}
