@@ -9,6 +9,7 @@ pub mod handle_scope;
 pub mod object;
 pub mod array;
 pub mod function;
+pub mod return_safe;
 
 #[cfg(test)]
 mod tests;

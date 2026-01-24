@@ -7,39 +7,21 @@ impl TestFnSingleton for DefaultTestFnSingleton {
         a + b
     }
 
-    fn echo_any(
-        &mut self,
-        _env: &mut mquickjs_rs::Env<'_>,
-        _v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
-    ) -> () {
-        unreachable!("any-return must use echo_any_out")
-    }
-
-    fn echo_any_out<'ctx>(
+    fn echo_any<'ctx>(
         &mut self,
         env: &mut mquickjs_rs::Env<'ctx>,
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
         v: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>,
-    ) -> () {
-        out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)))
+    ) -> mquickjs_rs::handles::return_safe::ReturnAny {
+        env.return_safe(v)
     }
 
     fn make_any_string(
         &mut self,
-        _env: &mut mquickjs_rs::Env<'_>,
-        _s: String,
-    ) -> () {
-        unreachable!("any-return must use make_any_string_out")
-    }
-
-    fn make_any_string_out<'ctx>(
-        &mut self,
-        env: &mut mquickjs_rs::Env<'ctx>,
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        env: &mut mquickjs_rs::Env<'_>,
         s: String,
-    ) -> () {
-        let h = env.str(&s).expect("env.str should succeed");
-        out(mquickjs_rs::handles::any::Any::from_value(h))
+    ) -> mquickjs_rs::handles::return_safe::ReturnAny {
+        let raw = env.str(&s).expect("env.str should succeed").as_raw();
+        env.return_safe(env.scope().value(raw))
     }
 
     fn any_to_string(
@@ -52,25 +34,15 @@ impl TestFnSingleton for DefaultTestFnSingleton {
 
     fn make_array_with_len(
         &mut self,
-        _env: &mut mquickjs_rs::Env<'_>,
-        _len: i32,
-    ) -> () {
-        unreachable!("any-return must use make_array_with_len_out")
-    }
-
-    fn make_array_with_len_out<'ctx>(
-        &mut self,
-        env: &mut mquickjs_rs::Env<'ctx>,
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
+        env: &mut mquickjs_rs::Env<'_>,
         len: i32,
-    ) -> () {
+    ) -> mquickjs_rs::handles::return_safe::ReturnAny {
         let len: u32 = len.try_into().expect("len must be non-negative");
-        let h = env
+        let raw = env
             .array_with_len(len)
-            .expect("env.array_with_len should succeed");
-        let raw = h.as_raw();
-        let v = env.scope().value(raw);
-        out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)))
+            .expect("env.array_with_len should succeed")
+            .as_raw();
+        env.return_safe(env.scope().value(raw))
     }
 
     fn arr_len(
@@ -128,36 +100,22 @@ impl TestFnSingleton for DefaultTestFnSingleton {
 
     fn arr_get(
         &mut self,
-        _env: &mut mquickjs_rs::Env<'_>,
-        _arr: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
-        _index: i32,
-    ) -> () {
-        unreachable!("any-return must use arr_get_out")
-    }
-
-    fn arr_get_out<'ctx>(
-        &mut self,
-        env: &mut mquickjs_rs::Env<'ctx>,
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
-        arr: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>,
+        env: &mut mquickjs_rs::Env<'_>,
+        arr: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
         index: i32,
-    ) -> () {
+    ) -> mquickjs_rs::handles::return_safe::ReturnAny {
         let arr_local = arr
             .try_into_array(env.scope())
             .expect("arrGet expects an array");
 
         let Ok(index) = u32::try_from(index) else {
-            // Negative index: return undefined.
-            let v = env.scope().value(mquickjs_rs::mquickjs_ffi::JS_UNDEFINED);
-            out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)));
-            return;
+            return env.return_safe(env.scope().value(mquickjs_rs::mquickjs_ffi::JS_UNDEFINED));
         };
 
         let raw = unsafe {
             mquickjs_rs::mquickjs_ffi::JS_GetPropertyUint32(env.scope().ctx_raw(), arr_local.as_raw(), index)
         };
-        let v = env.scope().value(raw);
-        out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)));
+        env.return_safe(env.scope().value(raw))
     }
 }
 

@@ -37,3 +37,4 @@
 
 ## Mi Code Added Memories
 - 用户说明：当前 RIDL 会被编译进 ROMClass 的 props 与 proto_props；当初实现时并未充分理解 ROM 机制，因此需要重新审视 RIDL 扩展机制与 ROM/标准库的关系与编译阶段考量。
+- 在本项目中，将“return-safe any”机制的类型命名为 ReturnAny。

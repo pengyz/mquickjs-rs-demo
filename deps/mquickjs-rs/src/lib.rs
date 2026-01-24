@@ -48,6 +48,7 @@ pub use handles::global::Global;
 pub use handles::local::{Local, Value};
 pub use handles::handle::Handle;
 pub use handles::any::Any;
+pub use handles::return_safe::{ReturnAny, ReturnSafe};
 pub use handles::handle_scope::{EscapableHandleScope, HandleScope};
 pub use handles::scope::Scope;
 

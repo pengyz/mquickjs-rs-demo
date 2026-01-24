@@ -9,90 +9,66 @@
 
 {%- for itf in interfaces %}
 // Interface {{ itf.name }}
+//
+// NOTE: keep API traits object-safe and context-agnostic.
+// Any JS-context borrowing must stay at method level (via `Env<'_>`).
 pub trait {{ itf.name|to_upper_camel_case }}Interface {
     {%- for method in itf.methods %}
-    fn {{ method.name|to_snake_case|rust_ident }}(
+    fn {{ method.name|to_snake_case|rust_ident }}<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
-        env: &mut mquickjs_rs::Env<'_>{%- if method.params|length > 0 %},
+        env: &mut mquickjs_rs::Env<'ctx>{%- if method.params|length > 0 %},
         {%- endif %}
         {%- endif %}
         {%- for p in method.params %}
         {%- if p.variadic %}
         {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>
         {%- else %}
-        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
-        {%- endif %}
-        {%- endfor %}
-    {%- if method.return_type == Type::Any %}
-    ) -> ();
-
-    fn {{ method.name|to_snake_case|rust_ident }}_out<'ctx>(
-        &mut self,
         {%- if method.needs_scope %}
-        env: &mut mquickjs_rs::Env<'ctx>,
-        {%- endif %}
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
-        {%- for p in method.params %}
-        {%- if p.variadic %}
-        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
-        {%- else %}
         {%- if p.ty == Type::Any %}
         {{ p.rust_name }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
         {%- else %}
         {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
+        {%- else %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {%- endif %}
         {%- endif %}
         {%- endfor %}
-    ) -> ();
-    {%- else %}
     ) -> {{ method.return_rust_ty|safe }};
-    {%- endif %}
     {%- endfor %}
 }
 {%- endfor %}
 
 {%- for s in singletons %}
 // Singleton {{ s.name }}
+//
+// NOTE: keep API traits object-safe and context-agnostic.
+// Any JS-context borrowing must stay at method level (via `Env<'_>`).
 pub trait {{ s.name|to_upper_camel_case }}Singleton {
     {%- for method in s.methods %}
-    fn {{ method.name|to_snake_case|rust_ident }}(
+    fn {{ method.name|to_snake_case|rust_ident }}<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
-        env: &mut mquickjs_rs::Env<'_>{%- if method.params|length > 0 %},
+        env: &mut mquickjs_rs::Env<'ctx>{%- if method.params|length > 0 %},
         {%- endif %}
         {%- endif %}
         {%- for p in method.params %}
         {%- if p.variadic %}
         {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>
         {%- else %}
-        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
-        {%- endif %}
-        {%- endfor %}
-    {%- if method.return_type == Type::Any %}
-    ) -> ();
-
-    fn {{ method.name|to_snake_case|rust_ident }}_out<'ctx>(
-        &mut self,
         {%- if method.needs_scope %}
-        env: &mut mquickjs_rs::Env<'ctx>,
-        {%- endif %}
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
-        {%- for p in method.params %}
-        {%- if p.variadic %}
-        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
-        {%- else %}
         {%- if p.ty == Type::Any %}
         {{ p.rust_name }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
         {%- else %}
         {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
+        {%- else %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
+        {%- endif %}
         {%- endif %}
         {%- endfor %}
-    ) -> ();
-    {%- else %}
     ) -> {{ method.return_rust_ty|safe }};
-    {%- endif %}
     {%- endfor %}
 
     {%- for prop in s.properties %}
@@ -131,41 +107,29 @@ pub mod {{ d.domain }} {
 {%- for class in classes %}
 
 // Class {{ class.name }}
+//
+// NOTE: keep API traits object-safe and context-agnostic.
+// Any JS-context borrowing must stay at method level (via `Env<'_>`).
 pub trait {{ class.name|to_upper_camel_case }}Class {
 {%- for method in class.methods %}
-    fn {{ method.name|to_snake_case|rust_ident }}(
+    fn {{ method.name|to_snake_case|rust_ident }}<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
-        env: &mut mquickjs_rs::Env<'_>{%- if method.params|length > 0 %},
+        env: &mut mquickjs_rs::Env<'ctx>{%- if method.params|length > 0 %},
         {%- endif %}
         {%- endif %}
         {%- for p in method.params %}
-        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
-        {%- endfor %}
-    {%- if method.return_type == Type::Any %}
-    ) -> ();
-
-    fn {{ method.name|to_snake_case|rust_ident }}_out<'ctx>(
-        &mut self,
         {%- if method.needs_scope %}
-        env: &mut mquickjs_rs::Env<'ctx>,
-        {%- endif %}
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
-        {%- for p in method.params %}
-        {%- if p.variadic %}
-        {{ p.rust_name }}: Vec<{{ p.rust_ty|safe }}>{%- if !loop.last %}, {% endif %}
-        {%- else %}
         {%- if p.ty == Type::Any %}
         {{ p.rust_name }}: mquickjs_rs::handles::local::Local<'ctx, mquickjs_rs::handles::local::Value>{%- if !loop.last %}, {% endif %}
         {%- else %}
         {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
+        {%- else %}
+        {{ p.rust_name }}: {{ p.rust_ty|safe }}{%- if !loop.last %}, {% endif %}
         {%- endif %}
         {%- endfor %}
-    ) -> ();
-    {%- else %}
     ) -> {{ method.return_rust_ty|safe }};
-    {%- endif %}
 {%- endfor %}
 
 {%- for prop in class.properties %}

@@ -60,7 +60,8 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         // - `FileMode::Strict` only limits where `any` may appear; it must not change the ABI.
         //
         // any param is a borrowed view.
-        // any return is handled at template/method level (see generator/mod.rs overrides).
+        // NOTE: params must NOT expose a free `'ctx` in API traits; methods that need to bind
+        // lifetime to `Env<'ctx>` must do it at template level.
         Type::Any => "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string(),
 
         // For class refs, treat them as trait objects at Rust boundary.

@@ -66,6 +66,24 @@ assertEq(typeof t.arrGet, 'function', 'TestFn.arrGet missing')
   assertEq(s, 'abc')
 }
 
+// GC / allocation pressure: returned any must remain valid
+// NOTE: mquickjs uses tracing GC; we don't assume a gc() hook exists.
+{
+  var o = t.echoAny({ k: 1 })
+  // Create allocation pressure.
+  var sink = []
+  for (var i = 0; i < 2000; i++) {
+    sink.push({ i: i, s: 'xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx' + i })
+  }
+  assertEq(o.k, 1, 'echoAny returned object must survive allocation pressure')
+
+  var s2 = t.makeAnyString('pressure')
+  for (var j = 0; j < 2000; j++) {
+    sink.push('yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy' + j)
+  }
+  assertEq(s2, 'pressure', 'makeAnyString returned string must survive allocation pressure')
+}
+
 // any param validation
 // Note: RIDL `any` means the callee decides how to interpret it.
 // anyToString currently coerces via Env::get_string and does not throw.

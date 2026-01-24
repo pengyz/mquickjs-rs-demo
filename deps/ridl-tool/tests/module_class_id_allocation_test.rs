@@ -39,6 +39,7 @@ fn js_class_ids_are_global_monotonic_across_modules() {
         generated: GeneratedPaths {
             out_dir: out_dir.clone(),
             mquickjs_ridl_register_h: out_dir.join("mquickjs_ridl_register.h"),
+            mquickjs_ridl_module_class_ids_h: out_dir.join("mquickjs_ridl_module_class_ids.h"),
             mqjs_ridl_user_class_ids_h: out_dir.join("mqjs_ridl_user_class_ids.h"),
             ridl_class_id_rs: out_dir.join("ridl_class_id.rs"),
         },

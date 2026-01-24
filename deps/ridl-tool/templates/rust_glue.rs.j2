@@ -213,30 +213,15 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
     let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
-    {%- if method.return_type == Type::Any %}
-    let mut __ridl_any_out: Option<mquickjs_rs::mquickjs_ffi::JSValue> = None;
-    singleton.{{ method.name|to_snake_case|rust_ident }}_out(
-        {%- if method.needs_scope %}
-        &mut env,
-        {%- endif %}
-        &mut |v| {
-            // `Any` is rooted by the current HandleScope; keep a raw copy and let the HandleScope
-            // live until we return.
-            __ridl_any_out = Some(v.as_raw());
-        },
-        {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
-    );
-    let Some(v) = __ridl_any_out else {
-        return js_throw_type_error(ctx, "any-return method did not call out() exactly once");
-    };
-    v
-    {%- else %}
     let result = singleton.{{ method.name|to_snake_case|rust_ident }}(
         {%- if method.needs_scope %}
         &mut env{%- if method.params|length > 0 %}, {% endif %}
         {%- endif %}
         {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
     );
+    {%- if method.return_type == Type::Any %}
+    env.pin_return(result)
+    {%- else %}
     {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
     {%- endif %}
 }
@@ -430,8 +415,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     let holder_ptr = opaque as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
     if !holder_ptr.is_null() {
         unsafe {
-            let holder: Box<Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>> =
-                Box::from_raw(holder_ptr);
+            let holder: Box<Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>> = Box::from_raw(holder_ptr);
             drop(holder);
         }
     }

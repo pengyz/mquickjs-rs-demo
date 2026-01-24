@@ -1,6 +1,7 @@
 use crate::handles::handle::Handle;
 use crate::handles::handle_scope::HandleScope;
 use crate::handles::local::{Array, Local, Object, Value};
+use crate::handles::return_safe::ReturnSafe;
 use crate::handles::scope::Scope;
 use crate::mquickjs_ffi;
 
@@ -27,6 +28,20 @@ impl<'ctx> Env<'ctx> {
 
     pub fn handle<'hs, T>(&'hs mut self, v: Local<'ctx, T>) -> Handle<'hs, 'ctx, T> {
         self.hs.handle(v)
+    }
+
+    pub fn return_safe<T>(&mut self, v: Local<'ctx, T>) -> ReturnSafe<T> {
+        // Pin via HandleScope so the value is reachable during the native->JS return boundary.
+        let h = self.handle(v);
+        ReturnSafe::new(h.as_raw(), h.ctx_id())
+    }
+
+    pub fn pin_return<T>(&mut self, v: ReturnSafe<T>) -> mquickjs_ffi::JSValue {
+        assert_eq!(v.ctx_id(), self.scope.context_id(), "cross-context Env::pin_return");
+        // Ensure the value is rooted in this scope before returning it to the engine.
+        let local = v.to_local(self.scope);
+        let _ = self.handle(local);
+        v.raw()
     }
 
     pub fn obj<'hs>(&'hs mut self) -> Result<Handle<'hs, 'ctx, Object>, String> {

@@ -719,12 +719,21 @@ impl TemplateMethod {
             || is_any_like(&method.return_type);
 
         let return_type = method.return_type;
-        let return_rust_ty = crate::generator::filters::rust_type_from_idl(&return_type)
+        let mut return_rust_ty = crate::generator::filters::rust_type_from_idl(&return_type)
             .unwrap_or_else(|_| {
                 // Fall back to unit only for truly unsupported types.
                 // `Type::Custom` should not silently become `()`, because it can hide bugs.
                 "()".to_string()
             });
+
+        // Object-safety rule: `any` return must not carry call-site lifetimes.
+        // Keep `any` param as borrowed `Local<'_, Value>`, but map `any` return to owned `ReturnAny`.
+        if matches!(return_type, Type::Any) {
+            return_rust_ty = "mquickjs_rs::handles::return_safe::ReturnAny".to_string();
+        }
+        if matches!(return_type, Type::Optional(ref inner) if matches!(inner.as_ref(), Type::Any)) {
+            return_rust_ty = "Option<mquickjs_rs::handles::return_safe::ReturnAny>".to_string();
+        }
 
         Self {
             name: method.name,

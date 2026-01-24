@@ -29,7 +29,11 @@ impl MFooClass for MFooImpl {
         v
     }
 
-    fn echo_any(&mut self, _env: &mut mquickjs_rs::Env<'_>, _v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>) {
+    fn echo_any(
+        &mut self,
+        _env: &mut mquickjs_rs::Env<'_>,
+        _v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
+    ) {
     }
 
     fn make_bar(&mut self, v: i32) -> Box<dyn MBarClass> {

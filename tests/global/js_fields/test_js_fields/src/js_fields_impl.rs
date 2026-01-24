@@ -5,19 +5,10 @@ pub struct DefaultTestJsFieldsSingleton;
 impl TestJsFieldsSingleton for DefaultTestJsFieldsSingleton {
     fn get_null_any(
         &mut self,
-        _env: &mut mquickjs_rs::Env<'_>,
-    ) -> () {
-        unreachable!("any-return must use get_null_any_out")
-    }
-
-    fn get_null_any_out<'ctx>(
-        &mut self,
-        env: &mut mquickjs_rs::Env<'ctx>,
-        out: &mut dyn for<'hs> FnMut(mquickjs_rs::handles::any::Any<'hs, 'ctx>),
-    ) -> () {
+        env: &mut mquickjs_rs::Env<'_>,
+    ) -> mquickjs_rs::handles::return_safe::ReturnAny {
         // v1 tests validate JS-visible behavior only; return `undefined`.
-        let v = env.scope().value(mquickjs_rs::mquickjs_ffi::JS_UNDEFINED);
-        out(mquickjs_rs::handles::any::Any::from_value(env.handle(v)))
+        env.return_safe(env.scope().value(mquickjs_rs::mquickjs_ffi::JS_UNDEFINED))
     }
 }
 
