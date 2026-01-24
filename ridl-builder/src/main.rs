@@ -769,7 +769,7 @@ fn write_or_print(bytes: &[u8], out: Option<&Path>) {
 }
 
 fn run(mut cmd: Command) {
-    cmd.stdout(Stdio::inherit());
+    cmd.stdout(Stdio::null());
     cmd.stderr(Stdio::inherit());
     let status = cmd.status().expect("failed to run command");
     if !status.success() {
