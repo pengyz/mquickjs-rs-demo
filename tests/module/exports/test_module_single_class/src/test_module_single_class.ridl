@@ -1,0 +1,5 @@
+module test_module_single_1_0@1.0
+
+class Only {
+    fn getV() -> int;
+}

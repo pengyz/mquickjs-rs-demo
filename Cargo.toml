@@ -21,6 +21,7 @@ members = [
     "tests/global/rust_ident/test_rust_ident",
 
     "tests/module/basic/test_module_basic",
+    "tests/module/exports/test_module_single_class",
 ]
 
 # NOTE: test RIDL modules live under tests/global/. They are workspace members but
@@ -82,6 +83,9 @@ path = "tests/global/rust_ident/test_rust_ident"
 
 [dependencies.ridl_test_m_basic]
 path = "tests/module/basic/test_module_basic"
+
+[dependencies.ridl_test_m_exports_single_class]
+path = "tests/module/exports/test_module_single_class"
 
 [features]
 # Demo app defaults to having RIDL stdlib extensions enabled.

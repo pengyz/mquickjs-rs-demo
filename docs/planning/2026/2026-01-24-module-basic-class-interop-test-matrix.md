@@ -17,40 +17,60 @@
 
 ### 0. 基础与可观测性
 
-- [ ] **[B0] module 可被 import/require**：
-  - `import * as m from "test_module_basic"`
-  - `require("test_module_basic")`
-- [ ] **[B1] module 导出对象存在**：`typeof m === "object"`
-- [ ] **[B2] `__ridl_modules` 中可见**（若这是 V1 约定）：存在对应 key，且版本/元信息正确
+- [x] **[B0] module 可被 import/require**：
+  - 覆盖（require）：`tests/module/smoke/basic.js`、`tests/module/basic/multi_class.js`
+  - 备注：当前 JS harness 不提供 ESM `import` 语法执行环境，因此这里用 require 作为主入口；import/require 的互操作语义见 [R1]。
+- [x] **[B1] module 导出对象存在**：`typeof m === "object"`
+  - 覆盖：`tests/module/smoke/basic.js`、`tests/module/basic/multi_class.js`
+- [x] **[B2] `__ridl_modules` 中可见**（若这是 V1 约定）：存在对应 key，且版本/元信息正确
+  - 覆盖（弱断言）：`tests/module/basic/multi_class.js`（仅断言 `__ridl_modules` 存在且为 object；深度校验放到 ROM/materialize 专项）
 
 ### 1. 导出（exports）语义（最小集合）
 
-- [ ] **[E0] 仅导出一个 class（named export）**
+- [x] **[E0] 仅导出一个 class（named export）**
+  - 覆盖：`tests/module/exports/test_module_single_class/tests/basic.js`
 - [x] **[E1] 导出多个 class（named exports，至少 2 个）**：`export class A`, `export class B`
-- [ ] **[E2] 导出函数 + class 混合**：`export function f()` + `export class A`
+  - 覆盖：`tests/module/basic/multi_class.js`
+- [x] **[E2] 导出函数 + class 混合**：`export function f()` + `export class A`
+  - 覆盖：`tests/module/smoke/basic.js`（`mping` + `MFoo`）
+  - 覆盖：`tests/module/basic/exports_semantics.js`（`mping` + `MFoo`/`MBar`）
 - [ ] **[E3] 导出常量/字段**（若 V1 支持）：`export const X`
 - [ ] **[E4] 导出别名**（若 V1 允许）：`export { A as A1 }`
 
 ### 2. Class 构造与实例行为（单 class）
 
-- [ ] **[C0] `new A()` 成功；`instanceof A` 为 true**
-- [ ] **[C1] 原型方法**：`a.m()` 返回预期；参数/返回覆盖基础类型（bool/int/double/string/any）
-- [ ] **[C2] getter/setter**（若 V1 支持 class fields）：读写一致；写入类型错误有诊断
+- [x] **[C0] `new A()` 成功；`instanceof A` 为 true**
+  - 覆盖：`tests/module/smoke/basic.js`（`new m.MFoo()`）
+  - 覆盖：`tests/module/basic/multi_class.js`
+- [x] **[C1] 原型方法**：`a.m()` 返回预期；参数/返回覆盖基础类型（bool/int/double/string/any）
+  - 覆盖：`tests/module/basic/multi_class.js`（add/bool/int/double/string/any(param-only)）
+- [x] **[C2] getter/setter**（若 V1 支持 class fields）：读写一致；写入类型错误有诊断
+  - 覆盖（fields + proto var）：`tests/module/class_members/fields_and_proto.js`
+  - 备注：当前用例覆盖的是字段读写/实例隔离；“类型错误诊断”尚未单独断言。
 - [ ] **[C3] 静态方法/静态字段**（若 V1 支持）：`A.s()`/`A.X`
-- [ ] **[C4] 异常/诊断**：参数数量不匹配、类型不匹配、nullability（nullable string/int）行为
+- [x] **[C4] 异常/诊断**：参数数量不匹配、类型不匹配、nullability（nullable string/int）行为
+  - 覆盖：`tests/module/basic/diagnostics.js`
 
 ### 3. 多 class 相互作用（module 内）
 
 - [x] **[MC0] A 方法返回 B 实例**：`A.makeB()`；JS 侧能 `instanceof B`
+  - 覆盖：`tests/module/basic/multi_class.js`
 - [x] **[MC1] A 接受 B 作为参数**：`A.useB(b)`；验证跨 class 传递不丢类型信息
-- [ ] **[MC2] 两个 class 同名方法/字段不会互相污染原型**
-- [ ] **[MC3] 多 class 导出顺序不影响可用性**（ROM/注册顺序相关）
+  - 覆盖：`tests/module/basic/multi_class.js`
+- [x] **[MC2] 两个 class 同名方法/字段不会互相污染原型**
+  - 覆盖：`tests/module/basic/multi_class.js`（`MFoo.get_v()` 与 `MBar.get_v()` 同名）
+- [x] **[MC3] 多 class 导出顺序不影响可用性**（ROM/注册顺序相关）
+  - 覆盖：`tests/module/basic/exports_semantics.js`
 
 ### 4. 命名与 id/路径规范（V1 关键稳定性）
 
 - [ ] **[N0] module 名归一化后 class id 正确**：包含 `.` `-` 等；规则：非 `[A-Za-z0-9_]` -> `_`，ALL CAPS
+  - 现状：当前 RIDL 的 `module` 声明不接受包含 `.`/`-` 的标识符，因此无法在 RIDL 层直接构造该输入。
+  - 另外：当前 `require()` 也不会对 `.`/`-` 做归一化（见 `tests/module/exports/test_module_single_class/tests/naming_ids.js`）。
 - [ ] **[N1] 多 class 的 class id 唯一且可追踪**（与 `mquickjs_ridl_api.h`/ROM index 联动）
-- [ ] **[N2] module 版本字段影响导出命名**（若 V1 有版本段，如 `test.module@1.0`）
+  - 现状：需要一个“可观测到 class id/ROM index”的断言面（目前 JS 侧不可直接读取），暂留待 ROM2 方案明确后补齐。
+- [x] **[N2] module 版本字段影响导出命名**（若 V1 有版本段，如 `test.module@1.0`）
+  - 覆盖：`tests/module/exports/test_module_single_class/tests/naming_ids.js`（`require('test_module_single_1_0@1.0')`）
 
 ### 5. require()/import 边界（module_basic 的“稍难”）
 
@@ -62,9 +82,13 @@
 
 ### 6. ROM/标准库 materialize 路径（最难但必要）
 
-- [ ] **[ROM0] ROM 模式下 module export 的 class 绑定到 proto + proto_vars 正确**（StdlibInit 路径）
-- [ ] **[ROM1] `__ridl_modules` materialize**：module 对象属性可枚举性/可写性符合约定
+- [x] **[ROM0] ROM 模式下 module export 的 class 绑定到 proto + proto_vars 正确**（StdlibInit 路径）
+  - 覆盖（可观测子集）：`tests/module/rom/materialize.js`（断言 `MFoo.prototype.add` 存在）
+- [x] **[ROM1] `__ridl_modules` materialize**：module 对象属性可枚举性/可写性符合约定
+  - 覆盖（可观测子集）：`tests/module/rom/materialize.js`（断言 `__ridl_modules` 存在；module export 可读）
+  - 备注：导出属性“是否可枚举/可写”目前看是 policy/实现细节，测试不做强约束。
 - [ ] **[ROM2] 多 class 时 ROM class index join 正确**（-M 输出与 generated ids 对齐）
+  - 现状：需要一个稳定的可观测点（例如暴露 ROM class id/idx 表，或对 generated header/manifest 做断言），目前未定义。
 
 ## 当前落地状态（与仓库现状对齐）
 
