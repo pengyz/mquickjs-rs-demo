@@ -1319,9 +1319,6 @@ fn parse_singleton(
                         let prop = parse_readwrite_property(member_pair)?;
                         properties.push(prop);
                     }
-                    Rule::normal_prop => {
-                        return Err("`normal_prop` is not supported in singleton; use `property`".into());
-                    }
                     _ => {}
                 }
             }

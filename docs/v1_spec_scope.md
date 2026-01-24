@@ -2,6 +2,8 @@
 
 本文档用于明确：本仓库当前一轮迭代的 **测试目标 = V1 合规**。
 
+- V1 缺口与执行顺序：见 `docs/planning/2026/2026-01-24-v1-gap-todo-list.md`
+
 - **V1 合规**：对 V1 规范内声明“应支持”的语义与类型组合，提供端到端可回归的用例（`tests/global/**`）。
 - **V2**：整体能力尚未实现、或超出 V1 的能力（例如 module 模式），明确不在本轮范围。
 
@@ -43,6 +45,24 @@
 
 均通过，且覆盖清单中的用例均存在并稳定运行。
 
+### 2.1 V1 module(require) 的最小完成标准
+
+> 说明：V1 的 module 仅覆盖 **require 形态**；import/using 的 module 语义不在 V1。
+
+- require 能加载 module：`require("<module_path>@<version>")`
+- module exports 至少支持：function / class
+- class exports 在 JS 侧可 `new`，并具备 prototype 方法
+- 跨导出互操作：
+  - 多 class 场景下，A 返回 B、A 接受 B 等行为正确
+  - 导出顺序不影响可用性（不依赖注册顺序的偶然性）
+
+#### 测试入口
+
+- `tests/module/smoke/**`：最小 smoke
+- `tests/module/basic/**`：module_basic 的互操作覆盖
+- `tests/module/exports/**`：导出形态覆盖（例如 single-class export）
+- `tests/module/rom/**`：require/materialize 的可观测行为（弱断言）
+
 
 ## 3. 目录与测试组织约定
 
@@ -56,18 +76,22 @@
 
 ## 4. V1 vs V2：当前仓库的明确划分
 
-### 4.1 明确归入 V2（本轮不支持）
+### 4.1 明确仍归入 V2（本轮不支持）
 
-- module 模式（模块化注册/导出/命名空间）
-- import/using 的 module 语义（等待 module 模式落地后补齐）
+- import/using 的 **module 语义**（按 module 命名空间隔离、ESM import 互操作等）
 
-> 对应现状：`tests/global/import_using/test_import_using/src/test_import_using.ridl` 里已标注“after module_mode lands”。
+> 说明：本仓库当前已实现 module(require) 形态，因此 **module 不再归入 V2**。
+> 对应现状：`tests/global/import_using/test_import_using/src/test_import_using.ridl` 中的注释已更新为：
+> “after V1 defines import/using module semantics”。
 
 ### 4.2 V1 范围内（本轮必须逐步补齐）
 
 - global 模式下的类型系统与 glue 行为（`tests/global/types` 为主）
 - strict/default 等模式下的调用校验差异（属于 V1 的部分）
 - literals/js_fields 等在 V1 内的语义（若受聚合链路限制，可用“方法返回值/参数”过渡，但最终仍需回归到规范支持的成员形式）
+- **module 模式（require 形态）**：module 注册/导出/可见性与 require 行为（`tests/module/**` 为主）
+  - 命名规则以 RIDL 语法为准：`module_path = identifier ("." identifier)*`，不支持 `-`。
+  - require() 不做 `-`/`.` 的归一化映射；传入不符合语法的 module id 应失败。
 
 
 ## 5. tests/global/types：V1 覆盖目标清单（逐步补齐）

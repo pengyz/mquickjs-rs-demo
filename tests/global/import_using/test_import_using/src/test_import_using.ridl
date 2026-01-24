@@ -1,7 +1,7 @@
 mode strict;
 
 // global_mode: keep minimal surface for now.
-// We will add import/using cases after module_mode lands.
+// We will add import/using *module semantics* cases after V1 defines them.
 
 singleton TestImportUsing {
     fn ping() -> int;
