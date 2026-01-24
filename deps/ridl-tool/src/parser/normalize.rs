@@ -1,6 +1,8 @@
 use crate::parser::ast::{IDLItem, Param, Property, Type};
 
-pub fn normalize_idl_items(items: Vec<IDLItem>) -> Result<Vec<IDLItem>, Box<dyn std::error::Error>> {
+pub fn normalize_idl_items(
+    items: Vec<IDLItem>,
+) -> Result<Vec<IDLItem>, Box<dyn std::error::Error>> {
     items
         .into_iter()
         .map(normalize_item)
@@ -77,10 +79,7 @@ fn normalize_type(ty: Type) -> Result<Type, Box<dyn std::error::Error>> {
     // First, normalize children.
     let ty = match ty {
         Type::Array(inner) => Type::Array(Box::new(normalize_type(*inner)?)),
-        Type::Map(k, v) => Type::Map(
-            Box::new(normalize_type(*k)?),
-            Box::new(normalize_type(*v)?),
-        ),
+        Type::Map(k, v) => Type::Map(Box::new(normalize_type(*k)?), Box::new(normalize_type(*v)?)),
         Type::Optional(inner) => Type::Optional(Box::new(normalize_type(*inner)?)),
         Type::Union(ts) => {
             let mut out = Vec::with_capacity(ts.len());

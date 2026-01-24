@@ -1,8 +1,4 @@
-use std::{
-    env,
-    path::Path,
-    process::Command,
-};
+use std::{env, path::Path, process::Command};
 
 #[test]
 fn mquickjs_build_base_does_not_emit_ridl_headers() {
@@ -33,7 +29,11 @@ fn mquickjs_build_base_does_not_emit_ridl_headers() {
                 .expect("cargo build -p mquickjs-build");
             assert!(status.success(), "failed to build mquickjs-build");
 
-            let profile = if cfg!(debug_assertions) { "debug" } else { "release" };
+            let profile = if cfg!(debug_assertions) {
+                "debug"
+            } else {
+                "release"
+            };
             env::current_dir()
                 .unwrap()
                 .join("target")
@@ -54,7 +54,11 @@ fn mquickjs_build_base_does_not_emit_ridl_headers() {
     assert!(status.success(), "mquickjs-build base build failed");
 
     let include_dir = out_dir.join("include");
-    assert!(include_dir.is_dir(), "missing include dir: {}", include_dir.display());
+    assert!(
+        include_dir.is_dir(),
+        "missing include dir: {}",
+        include_dir.display()
+    );
 
     for name in [
         "mquickjs_ridl_register.h",

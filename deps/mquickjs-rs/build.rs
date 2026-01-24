@@ -1,7 +1,4 @@
-use std::{
-    env,
-    path::PathBuf,
-};
+use std::{env, path::PathBuf};
 
 fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
@@ -97,7 +94,10 @@ fn generate_ridl_js_class_id_rs(out_dir: &std::path::Path, include_dir: &std::pa
         let _ = it.next();
         let Some(name) = it.next() else { continue };
         let Some(expr0) = it.next() else { continue };
-        let expr = std::iter::once(expr0).chain(it).collect::<Vec<_>>().join(" ");
+        let expr = std::iter::once(expr0)
+            .chain(it)
+            .collect::<Vec<_>>()
+            .join(" ");
 
         let expr = expr.trim();
         let Some(inner) = expr.strip_prefix('(').and_then(|s| s.strip_suffix(')')) else {
@@ -125,6 +125,5 @@ fn generate_ridl_js_class_id_rs(out_dir: &std::path::Path, include_dir: &std::pa
         ));
     }
 
-    std::fs::write(out_dir.join("ridl_js_class_id.rs"), out)
-        .expect("write ridl_js_class_id.rs");
+    std::fs::write(out_dir.join("ridl_js_class_id.rs"), out).expect("write ridl_js_class_id.rs");
 }

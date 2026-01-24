@@ -33,7 +33,10 @@ pub(super) fn generate_mquickjs_ridl_register_c(
     let modules = super::build_template_modules(&ridl_files, &ir.classes)?;
     let proto_vars = singleton_aggregate::collect_proto_vars(plan)?;
 
-    let t = MquickjsRidlRegisterCTemplate { modules, proto_vars };
+    let t = MquickjsRidlRegisterCTemplate {
+        modules,
+        proto_vars,
+    };
     std::fs::write(out_dir.join("mquickjs_ridl_register.c"), t.render()?)?;
     Ok(())
 }

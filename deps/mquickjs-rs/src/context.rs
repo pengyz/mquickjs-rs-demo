@@ -1,10 +1,10 @@
-use std::ffi::{CStr, CString};
 use std::cell::RefCell;
+use std::ffi::{CStr, CString};
 use std::os::raw::c_void;
 use std::sync::Arc;
 
-use crate::mquickjs_ffi;
 use crate::handles::local::{Local, Value};
+use crate::mquickjs_ffi;
 
 pub struct ContextInner {
     // NOTE: host per-context extensions (initialized by application-generated ridl_context_init).
@@ -14,7 +14,6 @@ pub struct ContextInner {
 
     pub(crate) alive: std::sync::atomic::AtomicBool,
 }
-
 
 impl ContextInner {
     pub(crate) fn new() -> Self {
@@ -176,7 +175,6 @@ impl Context {
             mquickjs_ffi::JS_SetContextUserData(ctx, arc_ptr, Some(user_data_finalizer));
         }
 
-
         Ok(Context {
             ctx,
             inner,
@@ -236,7 +234,11 @@ impl Context {
     }
 
     /// 创建一个新的字符串值
-    pub fn create_string<'a>(&self, scope: &crate::handles::scope::Scope<'a>, rust_str: &str) -> Result<Local<'a, Value>, String> {
+    pub fn create_string<'a>(
+        &self,
+        scope: &crate::handles::scope::Scope<'a>,
+        rust_str: &str,
+    ) -> Result<Local<'a, Value>, String> {
         let c_str = CString::new(rust_str).map_err(|e| e.to_string())?;
         let js_value = unsafe { mquickjs_ffi::JS_NewString(self.ctx, c_str.as_ptr()) };
 
@@ -250,7 +252,11 @@ impl Context {
     }
 
     /// 创建一个新的数字值
-    pub fn create_number<'a>(&self, scope: &crate::handles::scope::Scope<'a>, num: f64) -> Result<Local<'a, Value>, String> {
+    pub fn create_number<'a>(
+        &self,
+        scope: &crate::handles::scope::Scope<'a>,
+        num: f64,
+    ) -> Result<Local<'a, Value>, String> {
         let js_value = unsafe { mquickjs_ffi::JS_NewFloat64(self.ctx, num) };
 
         if (js_value as u32) & ((1u32 << (mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
@@ -263,13 +269,20 @@ impl Context {
     }
 
     /// 创建一个新的布尔值
-    pub fn create_boolean<'a>(&self, scope: &crate::handles::scope::Scope<'a>, boolean: bool) -> Result<Local<'a, Value>, String> {
+    pub fn create_boolean<'a>(
+        &self,
+        scope: &crate::handles::scope::Scope<'a>,
+        boolean: bool,
+    ) -> Result<Local<'a, Value>, String> {
         let js_value = mquickjs_ffi::js_mkbool(boolean);
         Ok(scope.value(js_value))
     }
 
     /// 创建一个新的对象
-    pub fn create_object<'a>(&self, scope: &crate::handles::scope::Scope<'a>) -> Result<Local<'a, Value>, String> {
+    pub fn create_object<'a>(
+        &self,
+        scope: &crate::handles::scope::Scope<'a>,
+    ) -> Result<Local<'a, Value>, String> {
         let obj = unsafe { mquickjs_ffi::JS_NewObject(self.ctx) };
         if (obj as u32) & ((1u32 << (mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
             == (mquickjs_ffi::JS_TAG_EXCEPTION as u32)

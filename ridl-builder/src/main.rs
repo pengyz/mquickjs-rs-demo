@@ -1,8 +1,8 @@
 mod aggregate;
 mod module_discovery;
 mod probe_bindgen;
-mod unit_graph;
 mod romclass_map;
+mod unit_graph;
 
 use std::{
     env,
@@ -41,19 +41,31 @@ fn usage() {
     eprintln!("  build-tools        Build internal tool binaries used by build.rs");
     eprintln!("  build-mquickjs     Build quickjs + generated headers (requires build-tools)");
     eprintln!("  aggregate          Generate ridl-manifest.json and mquickjs_ridl_register.h");
-    eprintln!("  prepare            Build tools, aggregate RIDL, then build mquickjs with the aggregated header");
+    eprintln!(
+        "  prepare            Build tools, aggregate RIDL, then build mquickjs with the aggregated header"
+    );
     eprintln!("  probe-bindgen      Compile a tiny crate to probe bindgen API");
     eprintln!("");
     eprintln!("Debug/Audit commands:");
     eprintln!("  export-unit-graph  Export raw cargo -Z --unit-graph JSON (debugging only)");
-    eprintln!("  export-deps        Export parsed direct deps snapshot as ridl-deps.json (debugging only)");
+    eprintln!(
+        "  export-deps        Export parsed direct deps snapshot as ridl-deps.json (debugging only)"
+    );
     eprintln!("");
     eprintln!("aggregate/prepare options:");
-    eprintln!("  --cargo-toml <path>   App Cargo.toml (optional; default from nearest mquickjs.ridl.toml)");
+    eprintln!(
+        "  --cargo-toml <path>   App Cargo.toml (optional; default from nearest mquickjs.ridl.toml)"
+    );
     eprintln!("  --app-id <id>         Override app id (optional)");
-    eprintln!("  --cargo-subcommand build|test  Use cargo unit-graph to derive direct deps (preferred)");
-    eprintln!("  --cargo-args <args>            Extra args forwarded to cargo (features/target/profile), e.g. --cargo-args \"--features foo\"");
-    eprintln!("  --intent build|test            Force fallback intent when not using unit-graph (default: build)");
+    eprintln!(
+        "  --cargo-subcommand build|test  Use cargo unit-graph to derive direct deps (preferred)"
+    );
+    eprintln!(
+        "  --cargo-args <args>            Extra args forwarded to cargo (features/target/profile), e.g. --cargo-args \"--features foo\""
+    );
+    eprintln!(
+        "  --intent build|test            Force fallback intent when not using unit-graph (default: build)"
+    );
     eprintln!("");
     eprintln!("export-unit-graph/export-deps options:");
     eprintln!("  --cargo-toml <path>   App Cargo.toml (required, absolute)");
@@ -169,7 +181,10 @@ fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
 
     if !cargo_toml.is_absolute() {
         // Keep things explicit/stable across different cwd.
-        panic!("--cargo-toml must be an absolute path: {}", cargo_toml.display());
+        panic!(
+            "--cargo-toml must be an absolute path: {}",
+            cargo_toml.display()
+        );
     }
 
     let cargo_subcommand = parse_opt(args, "--cargo-subcommand")
@@ -194,8 +209,7 @@ fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
 
     let app_pkg = select_app_package(&meta, &cargo_toml);
 
-    let app_id = parse_opt(args, "--app-id")
-        .unwrap_or_else(|| normalize_app_id(&app_pkg.name));
+    let app_id = parse_opt(args, "--app-id").unwrap_or_else(|| normalize_app_id(&app_pkg.name));
 
     AggregateOpts {
         cargo_toml,
@@ -400,9 +414,12 @@ fn cargo_metadata(manifest_path: &Path) -> CargoMetadata {
 }
 
 fn select_app_package<'a>(meta: &'a CargoMetadata, cargo_toml: &Path) -> &'a CargoPackage {
-    let want = cargo_toml
-        .canonicalize()
-        .unwrap_or_else(|e| panic!("failed to canonicalize --cargo-toml {}: {e}", cargo_toml.display()));
+    let want = cargo_toml.canonicalize().unwrap_or_else(|e| {
+        panic!(
+            "failed to canonicalize --cargo-toml {}: {e}",
+            cargo_toml.display()
+        )
+    });
 
     meta.packages
         .iter()
@@ -460,7 +477,6 @@ fn resolve_target_triple() -> String {
     panic!("Unable to resolve target triple (no TARGET/HOST env, and rustc -vV has no host)");
 }
 
-
 fn build_tools() {
     // Build tool binaries in one cargo invocation to avoid repeated locking.
     let mut cmd = Command::new("cargo");
@@ -492,9 +508,11 @@ fn write_cargo_env_config(bin_dir: &str) {
     std::fs::create_dir_all(&cargo_dir)
         .unwrap_or_else(|e| panic!("failed to create {}: {e}", cargo_dir.display()));
 
-    let ridl_tool = workspace_root
-        .join(bin_dir)
-        .join(if cfg!(windows) { "ridl-tool.exe" } else { "ridl-tool" });
+    let ridl_tool = workspace_root.join(bin_dir).join(if cfg!(windows) {
+        "ridl-tool.exe"
+    } else {
+        "ridl-tool"
+    });
 
     let ridl_tool = ridl_tool
         .canonicalize()
@@ -522,7 +540,11 @@ fn build_mquickjs(args: Vec<String>) {
     if args.is_empty() {
         let target_triple = resolve_target_triple();
         let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-        let mode = if profile == "release" { "release" } else { "debug" };
+        let mode = if profile == "release" {
+            "release"
+        } else {
+            "debug"
+        };
 
         let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/base");
 
@@ -567,7 +589,11 @@ fn prepare_cmd(args: Vec<String>) {
 
     let target_triple = resolve_target_triple();
     let cargo_profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
-    let mode = if cargo_profile == "release" { "release" } else { "debug" };
+    let mode = if cargo_profile == "release" {
+        "release"
+    } else {
+        "debug"
+    };
 
     // TODO: this profile directory will be made app-id aware as we formalize multi-app mquickjs-build outputs.
     let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/ridl");
@@ -603,8 +629,7 @@ fn prepare_cmd(args: Vec<String>) {
     });
 
     let module_ids = romclass_map::parse_module_class_ids_header(
-        &out
-            .ridl_register_h
+        &out.ridl_register_h
             .parent()
             .unwrap()
             .join("mquickjs_ridl_module_class_ids.h"),
@@ -635,7 +660,8 @@ fn export_deps_cmd(args: Vec<String>) {
     let app_pkg = select_app_package(&meta, &opts.cargo_toml);
 
     let raw = unit_graph::run_unit_graph(&opts.cargo_toml, opts.cargo_subcommand, &opts.cargo_args);
-    let direct = unit_graph::direct_deps_from_unit_graph_raw(&meta, app_pkg, opts.cargo_subcommand, &raw);
+    let direct =
+        unit_graph::direct_deps_from_unit_graph_raw(&meta, app_pkg, opts.cargo_subcommand, &raw);
 
     let snapshot = build_deps_snapshot(app_pkg, opts.cargo_subcommand, &opts.cargo_args, &direct);
     let json = serde_json::to_vec_pretty(&snapshot)
@@ -653,11 +679,14 @@ struct ExportOpts {
 }
 
 fn parse_export_opts(args: &[String]) -> ExportOpts {
-    let cargo_toml = parse_opt(args, "--cargo-toml")
-        .unwrap_or_else(|| panic!("--cargo-toml is required"));
+    let cargo_toml =
+        parse_opt(args, "--cargo-toml").unwrap_or_else(|| panic!("--cargo-toml is required"));
     let cargo_toml = PathBuf::from(cargo_toml);
     if !cargo_toml.is_absolute() {
-        panic!("--cargo-toml must be an absolute path: {}", cargo_toml.display());
+        panic!(
+            "--cargo-toml must be an absolute path: {}",
+            cargo_toml.display()
+        );
     }
 
     let cargo_subcommand = parse_opt(args, "--cargo-subcommand")
@@ -703,7 +732,12 @@ struct RidlDepsPkg {
     manifest_path: String,
 }
 
-fn build_deps_snapshot(app_pkg: &CargoPackage, sc: CargoSubcommand, cargo_args: &[String], direct: &[&CargoPackage]) -> RidlDepsSnapshot {
+fn build_deps_snapshot(
+    app_pkg: &CargoPackage,
+    sc: CargoSubcommand,
+    cargo_args: &[String],
+    direct: &[&CargoPackage],
+) -> RidlDepsSnapshot {
     let mut deps: Vec<RidlDepsPkg> = direct
         .iter()
         .map(|p| RidlDepsPkg {

@@ -1,8 +1,4 @@
-use std::{
-    env,
-    path::Path,
-    process::Command,
-};
+use std::{env, path::Path, process::Command};
 
 #[test]
 fn mquickjs_build_tool_rejects_c_option() {
@@ -23,7 +19,9 @@ fn mquickjs_build_tool_rejects_c_option() {
     } else {
         // Fallback: build it locally in a temp dir via `gcc`.
         // This stays within Cargo's test temp directory.
-        let tmp = env::temp_dir().join("mquickjs-demo-tests").join("no_c_option");
+        let tmp = env::temp_dir()
+            .join("mquickjs-demo-tests")
+            .join("no_c_option");
         std::fs::create_dir_all(&tmp).expect("create temp dir");
         let out = tmp.join("mqjs_ridl_stdlib");
 
@@ -31,10 +29,18 @@ fn mquickjs_build_tool_rejects_c_option() {
             .current_dir(&tmp)
             .arg("-O2")
             .arg("-D__HOST__")
-            .arg(env::current_dir().unwrap().join("deps/mquickjs/mquickjs_build.c"))
+            .arg(
+                env::current_dir()
+                    .unwrap()
+                    .join("deps/mquickjs/mquickjs_build.c"),
+            )
             .arg("-D")
             .arg("main=mqjs_ridl_stdlib_main")
-            .arg(env::current_dir().unwrap().join("deps/mquickjs/mqjs_stdlib.c"))
+            .arg(
+                env::current_dir()
+                    .unwrap()
+                    .join("deps/mquickjs/mqjs_stdlib.c"),
+            )
             .arg("-D")
             .arg("mqjs_ridl_stdlib_main=main")
             .arg("-o")

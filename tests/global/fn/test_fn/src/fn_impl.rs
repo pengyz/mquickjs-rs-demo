@@ -29,7 +29,8 @@ impl TestFnSingleton for DefaultTestFnSingleton {
         env: &mut mquickjs_rs::Env<'_>,
         v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>,
     ) -> String {
-        env.get_string(v).expect("any_to_string expects a string value")
+        env.get_string(v)
+            .expect("any_to_string expects a string value")
     }
 
     fn make_array_with_len(
@@ -113,7 +114,11 @@ impl TestFnSingleton for DefaultTestFnSingleton {
         };
 
         let raw = unsafe {
-            mquickjs_rs::mquickjs_ffi::JS_GetPropertyUint32(env.scope().ctx_raw(), arr_local.as_raw(), index)
+            mquickjs_rs::mquickjs_ffi::JS_GetPropertyUint32(
+                env.scope().ctx_raw(),
+                arr_local.as_raw(),
+                index,
+            )
         };
         env.return_safe(env.scope().value(raw))
     }

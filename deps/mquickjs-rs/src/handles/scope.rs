@@ -27,7 +27,10 @@ impl Drop for EnterGuard<'_> {
             let mut st = s.borrow_mut();
             let top = st.pop().expect("enter/exit stack underflow");
             assert_eq!(top.id, self.expected_id, "Context enter/exit out of order");
-            assert_eq!(top.ctx, self.expected_ctx, "Context enter/exit out of order");
+            assert_eq!(
+                top.ctx, self.expected_ctx,
+                "Context enter/exit out of order"
+            );
         })
     }
 }
@@ -83,4 +86,3 @@ impl ContextToken {
         Scope { h: self, _g: g }
     }
 }
-

@@ -8,7 +8,9 @@ pub mod impls {
     }
 
     pub fn user_constructor() -> Box<dyn crate::api::UserClass> {
-        Box::new(crate::class_impl::DefaultUser { name: String::new() })
+        Box::new(crate::class_impl::DefaultUser {
+            name: String::new(),
+        })
     }
 }
 

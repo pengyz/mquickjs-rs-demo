@@ -57,7 +57,11 @@ pub fn run_one_js_file(path: &Path) -> Result<(), String> {
     context.eval(&script).map(|_result| ()).map_err(|e| {
         // Include file path and a short prefix to help diagnose syntax errors.
         let prefix: String = script.chars().take(80).collect();
-        format!("eval failed: {e}\n  file: {}\n  prefix: {:?}", path.display(), prefix)
+        format!(
+            "eval failed: {e}\n  file: {}\n  prefix: {:?}",
+            path.display(),
+            prefix
+        )
     })
 }
 

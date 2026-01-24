@@ -8,7 +8,6 @@ use std::ffi::CStr;
 
 use mquickjs_rs::mquickjs_ffi::{JSContext, JSValue};
 
-
 fn print_js_values(ctx: *mut JSContext, args: &[JSValue], is_err: bool) {
     for (i, v) in args.iter().copied().enumerate() {
         if i != 0 {
@@ -73,7 +72,8 @@ impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
         let Some(h) = mquickjs_rs::context::ContextToken::current() else {
             return;
         };
-        let args: Vec<mquickjs_rs::mquickjs_ffi::JSValue> = args.into_iter().map(|v| v.as_raw()).collect();
+        let args: Vec<mquickjs_rs::mquickjs_ffi::JSValue> =
+            args.into_iter().map(|v| v.as_raw()).collect();
         print_js_values(h.ctx, &args, false);
         println!();
     }
@@ -86,7 +86,8 @@ impl crate::impls::ConsoleSingleton for DefaultConsoleSingleton {
         let Some(h) = mquickjs_rs::context::ContextToken::current() else {
             return;
         };
-        let args: Vec<mquickjs_rs::mquickjs_ffi::JSValue> = args.into_iter().map(|v| v.as_raw()).collect();
+        let args: Vec<mquickjs_rs::mquickjs_ffi::JSValue> =
+            args.into_iter().map(|v| v.as_raw()).collect();
         print_js_values(h.ctx, &args, true);
         eprintln!();
     }

@@ -50,11 +50,26 @@ fn js_class_ids_are_global_monotonic_across_modules() {
 
     let hdr = fs::read_to_string(out_dir.join("mquickjs_ridl_register.h")).unwrap();
 
-    assert!(hdr.contains("#define JS_CLASS_M1_1_0_MODULE (JS_CLASS_USER + 0)"), "{hdr}");
-    assert!(hdr.contains("#define JS_CLASS_M2_1_0_MODULE (JS_CLASS_USER + 1)"), "{hdr}");
+    assert!(
+        hdr.contains("#define JS_CLASS_M1_1_0_MODULE (JS_CLASS_USER + 0)"),
+        "{hdr}"
+    );
+    assert!(
+        hdr.contains("#define JS_CLASS_M2_1_0_MODULE (JS_CLASS_USER + 1)"),
+        "{hdr}"
+    );
 
-    assert!(hdr.contains("#define JS_CLASS_M1_USERA (JS_CLASS_USER + 2)"), "{hdr}");
-    assert!(hdr.contains("#define JS_CLASS_M2_USERB (JS_CLASS_USER + 3)"), "{hdr}");
+    assert!(
+        hdr.contains("#define JS_CLASS_M1_USERA (JS_CLASS_USER + 2)"),
+        "{hdr}"
+    );
+    assert!(
+        hdr.contains("#define JS_CLASS_M2_USERB (JS_CLASS_USER + 3)"),
+        "{hdr}"
+    );
 
-    assert!(hdr.contains("#define JS_CLASS_COUNT (JS_CLASS_USER + 4)"), "{hdr}");
+    assert!(
+        hdr.contains("#define JS_CLASS_COUNT (JS_CLASS_USER + 4)"),
+        "{hdr}"
+    );
 }

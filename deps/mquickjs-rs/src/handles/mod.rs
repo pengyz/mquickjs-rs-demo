@@ -1,14 +1,14 @@
-pub mod scope;
-pub mod local;
-pub mod handle;
 pub mod any;
 pub mod global;
+pub mod handle;
+pub mod local;
+pub mod scope;
 
 pub mod handle_scope;
 
-pub mod object;
 pub mod array;
 pub mod function;
+pub mod object;
 pub mod return_safe;
 
 #[cfg(test)]

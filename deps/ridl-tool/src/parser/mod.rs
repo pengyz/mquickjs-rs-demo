@@ -24,7 +24,6 @@ fn pair_pos(pair: &pest::iterators::Pair<Rule>) -> ast::SourcePos {
     ast::SourcePos { line, column }
 }
 
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileMode {
     Default,
@@ -96,7 +95,11 @@ pub fn parse_idl_file(content: &str) -> Result<ParsedIDL, Box<dyn std::error::Er
         }
     }
 
-    Ok(ParsedIDL { module, mode, items })
+    Ok(ParsedIDL {
+        module,
+        mode,
+        items,
+    })
 }
 
 fn parse_mode_decl(
@@ -432,7 +435,8 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                     }
                     Rule::proto_var_member => {
                         let mut f = parse_var_field(member_pair)?;
-                        f.modifiers.insert(0, crate::parser::ast::PropertyModifier::Proto);
+                        f.modifiers
+                            .insert(0, crate::parser::ast::PropertyModifier::Proto);
                         js_fields.push(f);
                     }
                     Rule::method_def => {
@@ -486,12 +490,12 @@ fn parse_var_field(
     let type_pair = iter.next().ok_or("Expected type for var field")?;
     let property_type = parse_type(type_pair)?;
 
-    let literal_pair = iter
-        .next()
-        .ok_or("Expected literal value for var field")?;
+    let literal_pair = iter.next().ok_or("Expected literal value for var field")?;
 
     let init_literal = match property_type {
-        crate::parser::ast::Type::String => decode_ridl_string_literal(&pair_pos(&literal_pair), literal_pair.as_str())?,
+        crate::parser::ast::Type::String => {
+            decode_ridl_string_literal(&pair_pos(&literal_pair), literal_pair.as_str())?
+        }
         _ => literal_pair.as_str().to_string(),
     };
 
@@ -1087,7 +1091,10 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                 let mut inner_type: Option<Type> = None;
                 for p in inner_pair.into_inner() {
                     match p.as_rule() {
-                        Rule::r#type | Rule::union_type | Rule::nullable_type | Rule::primary_type => {
+                        Rule::r#type
+                        | Rule::union_type
+                        | Rule::nullable_type
+                        | Rule::primary_type => {
                             inner_type = Some(parse_type(p)?);
                         }
                         Rule::WS => {}

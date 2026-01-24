@@ -2,7 +2,9 @@ use std::path::PathBuf;
 
 use crate::parser;
 
-use super::{TemplateClass, TemplateFunction, TemplateInterface, TemplateModule, TemplateSingleton};
+use super::{
+    TemplateClass, TemplateFunction, TemplateInterface, TemplateModule, TemplateSingleton,
+};
 
 pub(super) fn build_template_modules(
     ridl_files: &[PathBuf],
@@ -66,7 +68,10 @@ pub(super) fn build_template_modules(
 
         let (require_full_name, require_base, require_v_major, require_v_minor, require_v_patch) =
             if let Some(m) = &parsed.module {
-                let ver = m.version.as_ref().expect("module version is required by parser");
+                let ver = m
+                    .version
+                    .as_ref()
+                    .expect("module version is required by parser");
                 let v = crate::parser::require_spec::Version::parse_no_ws(ver)
                     .expect("module version is validated by parser");
                 (

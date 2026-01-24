@@ -28,4 +28,3 @@ impl UserClass for DefaultUser {
         }
     }
 }
-

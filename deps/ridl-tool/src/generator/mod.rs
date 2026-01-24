@@ -2,7 +2,10 @@ use crate::parser::ast::{Class, Function, IDLItem, Interface, Method, Param, Typ
 
 use union_types::collect_union_types;
 
-fn apply_union_rust_ty_overrides(union_types: &[TemplateUnionType], tpl: &mut impl RustGlueLikeTemplate) {
+fn apply_union_rust_ty_overrides(
+    union_types: &[TemplateUnionType],
+    tpl: &mut impl RustGlueLikeTemplate,
+) {
     for itf in tpl.interfaces_mut().iter_mut() {
         for m in &mut itf.methods {
             let name = m.name.clone();
@@ -44,7 +47,13 @@ fn apply_union_rust_ty_overrides_function(
     }
 
     // Return type: optionality comes from the type shape; we don't use the "Optional" label.
-    apply_union_rust_ty_overrides_ty(union_types, fn_name, "", &f.return_type, &mut f.return_rust_ty);
+    apply_union_rust_ty_overrides_ty(
+        union_types,
+        fn_name,
+        "",
+        &f.return_type,
+        &mut f.return_rust_ty,
+    );
 }
 
 fn apply_union_rust_ty_overrides_method(
@@ -57,7 +66,13 @@ fn apply_union_rust_ty_overrides_method(
     }
 
     // Return type label should not affect optionality; only the type shape should.
-    apply_union_rust_ty_overrides_ty(union_types, fn_name, "", &m.return_type, &mut m.return_rust_ty);
+    apply_union_rust_ty_overrides_ty(
+        union_types,
+        fn_name,
+        "",
+        &m.return_type,
+        &mut m.return_rust_ty,
+    );
 }
 
 fn apply_union_rust_ty_overrides_param(
@@ -80,7 +95,6 @@ fn apply_union_rust_ty_overrides_ty(
     if !contains_union(ty) {
         return;
     }
-
 
     if let Some((enum_path, optional)) = union_enum_path_for_ty(union_types, fn_name, label, ty) {
         *out_rust_ty = if optional {
@@ -141,7 +155,10 @@ fn union_enum_path_for_ty(
                 let name = format!("Union{}", keys.join(""));
                 let u = union_types.iter().find(|u| u.name == name)?;
                 let is_optional = label == "Optional";
-                return Some((format!("crate::api::{}::union::{}", u.domain, u.name), is_optional));
+                return Some((
+                    format!("crate::api::{}::union::{}", u.domain, u.name),
+                    is_optional,
+                ));
             }
             None
         }
@@ -176,7 +193,10 @@ fn union_enum_path_for_ty(
             // v1 semantic (strategy A): `T1 | T2 | null` is sugar for `(T1|T2)?`.
             // Also, `label=="Optional"` is used by outer Optional(...) wrapper for params.
             let is_optional = nullable || label == "Optional";
-            Some((format!("crate::api::{}::union::{}", u.domain, u.name), is_optional))
+            Some((
+                format!("crate::api::{}::union::{}", u.domain, u.name),
+                is_optional,
+            ))
         }
         _ => None,
     }
@@ -286,9 +306,14 @@ fn generate_register_h_and_symbols(
                         .as_ref()
                         .map(|m| m.module_path.clone())
                         .unwrap_or_else(|| "GLOBAL".to_string());
-                    let module_name_normalized = crate::generator::filters::normalize_ident(&ridl_module_name)
-                        .unwrap_or_else(|_| "GLOBAL".to_string());
-                    functions.push(TemplateFunction::from_with_mode(f, parsed.mode, module_name_normalized))
+                    let module_name_normalized =
+                        crate::generator::filters::normalize_ident(&ridl_module_name)
+                            .unwrap_or_else(|_| "GLOBAL".to_string());
+                    functions.push(TemplateFunction::from_with_mode(
+                        f,
+                        parsed.mode,
+                        module_name_normalized,
+                    ))
                 }
                 crate::parser::ast::IDLItem::Interface(mut i) => {
                     i.module = parsed.module.clone();
@@ -297,9 +322,14 @@ fn generate_register_h_and_symbols(
                         .as_ref()
                         .map(|m| m.module_path.clone())
                         .unwrap_or_else(|| "GLOBAL".to_string());
-                    let module_name_normalized = crate::generator::filters::normalize_ident(&ridl_module_name)
-                        .unwrap_or_else(|_| "GLOBAL".to_string());
-                    interfaces.push(TemplateInterface::from_with_mode(i, parsed.mode, module_name_normalized))
+                    let module_name_normalized =
+                        crate::generator::filters::normalize_ident(&ridl_module_name)
+                            .unwrap_or_else(|_| "GLOBAL".to_string());
+                    interfaces.push(TemplateInterface::from_with_mode(
+                        i,
+                        parsed.mode,
+                        module_name_normalized,
+                    ))
                 }
                 crate::parser::ast::IDLItem::Singleton(mut s) => {
                     s.module = parsed.module.clone();
@@ -311,8 +341,10 @@ fn generate_register_h_and_symbols(
                         .to_string();
                     singletons.push(TemplateSingleton {
                         name: s.name,
-                        module_name_normalized: crate::generator::filters::normalize_ident(&module_name)
-                            .unwrap_or_else(|_| "GLOBAL".to_string()),
+                        module_name_normalized: crate::generator::filters::normalize_ident(
+                            &module_name,
+                        )
+                        .unwrap_or_else(|_| "GLOBAL".to_string()),
                         module_name,
                         methods: s
                             .methods
@@ -323,8 +355,9 @@ fn generate_register_h_and_symbols(
                     })
                 }
                 crate::parser::ast::IDLItem::Class(c) => {
-                    let module_name_normalized = crate::generator::filters::normalize_ident(&module_name)
-                        .unwrap_or_else(|_| "GLOBAL".to_string());
+                    let module_name_normalized =
+                        crate::generator::filters::normalize_ident(&module_name)
+                            .unwrap_or_else(|_| "GLOBAL".to_string());
                     classes.push(TemplateClass::from_with_mode(
                         module_name.clone(),
                         module_name_normalized,
@@ -371,7 +404,6 @@ fn generate_register_h_and_symbols(
             classes,
         });
     }
-
 
     // Assign a global, monotonic class_id across all modules in this app aggregate.
     // This matches the ROM/build expectation: JS class ids are allocated as
@@ -446,7 +478,6 @@ fn generate_register_h_and_symbols(
     }))
 }
 
-
 // singleton aggregation (Option A: erased slots)
 pub mod singleton_aggregate;
 
@@ -486,7 +517,6 @@ struct MquickjsRidlModuleClassIdsHeaderTemplate {
     modules: Vec<TemplateModule>,
 }
 
-
 trait RustGlueLikeTemplate {
     fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface>;
     fn functions_mut(&mut self) -> &mut Vec<TemplateFunction>;
@@ -506,7 +536,6 @@ struct RustGlueTemplate {
     singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
 }
-
 
 impl RustGlueLikeTemplate for RustGlueTemplate {
     fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface> {
@@ -578,14 +607,12 @@ struct TemplateUnionMember {
     rust_ty: String,
 }
 
-
 #[derive(Template)]
 #[template(path = "ridl_symbols.rs.j2")]
 #[allow(dead_code)]
 struct AggSymbolsTemplate {
     modules: Vec<TemplateModule>,
 }
-
 
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -753,9 +780,12 @@ impl TemplateMethod {
 impl TemplateParam {
     fn from_with_mode(param: Param, file_mode: crate::parser::FileMode) -> Self {
         let ty = param.param_type;
-        let rust_ty = crate::generator::filters::rust_type_from_idl(&ty).unwrap_or_else(|_| "()".to_string());
-        let rust_name = crate::generator::filters::rust_ident(&crate::generator::naming::to_snake_case(&param.name))
-            .unwrap_or_else(|_| "_".to_string());
+        let rust_ty =
+            crate::generator::filters::rust_type_from_idl(&ty).unwrap_or_else(|_| "()".to_string());
+        let rust_name = crate::generator::filters::rust_ident(
+            &crate::generator::naming::to_snake_case(&param.name),
+        )
+        .unwrap_or_else(|_| "_".to_string());
 
         Self {
             name: param.name,
@@ -808,11 +838,13 @@ impl TemplateClass {
             module_name_normalized,
             name: class.name,
             class_id: 0,
-            constructor: class
-                .constructor
-                .map(|c| {
-                    TemplateFunction::from_with_mode(c, file_mode, module_name_normalized_cloned.clone())
-                }),
+            constructor: class.constructor.map(|c| {
+                TemplateFunction::from_with_mode(
+                    c,
+                    file_mode,
+                    module_name_normalized_cloned.clone(),
+                )
+            }),
             methods: class
                 .methods
                 .into_iter()
@@ -934,8 +966,9 @@ pub fn generate_module_files(
                     .as_ref()
                     .map(|m| m.module_path.as_str())
                     .unwrap_or("GLOBAL");
-                let module_name_normalized = crate::generator::filters::normalize_ident(ridl_module_name)
-                    .unwrap_or_else(|_| "GLOBAL".to_string());
+                let module_name_normalized =
+                    crate::generator::filters::normalize_ident(ridl_module_name)
+                        .unwrap_or_else(|_| "GLOBAL".to_string());
                 classes.push(TemplateClass::from_with_mode(
                     ridl_module_name.to_string(),
                     module_name_normalized,
@@ -962,8 +995,10 @@ pub fn generate_module_files(
                 .to_string();
             singletons.push(TemplateSingleton {
                 name: s.name.clone(),
-                module_name_normalized: crate::generator::filters::normalize_ident(&singleton_module_name)
-                    .unwrap_or_else(|_| "GLOBAL".to_string()),
+                module_name_normalized: crate::generator::filters::normalize_ident(
+                    &singleton_module_name,
+                )
+                .unwrap_or_else(|_| "GLOBAL".to_string()),
                 module_name: singleton_module_name,
                 methods: s
                     .methods
@@ -996,7 +1031,6 @@ pub fn generate_module_files(
     apply_union_rust_ty_overrides(&union_types, &mut rust_glue_template);
     let rust_glue_code = rust_glue_template.render()?;
     std::fs::write(output_path.join("glue.rs"), rust_glue_code)?;
-
 
     // 生成 Rust API（trait/类型声明），供用户 impl 层与 glue 层共享引用。
     // 注意：这里不生成任何 `todo!()` 实现骨架，避免误导用户编辑 OUT_DIR 生成物。
@@ -1049,7 +1083,6 @@ pub fn ridl_module_context_init(w: &mut dyn mquickjs_rs::ridl_runtime::RidlSlotW
     Ok(())
 }
 
-
 pub fn generate_aggregate_consolidated(
     plan: &crate::plan::RidlPlan,
     output_dir: &std::path::Path,
@@ -1063,9 +1096,7 @@ pub fn generate_aggregate_consolidated(
         .collect();
 
     {
-        let out_dir_str = output_dir
-            .to_str()
-            .ok_or("invalid output dir (non-utf8)")?;
+        let out_dir_str = output_dir.to_str().ok_or("invalid output dir (non-utf8)")?;
 
         // Make sure the consolidated C-side register header matches the same
         // C ABI symbol naming convention as Rust glue (snake_case, '_' separated).

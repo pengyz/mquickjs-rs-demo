@@ -1,11 +1,8 @@
-use std::{
-    collections::HashSet,
-    process::Command,
-};
+use std::{collections::HashSet, process::Command};
 
 use serde::Deserialize;
 
-use crate::{CargoSubcommand, CargoMetadata, CargoPackage};
+use crate::{CargoMetadata, CargoPackage, CargoSubcommand};
 
 pub fn direct_deps_from_unit_graph<'a>(
     cargo_toml: &std::path::Path,
@@ -97,7 +94,11 @@ pub fn direct_deps_from_unit_graph_raw<'a>(
     out
 }
 
-pub fn run_unit_graph(cargo_toml: &std::path::Path, subcommand: CargoSubcommand, cargo_args: &[String]) -> Vec<u8> {
+pub fn run_unit_graph(
+    cargo_toml: &std::path::Path,
+    subcommand: CargoSubcommand,
+    cargo_args: &[String],
+) -> Vec<u8> {
     try_run_unit_graph(cargo_toml, subcommand, cargo_args).unwrap_or_else(|e| panic!("{e}"))
 }
 
@@ -123,7 +124,9 @@ pub fn try_run_unit_graph(
         .arg(cargo_toml)
         .args(cargo_args);
 
-    let out = cmd.output().map_err(|e| format!("failed to run cargo --unit-graph: {e}"))?;
+    let out = cmd
+        .output()
+        .map_err(|e| format!("failed to run cargo --unit-graph: {e}"))?;
     if !out.status.success() {
         return Err(format!(
             "cargo --unit-graph failed (exit={:?}). Hint: this requires nightly cargo (try `cargo +nightly ... -Z unstable-options --unit-graph`). stderr:\n{}",
@@ -256,7 +259,9 @@ mod tests {
 
         // Ensure manifest_path.exists() passes for our fake local packages.
         // Use a writable temp dir (tests might not have permission to write to /workspace).
-        let tmp = std::env::temp_dir().join("ridl-builder-tests").join("unit-graph-1");
+        let tmp = std::env::temp_dir()
+            .join("ridl-builder-tests")
+            .join("unit-graph-1");
         std::fs::create_dir_all(&tmp).unwrap();
 
         for p in &mut meta.packages {
@@ -333,7 +338,9 @@ mod tests {
             target_directory: "/workspace2/target".into(),
         };
 
-        let tmp = std::env::temp_dir().join("ridl-builder-tests").join("unit-graph-2");
+        let tmp = std::env::temp_dir()
+            .join("ridl-builder-tests")
+            .join("unit-graph-2");
         std::fs::create_dir_all(&tmp).unwrap();
 
         for p in &mut meta.packages {

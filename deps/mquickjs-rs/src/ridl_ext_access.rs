@@ -8,14 +8,12 @@ use crate::ridl_runtime::ErasedCtxSlot;
 /// matching the concrete `CtxExt` layout.
 #[repr(C)]
 pub struct RidlCtxExtVTable {
-    pub get_slot:
-        unsafe extern "C" fn(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedCtxSlot,
+    pub get_slot: unsafe extern "C" fn(ext_ptr: *mut c_void, slot_index: u32) -> *mut ErasedCtxSlot,
     pub get_slot_by_name: unsafe extern "C" fn(
         ext_ptr: *mut c_void,
         name_ptr: *const u8,
         name_len: usize,
     ) -> *mut ErasedCtxSlot,
-
 }
 
 static mut RIDL_CTX_EXT_VTABLE: *const RidlCtxExtVTable = core::ptr::null();

@@ -97,7 +97,10 @@ fn build_cmd(argv: Vec<String>) {
             .parent()
             .unwrap_or_else(|| die("--ridl-register-h has no parent directory"));
 
-        copy_file(&src_dir.join("mquickjs_ridl_module_class_ids.h"), &ridl_module_class_ids_dst);
+        copy_file(
+            &src_dir.join("mquickjs_ridl_module_class_ids.h"),
+            &ridl_module_class_ids_dst,
+        );
         copy_file(&src_dir.join("mquickjs_ridl_api.h"), &ridl_api_dst);
         copy_file(&src_dir.join("mquickjs_ridl_register.c"), &ridl_c_dst);
     }
@@ -133,9 +136,11 @@ fn build_cmd(argv: Vec<String>) {
         .join("mquickjs-rs")
         .join("mqjs_stdlib_template.c");
 
-    let template = template
-        .canonicalize()
-        .unwrap_or_else(|e| die(&format!("Failed to canonicalize mqjs_stdlib_template.c: {e}")));
+    let template = template.canonicalize().unwrap_or_else(|e| {
+        die(&format!(
+            "Failed to canonicalize mqjs_stdlib_template.c: {e}"
+        ))
+    });
 
     let include_dir_canon = include_dir
         .canonicalize()
@@ -250,9 +255,11 @@ fn build_cmd(argv: Vec<String>) {
 
     // 6.0) (ridl-extensions only) Compile generated runtime glue (require table).
     if ridl_register_h.is_some() {
-        let ridl_reg_c = ridl_c_dst
-            .canonicalize()
-            .unwrap_or_else(|e| die(&format!("Failed to canonicalize mquickjs_ridl_register.c: {e}")));
+        let ridl_reg_c = ridl_c_dst.canonicalize().unwrap_or_else(|e| {
+            die(&format!(
+                "Failed to canonicalize mquickjs_ridl_register.c: {e}"
+            ))
+        });
 
         let ridl_reg_obj = PathBuf::from("mquickjs_ridl_register.o");
         let mut gcc = Command::new("gcc");
@@ -384,7 +391,6 @@ fn copy_file(src: &Path, dst: &Path) {
         ))
     });
 }
-
 
 fn die(msg: &str) -> ! {
     eprintln!("{msg}");

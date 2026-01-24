@@ -11,17 +11,24 @@ impl<'ctx> Local<'ctx, Value> {
         let ctx = scope.ctx_raw();
         unsafe {
             let global = mquickjs_ffi::JS_GetGlobalObject(ctx);
-            if mquickjs_ffi::js_value_special_tag(global) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
+            if mquickjs_ffi::js_value_special_tag(global) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32)
+            {
                 return false;
             }
 
-            let array_ctor = mquickjs_ffi::JS_GetPropertyStr(ctx, global, b"Array\0".as_ptr() as *const _);
-            if mquickjs_ffi::js_value_special_tag(array_ctor) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
+            let array_ctor =
+                mquickjs_ffi::JS_GetPropertyStr(ctx, global, b"Array\0".as_ptr() as *const _);
+            if mquickjs_ffi::js_value_special_tag(array_ctor)
+                == (mquickjs_ffi::JS_TAG_EXCEPTION as u32)
+            {
                 return false;
             }
 
-            let is_array = mquickjs_ffi::JS_GetPropertyStr(ctx, array_ctor, b"isArray\0".as_ptr() as *const _);
-            if mquickjs_ffi::js_value_special_tag(is_array) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
+            let is_array =
+                mquickjs_ffi::JS_GetPropertyStr(ctx, array_ctor, b"isArray\0".as_ptr() as *const _);
+            if mquickjs_ffi::js_value_special_tag(is_array)
+                == (mquickjs_ffi::JS_TAG_EXCEPTION as u32)
+            {
                 return false;
             }
 
@@ -63,16 +70,28 @@ impl<'ctx> Local<'ctx, Array> {
     }
 
     pub fn get<'hs>(&self, env: &'hs mut Env<'ctx>, index: u32) -> Result<Any<'hs, 'ctx>, String> {
-        let raw = unsafe { mquickjs_ffi::JS_GetPropertyUint32(env.scope().ctx_raw(), self.as_raw(), index) };
+        let raw = unsafe {
+            mquickjs_ffi::JS_GetPropertyUint32(env.scope().ctx_raw(), self.as_raw(), index)
+        };
         if mquickjs_ffi::js_value_special_tag(raw) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
             return Err("Exception during array get".to_string());
         }
         Ok(Any::from_value(env.handle(env.scope().value(raw))))
     }
 
-    pub fn set(&self, env: &Env<'ctx>, index: u32, value: Local<'ctx, Value>) -> Result<(), String> {
+    pub fn set(
+        &self,
+        env: &Env<'ctx>,
+        index: u32,
+        value: Local<'ctx, Value>,
+    ) -> Result<(), String> {
         let r = unsafe {
-            mquickjs_ffi::JS_SetPropertyUint32(env.scope().ctx_raw(), self.as_raw(), index, value.as_raw())
+            mquickjs_ffi::JS_SetPropertyUint32(
+                env.scope().ctx_raw(),
+                self.as_raw(),
+                index,
+                value.as_raw(),
+            )
         };
         if mquickjs_ffi::js_value_special_tag(r) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
             return Err("Exception during array set".to_string());
@@ -89,7 +108,9 @@ impl<'ctx> Local<'ctx, Array> {
     pub fn pop<'hs>(&self, env: &'hs mut Env<'ctx>) -> Result<Any<'hs, 'ctx>, String> {
         let len = self.len(&*env)?;
         if len == 0 {
-            return Ok(Any::from_value(env.handle(env.scope().value(mquickjs_ffi::JS_UNDEFINED))));
+            return Ok(Any::from_value(
+                env.handle(env.scope().value(mquickjs_ffi::JS_UNDEFINED)),
+            ));
         }
 
         let ctx = env.scope().ctx_raw();

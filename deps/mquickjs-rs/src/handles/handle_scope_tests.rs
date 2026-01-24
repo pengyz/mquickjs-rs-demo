@@ -19,7 +19,9 @@ fn escapable_escape_survives_gc() {
 
     unsafe { crate::mquickjs_ffi::JS_GC(context.ctx) };
 
-    let s = context.get_string(scope_ref.value(escaped.as_raw())).unwrap();
+    let s = context
+        .get_string(scope_ref.value(escaped.as_raw()))
+        .unwrap();
     assert_eq!(s, "escaped");
 }
 

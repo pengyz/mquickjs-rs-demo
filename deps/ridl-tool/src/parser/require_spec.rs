@@ -30,7 +30,11 @@ impl Version {
             return None;
         }
 
-        Some(Self { major, minor, patch })
+        Some(Self {
+            major,
+            minor,
+            patch,
+        })
     }
 }
 
@@ -57,9 +61,18 @@ pub enum VersionOp {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum RequireSpec {
-    Latest { base: String },
-    Exact { base: String, version: Version },
-    Range { base: String, op: VersionOp, version: Version },
+    Latest {
+        base: String,
+    },
+    Exact {
+        base: String,
+        version: Version,
+    },
+    Range {
+        base: String,
+        op: VersionOp,
+        version: Version,
+    },
 }
 
 /// Parse require(spec) argument.
@@ -78,7 +91,11 @@ pub fn parse_require_spec_no_ws(spec: &str) -> Option<RequireSpec> {
     }
 
     let (base, tail) = match spec.split_once('@') {
-        None => return Some(RequireSpec::Latest { base: spec.to_string() }),
+        None => {
+            return Some(RequireSpec::Latest {
+                base: spec.to_string(),
+            })
+        }
         Some((b, t)) => (b, t),
     };
 

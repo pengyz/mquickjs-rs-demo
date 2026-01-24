@@ -44,7 +44,8 @@ impl<'ctx> Local<'ctx, Function> {
             let exception = unsafe { mquickjs_ffi::JS_GetException(scope.ctx()) };
 
             let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
-            let error_ptr = unsafe { mquickjs_ffi::JS_ToCString(scope.ctx(), exception, &mut cstr_buf) };
+            let error_ptr =
+                unsafe { mquickjs_ffi::JS_ToCString(scope.ctx(), exception, &mut cstr_buf) };
 
             if !error_ptr.is_null() {
                 let error_str = unsafe { CStr::from_ptr(error_ptr).to_string_lossy().into_owned() };
@@ -55,5 +56,4 @@ impl<'ctx> Local<'ctx, Function> {
 
         Ok(scope.value(result))
     }
-
 }

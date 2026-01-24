@@ -5,7 +5,6 @@ macro_rules! ridl_include_api {
     };
 }
 
-
 #[macro_export]
 macro_rules! ridl_include_glue {
     () => {

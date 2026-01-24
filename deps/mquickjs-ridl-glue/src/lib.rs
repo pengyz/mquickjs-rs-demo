@@ -167,7 +167,11 @@ fn parse_config(path: &Path) -> Config {
         .unwrap_or_else(|e| panic!("failed to parse {}: {e}", path.display()));
 
     if raw.version != 1 {
-        panic!("unsupported mquickjs.ridl.toml version={}, path={}", raw.version, path.display());
+        panic!(
+            "unsupported mquickjs.ridl.toml version={}, path={}",
+            raw.version,
+            path.display()
+        );
     }
 
     let root_dir = path

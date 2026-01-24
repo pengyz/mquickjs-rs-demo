@@ -37,7 +37,11 @@ impl<'ctx> Env<'ctx> {
     }
 
     pub fn pin_return<T>(&mut self, v: ReturnSafe<T>) -> mquickjs_ffi::JSValue {
-        assert_eq!(v.ctx_id(), self.scope.context_id(), "cross-context Env::pin_return");
+        assert_eq!(
+            v.ctx_id(),
+            self.scope.context_id(),
+            "cross-context Env::pin_return"
+        );
         // Ensure the value is rooted in this scope before returning it to the engine.
         let local = v.to_local(self.scope);
         let _ = self.handle(local);
@@ -56,7 +60,10 @@ impl<'ctx> Env<'ctx> {
         self.array_with_len(0)
     }
 
-    pub fn array_with_len<'hs>(&'hs mut self, len: u32) -> Result<Handle<'hs, 'ctx, Array>, String> {
+    pub fn array_with_len<'hs>(
+        &'hs mut self,
+        len: u32,
+    ) -> Result<Handle<'hs, 'ctx, Array>, String> {
         let raw = unsafe { mquickjs_ffi::JS_NewArray(self.scope.ctx_raw(), len as i32) };
         if mquickjs_ffi::js_value_special_tag(raw) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
             return Err("Exception during JS_NewArray".to_string());
@@ -75,7 +82,8 @@ impl<'ctx> Env<'ctx> {
 
     pub fn get_number(&self, v: Local<'ctx, Value>) -> Result<f64, String> {
         let mut result = 0.0;
-        let ret = unsafe { mquickjs_ffi::JS_ToNumber(self.scope.ctx_raw(), &mut result, v.as_raw()) };
+        let ret =
+            unsafe { mquickjs_ffi::JS_ToNumber(self.scope.ctx_raw(), &mut result, v.as_raw()) };
         if ret != 0 {
             return Err("Failed to convert Value to number".to_string());
         }
@@ -100,7 +108,8 @@ impl<'ctx> Env<'ctx> {
 
     pub fn get_string(&self, v: Local<'ctx, Value>) -> Result<String, String> {
         let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
-        let result_ptr = unsafe { mquickjs_ffi::JS_ToCString(self.scope.ctx_raw(), v.as_raw(), &mut cstr_buf) };
+        let result_ptr =
+            unsafe { mquickjs_ffi::JS_ToCString(self.scope.ctx_raw(), v.as_raw(), &mut cstr_buf) };
         if result_ptr.is_null() {
             return Err("Failed to convert Value to string".to_string());
         }

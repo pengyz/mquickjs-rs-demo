@@ -1,7 +1,4 @@
-use std::{
-    env,
-    path::Path,
-};
+use std::{env, path::Path};
 
 use ridl_tool::{generator, parser, validator};
 

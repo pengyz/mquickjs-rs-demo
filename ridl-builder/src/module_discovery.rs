@@ -3,7 +3,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use crate::{aggregate::Module, AggregateOpts, CargoMetadata, Intent};
+use crate::{AggregateOpts, CargoMetadata, Intent, aggregate::Module};
 
 const DEFAULT_FALLBACK_INTENT: Intent = Intent::Build;
 
@@ -20,11 +20,20 @@ pub fn discover_ridl_modules(opts: &AggregateOpts) -> Vec<Module> {
             &opts.cargo_args,
         )
     } else if opts.intent.is_some() {
-        direct_deps_from_metadata(&meta, app_pkg, opts.intent.unwrap_or(DEFAULT_FALLBACK_INTENT))
+        direct_deps_from_metadata(
+            &meta,
+            app_pkg,
+            opts.intent.unwrap_or(DEFAULT_FALLBACK_INTENT),
+        )
     } else {
         // Default path: try unit-graph without requiring extra flags.
         // If unit-graph isn't available (e.g. stable toolchain), fallback to metadata with default intent.
-        match crate::unit_graph::direct_deps_auto_detect(&opts.cargo_toml, &meta, app_pkg, &opts.cargo_args) {
+        match crate::unit_graph::direct_deps_auto_detect(
+            &opts.cargo_toml,
+            &meta,
+            app_pkg,
+            &opts.cargo_args,
+        ) {
             Ok(direct) => direct,
             Err(_) => direct_deps_from_metadata(&meta, app_pkg, DEFAULT_FALLBACK_INTENT),
         }
@@ -35,7 +44,12 @@ pub fn discover_ridl_modules(opts: &AggregateOpts) -> Vec<Module> {
         let crate_dir = pkg
             .manifest_path
             .parent()
-            .unwrap_or_else(|| panic!("package.manifest_path has no parent: {}", pkg.manifest_path.display()))
+            .unwrap_or_else(|| {
+                panic!(
+                    "package.manifest_path has no parent: {}",
+                    pkg.manifest_path.display()
+                )
+            })
             .to_path_buf();
 
         let ridl_files = find_ridl_files(&crate_dir.join("src"));
@@ -110,7 +124,6 @@ fn dep_kind_allowed(dep: &crate::CargoDep, intent: Intent) -> bool {
     }
 }
 
-
 fn find_ridl_files(src_dir: &Path) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let Ok(entries) = fs::read_dir(src_dir) else {
@@ -125,4 +138,3 @@ fn find_ridl_files(src_dir: &Path) -> Vec<PathBuf> {
     out.sort();
     out
 }
-

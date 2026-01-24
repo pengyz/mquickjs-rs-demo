@@ -37,5 +37,9 @@ class A {
     // Expect at least one error and it should have a non-zero line/column.
     assert!(!err.is_empty());
     assert!(err[0].line > 0, "line should be > 0, got {}", err[0].line);
-    assert!(err[0].column > 0, "column should be > 0, got {}", err[0].column);
+    assert!(
+        err[0].column > 0,
+        "column should be > 0, got {}",
+        err[0].column
+    );
 }

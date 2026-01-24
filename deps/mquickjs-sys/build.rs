@@ -65,7 +65,11 @@ fn main() {
         .join(&profile)
         .join(&target_triple)
         .join(mode)
-        .join(if _ridl_extensions_enabled { "ridl" } else { "base" });
+        .join(if _ridl_extensions_enabled {
+            "ridl"
+        } else {
+            "base"
+        });
 
     let build_output_path = build_out_dir.join("mquickjs_build_output.json");
     if !build_output_path.exists() {
@@ -126,7 +130,6 @@ fn select_profile(cfg: &WorkspaceBuildConfig) -> String {
         .unwrap_or_else(|| "framework".to_string())
 }
 
-
 fn find_mquickjs_build_toml() -> PathBuf {
     // External override. Note: this must be provided by the outer environment (shell, CI, or
     // workspace .cargo/config.toml). Build script emitted env vars do not propagate to other crates.
@@ -169,4 +172,3 @@ fn find_mquickjs_build_toml() -> PathBuf {
 or ensure this crate is built within a workspace root that contains mquickjs.build.toml."
     );
 }
-

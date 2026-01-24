@@ -37,7 +37,9 @@ fn main() {
     };
 
     if files.is_empty() {
-        eprintln!("No .js files found under default roots (tests/, ridl-modules/) or provided path");
+        eprintln!(
+            "No .js files found under default roots (tests/, ridl-modules/) or provided path"
+        );
         process::exit(2);
     }
 
@@ -65,10 +67,7 @@ fn main() {
         );
     }
 
-    println!(
-        "\n[==========] {} tests ran.",
-        summary.total.total
-    );
+    println!("\n[==========] {} tests ran.", summary.total.total);
     println!("[  PASSED  ] {} tests.", summary.total.passed);
     if summary.total.failed > 0 {
         println!("[  FAILED  ] {} tests.", summary.total.failed);

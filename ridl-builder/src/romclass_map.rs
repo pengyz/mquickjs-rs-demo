@@ -1,8 +1,4 @@
-use std::{
-    collections::BTreeMap,
-    fs,
-    path::Path,
-};
+use std::{collections::BTreeMap, fs, path::Path};
 
 #[derive(Debug)]
 pub struct RomclassIndex {
@@ -46,7 +42,11 @@ pub fn parse_module_class_ids_header(path: &Path) -> std::io::Result<Vec<ModuleC
         if !line.ends_with("\\") {
             return Err(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("{}:{}: expected line to end with \\\\ (macro continuation)", path.display(), idx + 1),
+                format!(
+                    "{}:{}: expected line to end with \\\\ (macro continuation)",
+                    path.display(),
+                    idx + 1
+                ),
             ));
         }
 
@@ -77,7 +77,11 @@ pub fn parse_module_class_ids_header(path: &Path) -> std::io::Result<Vec<ModuleC
         let require_full_name = unquote_c_string(parts[1]).ok_or_else(|| {
             std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
-                format!("{}:{}: invalid require_full_name string", path.display(), idx + 1),
+                format!(
+                    "{}:{}: invalid require_full_name string",
+                    path.display(),
+                    idx + 1
+                ),
             )
         })?;
         let sym_suffix = unquote_c_string(parts[2]).ok_or_else(|| {
@@ -117,7 +121,9 @@ pub fn generate_ext_romclass_map_c(
     buf.push_str("// js_stdlib_table is generated as a TU-local static in mqjs_ridl_stdlib.h\n");
     buf.push_str("// (included by mquickjs.c). It is intentionally not link-visible.\n");
     buf.push_str("//\n");
-    buf.push_str("// For ROM handles in external TUs, use the link-visible js_stdlib.stdlib_table\n");
+    buf.push_str(
+        "// For ROM handles in external TUs, use the link-visible js_stdlib.stdlib_table\n",
+    );
     buf.push_str("// pointer (JSSTDLibraryDef) and index into that.\n");
     buf.push_str("extern const JSSTDLibraryDef js_stdlib;\n\n");
 
@@ -155,4 +161,3 @@ pub fn generate_ext_romclass_map_c(
 
     fs::write(out_path, buf)
 }
-

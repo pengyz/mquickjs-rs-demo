@@ -43,7 +43,11 @@ pub fn write_manifest(out_dir: &Path, modules: &[Module]) -> std::io::Result<Pat
         .map(|m| ManifestModule {
             crate_name: &m.crate_name,
             crate_dir: m.crate_dir.display().to_string(),
-            ridl_files: m.ridl_files.iter().map(|f| f.display().to_string()).collect(),
+            ridl_files: m
+                .ridl_files
+                .iter()
+                .map(|f| f.display().to_string())
+                .collect(),
         })
         .collect();
 
@@ -73,7 +77,6 @@ pub fn write_ridl_shared_files_and_context_init(
             ridl_files.push(f.display().to_string());
         }
     }
-
 
     let plan = ridl_tool::plan::RidlPlan {
         schema_version: 1,
@@ -109,8 +112,11 @@ pub fn write_ridl_shared_files_and_context_init(
     ))
 }
 
-
-pub fn aggregate(target_dir: &Path, app_id: &str, modules: &[Module]) -> std::io::Result<AggregateOutput> {
+pub fn aggregate(
+    target_dir: &Path,
+    app_id: &str,
+    modules: &[Module],
+) -> std::io::Result<AggregateOutput> {
     let out_dir = default_out_dir(target_dir, app_id);
 
     let manifest_path = write_manifest(&out_dir, modules)?;
@@ -123,4 +129,3 @@ pub fn aggregate(target_dir: &Path, app_id: &str, modules: &[Module]) -> std::io
         ridl_register_h,
     })
 }
-

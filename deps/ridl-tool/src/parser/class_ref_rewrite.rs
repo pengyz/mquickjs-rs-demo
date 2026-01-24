@@ -32,7 +32,11 @@ pub fn rewrite_item_class_refs(item: &mut IDLItem, class_names: &HashSet<String>
                 rewrite_type_class_refs(&mut f.field_type, class_names);
             }
         }
-        IDLItem::Function(Function { params, return_type, .. }) => {
+        IDLItem::Function(Function {
+            params,
+            return_type,
+            ..
+        }) => {
             for Param { param_type, .. } in params {
                 rewrite_type_class_refs(param_type, class_names);
             }

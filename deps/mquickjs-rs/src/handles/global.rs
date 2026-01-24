@@ -38,8 +38,16 @@ impl<T> Global<T> {
     }
 
     pub fn reset<'ctx>(&mut self, scope: &Scope<'ctx>, v: Local<'ctx, T>) {
-        assert_eq!(self.ctx_id, scope.context_id(), "cross-context Global::reset(scope)");
-        assert_eq!(v.ctx_id(), scope.context_id(), "cross-context Global::reset(value)");
+        assert_eq!(
+            self.ctx_id,
+            scope.context_id(),
+            "cross-context Global::reset(scope)"
+        );
+        assert_eq!(
+            v.ctx_id(),
+            scope.context_id(),
+            "cross-context Global::reset(value)"
+        );
 
         unsafe {
             let p = self.gc_ref.as_ref().get_ref().get();
@@ -65,11 +73,7 @@ impl<T> Global<T> {
 
 impl<T> Drop for Global<T> {
     fn drop(&mut self) {
-        if !self
-            .inner
-            .alive
-            .load(std::sync::atomic::Ordering::Acquire)
-        {
+        if !self.inner.alive.load(std::sync::atomic::Ordering::Acquire) {
             panic!("Global must be dropped before Context drop");
         }
 

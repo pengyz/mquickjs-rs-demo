@@ -14,13 +14,13 @@
 ### 1.1 union 成员类型
 
 支持（全覆盖）：
-- primitive：`bool` / `int` / `double` / `string`
+- primitive：`bool` / `i32` / `i64` / `f32` / `f64` / `string`
 - `any`
 - `object`
 - `ClassRef`（类引用）
 - `array<T>`（递归支持：T 可以是上述类型或嵌套 union/Optional）
 - `Optional(T)`（包括 `Optional(union)`）
-- 嵌套 union（例如 `(int | (string | bool))`）
+- 嵌套 union（例如 `(i32 | (string | bool))`）
 
 不支持（本次明确排除）：
 - `map<K,V>`（因为 map 还未实现）
@@ -28,8 +28,8 @@
 ### 1.2 number 判别规则（JS → union）
 
 JS 侧 `number` 进入 union 时：
-- 若值是“整数且可表示为 i32”（范围内且无小数部分），归入 `int` 分支
-- 否则归入 `double` 分支
+- 若值是“整数且可表示为 i32”（范围内且无小数部分），归入 `i32` 分支
+- 否则归入 `f64` 分支
 
 ### 1.3 object 判别规则
 
@@ -44,9 +44,9 @@ JS 侧 `number` 进入 union 时：
 ### 2.1 代码生成产物（Rust 侧）
 
 - 对每个出现的 union 成员集合，生成一个稳定命名的 Rust enum：
-  - 例如：`UnionBoolIntDoubleStringAnyObject...`
+  - 例如：`UnionBoolI32F64StringAnyObject...`
   - 成员包含：
-    - `Bool(bool)` / `Int(i32)` / `Double(f64)` / `String(String)`
+    - `Bool(bool)` / `I32(i32)` / `I64(i64)` / `F32(f32)` / `F64(f64)` / `String(String)`
     - `Any(Local<'_, Value>)`（param 侧）或 `ReturnAny`（return 侧，视现有 ABI 约束）
     - `Object(Local<'_, Value>)`（或同 Any，但 decode 需额外判别）
     - `ClassX(Box<dyn ...>)`（由现有 ClassRef 规则决定）
@@ -59,7 +59,7 @@ JS 侧 `number` 进入 union 时：
 - 参数 decode：
   - Optional(union)：`null/undefined => None`；否则 decode 成 `Some(UnionEnum)`
   - union：按成员类型顺序进行判别/转换
-    - number：按 §1.2 分流 int/double
+    - number：按 §1.2 分流 i32/f64
     - string/bool：直映射
     - classRef：按现有 class decode 路径优先判别
     - object：按 §1.3 判别
@@ -74,18 +74,18 @@ JS 侧 `number` 进入 union 时：
 ### 3.1 global/types
 
 新增/扩展用例覆盖：
-- union param：`handleUnion(x: int | double | string | bool | object | any)`
-- union return：`makeUnion(tag: int) -> (int | double | string | bool | object | any)`
+- union param：`handleUnion(x: i32 | f64 | string | bool | object | any)`
+- union return：`makeUnion(tag: i32) -> (i32 | f64 | string | bool | object | any)`
 - Optional(union) param/return：
-  - `maybeUnion(x: (int|double|string)? ) -> (int|double|string)?`
+  - `maybeUnion(x: (i32|f64|string)? ) -> (i32|f64|string)?`
   - 覆盖：undefined/null/具体值
 - number 判别：
-  - `1 => int`；`1.1 => double`；`(1<<31) => double`
+  - `1 => i32`；`1.1 => f64`；`(1<<31) => f64`
 - object 判别：
   - `{}`、`[]`、`()=>{}` 进入 object 分支
   - `null` 只能在 Optional 路径
-- array 成员：`array<int|string>` param/return（递归）
-- 嵌套 union：`int | (string | bool)` 的 decode/encode
+- array 成员：`array<i32|string>` param/return（递归）
+- 嵌套 union：`i32 | (string | bool)` 的 decode/encode
 
 ### 3.2 module/basic
 

@@ -64,7 +64,10 @@ interface Test {
     );
 
     // JS->Rust conversions must not use `?` (explicit match/early-return only).
-    assert!(!glue.contains('?'), "glue.rs must not contain `?`; got:\n{glue}");
+    assert!(
+        !glue.contains('?'),
+        "glue.rs must not contain `?`; got:\n{glue}"
+    );
 
     // Error paths must use JS exceptions (no panics) when decode fails.
     assert!(

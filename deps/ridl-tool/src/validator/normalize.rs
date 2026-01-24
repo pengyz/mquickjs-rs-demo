@@ -1,4 +1,4 @@
-use crate::parser::ast::{Function, IDL, Type};
+use crate::parser::ast::{Function, Type, IDL};
 
 pub(crate) fn ensure_default_constructors(idl: &mut IDL) {
     for c in &mut idl.classes {

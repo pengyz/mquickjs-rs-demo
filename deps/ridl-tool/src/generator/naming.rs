@@ -123,7 +123,9 @@ pub fn to_upper_camel_case(s: &str) -> String {
         }
 
         // Preserve all-caps acronyms (URL/JS/etc) as a single token.
-        if t.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit()) {
+        if t.chars()
+            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit())
+        {
             out.push_str(&t);
             continue;
         }

@@ -1,7 +1,10 @@
 use crate::parser::ast::{ModuleDeclaration, Type};
 
-use super::{TemplateClass, TemplateFunction, TemplateInterface, TemplateMethod, TemplateParam, TemplateSingleton, TemplateUnionMember, TemplateUnionType};
 use super::filters::rust_type_from_idl;
+use super::{
+    TemplateClass, TemplateFunction, TemplateInterface, TemplateMethod, TemplateParam,
+    TemplateSingleton, TemplateUnionMember, TemplateUnionType,
+};
 
 pub(super) fn collect_union_types(
     _module_name: &str,
@@ -59,7 +62,12 @@ fn collect_from_function(domain: &str, f: &TemplateFunction, out: &mut Vec<Templ
     collect_from_return(domain, &f.name, &f.return_type, out);
 }
 
-fn collect_from_param(domain: &str, fn_name: &str, p: &TemplateParam, out: &mut Vec<TemplateUnionType>) {
+fn collect_from_param(
+    domain: &str,
+    fn_name: &str,
+    p: &TemplateParam,
+    out: &mut Vec<TemplateUnionType>,
+) {
     collect_from_type(domain, fn_name, &p.name, &p.ty, out);
 }
 
@@ -67,7 +75,13 @@ fn collect_from_return(domain: &str, fn_name: &str, ty: &Type, out: &mut Vec<Tem
     collect_from_type(domain, fn_name, "return", ty, out);
 }
 
-fn collect_from_type(domain: &str, fn_name: &str, label: &str, ty: &Type, out: &mut Vec<TemplateUnionType>) {
+fn collect_from_type(
+    domain: &str,
+    fn_name: &str,
+    label: &str,
+    ty: &Type,
+    out: &mut Vec<TemplateUnionType>,
+) {
     match ty {
         Type::Optional(inner) => collect_from_type(domain, fn_name, label, inner, out),
         Type::Group(inner) => collect_from_type(domain, fn_name, label, inner, out),
@@ -94,7 +108,10 @@ fn collect_from_type(domain: &str, fn_name: &str, label: &str, ty: &Type, out: &
                 members,
             };
 
-            if !out.iter().any(|u| u.domain == cand.domain && u.name == cand.name) {
+            if !out
+                .iter()
+                .any(|u| u.domain == cand.domain && u.name == cand.name)
+            {
                 out.push(cand);
             }
         }
@@ -160,7 +177,13 @@ fn domain_name(module_decl: &Option<ModuleDeclaration>) -> String {
 
 fn normalize_ident(s: &str) -> String {
     s.chars()
-        .map(|c| if c.is_ascii_alphanumeric() || c == '_' { c } else { '_' })
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' {
+                c
+            } else {
+                '_'
+            }
+        })
         .collect()
 }
 

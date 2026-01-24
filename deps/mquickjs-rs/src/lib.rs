@@ -44,14 +44,13 @@ pub mod mquickjs_ffi {
 
 pub use context::Context;
 pub use env::Env;
-pub use handles::global::Global;
-pub use handles::local::{Local, Value};
-pub use handles::handle::Handle;
 pub use handles::any::Any;
-pub use handles::return_safe::{ReturnAny, ReturnSafe};
+pub use handles::global::Global;
+pub use handles::handle::Handle;
 pub use handles::handle_scope::{EscapableHandleScope, HandleScope};
+pub use handles::local::{Local, Value};
+pub use handles::return_safe::{ReturnAny, ReturnSafe};
 pub use handles::scope::Scope;
-
 
 pub mod ridl_js_class_id {
     include!(concat!(env!("OUT_DIR"), "/ridl_js_class_id.rs"));

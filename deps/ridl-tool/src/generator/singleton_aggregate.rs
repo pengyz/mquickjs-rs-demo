@@ -4,7 +4,6 @@ use crate::plan::RidlPlan;
 use std::collections::BTreeMap;
 use std::path::Path;
 
-
 #[derive(Template)]
 #[template(path = "ridl_context_ext.rs.j2")]
 struct RidlContextExtTemplate {
@@ -27,7 +26,6 @@ struct SlotInit {
     vt_ident: String,
     slot_key: String,
 }
-
 
 #[derive(Debug, Clone)]
 struct Slot {
@@ -59,7 +57,10 @@ pub(super) fn collect_proto_vars(
                         sanitize_ident(&c.name).to_uppercase()
                     );
                     for f in &c.js_fields {
-                        if !f.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto) {
+                        if !f
+                            .modifiers
+                            .contains(&crate::parser::ast::PropertyModifier::Proto)
+                        {
                             continue;
                         }
                         proto_vars.push(ProtoVarInit {
@@ -133,10 +134,10 @@ pub(super) fn generate_ridl_context_ext(
                     }
                     crate::parser::ast::IDLItem::Class(c) => {
                         // Only generate proto backing when the class has at least one proto property.
-                        let has_proto = c
-                            .properties
-                            .iter()
-                            .any(|p| p.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto));
+                        let has_proto = c.properties.iter().any(|p| {
+                            p.modifiers
+                                .contains(&crate::parser::ast::PropertyModifier::Proto)
+                        });
                         if !has_proto {
                             // Note: proto vars are installed on JS prototype, independent from proto state.
                             // We still need to collect them even when there's no proto state.
@@ -253,7 +254,6 @@ pub(super) fn generate_ridl_context_ext(
     std::fs::write(out_dir.join("ridl_context_ext.rs"), t.render()?)?;
     Ok(())
 }
-
 
 fn sanitize_ident(name: &str) -> String {
     // Keep it simple: allow [A-Za-z_][A-Za-z0-9_]*; otherwise map to underscores.

@@ -61,7 +61,14 @@ singleton TestClass {
     let out_dir = dir.join("out");
     fs::create_dir_all(&out_dir).unwrap();
 
-    generate_module_files(&parsed.items, parsed.module.clone(), parsed.mode, &out_dir, "m").unwrap();
+    generate_module_files(
+        &parsed.items,
+        parsed.module.clone(),
+        parsed.mode,
+        &out_dir,
+        "m",
+    )
+    .unwrap();
 
     let glue = fs::read_to_string(out_dir.join("glue.rs")).unwrap();
     assert!(
