@@ -319,8 +319,7 @@ unsafe fn ridl_boxed_{{ class.name|to_snake_case }}_to_js(
     let obj = unsafe {
         mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
             ctx,
-            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32
-                + mquickjs_rs::ridl_js_class_id::JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} as i32,
+            mquickjs_rs::ridl_js_class_id::JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }},
         )
     };
     if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
@@ -362,8 +361,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     let obj = unsafe {
         mquickjs_rs::mquickjs_ffi::JS_NewObjectClassUser(
             ctx,
-            mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_USER as i32
-                + mquickjs_rs::ridl_js_class_id::JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }} as i32,
+            mquickjs_rs::ridl_js_class_id::JS_CLASS_{{ class.module_name|normalize_ident|upper }}_{{ class.name|normalize_ident|upper }},
         )
     };
     if (obj as u32) & ((1u32 << (mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)

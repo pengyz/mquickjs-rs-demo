@@ -260,7 +260,7 @@ mquickjs 的字符串转换走 `JS_ToCString(ctx, v, &mut JSCStringBuf)` 这套 
 
 约定（v1 固化）：
 - C 侧 user class id 使用 `JS_CLASS_USER + i` 的编译期常量宏（类似 mquickjs example.c），并生成独立头文件 `mqjs_ridl_user_class_ids.h`。
-- Rust 侧同源生成 `ridl_class_id.rs`（供 `mquickjs_rs::ridl_class_id` include）。
+- Rust 侧同源生成 `ridl_js_class_id.rs`（供 `mquickjs_rs::ridl_js_class_id` include）。
 - 排序规则采用与 `ridl-manifest.json` 相同的稳定排序（便于审计），但 `ridl-manifest.json` 本身不作为输入。
 
 命名规范：

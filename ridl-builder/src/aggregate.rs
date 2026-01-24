@@ -90,6 +90,7 @@ pub fn write_ridl_shared_files_and_context_init(
         generated: ridl_tool::plan::GeneratedPaths {
             out_dir: out_dir.to_path_buf(),
             mquickjs_ridl_register_h: out_dir.join("mquickjs_ridl_register.h"),
+            mquickjs_ridl_module_class_ids_h: out_dir.join("mquickjs_ridl_module_class_ids.h"),
             mqjs_ridl_user_class_ids_h: out_dir.join("mqjs_ridl_user_class_ids.h"),
             ridl_class_id_rs: out_dir.join("ridl_class_id.rs"),
         },

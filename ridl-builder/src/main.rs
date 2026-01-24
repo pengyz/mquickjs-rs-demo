@@ -2,6 +2,7 @@ mod aggregate;
 mod module_discovery;
 mod probe_bindgen;
 mod unit_graph;
+mod romclass_map;
 
 use std::{
     env,
@@ -581,10 +582,41 @@ fn prepare_cmd(args: Vec<String>) {
         .arg("--mquickjs-dir")
         .arg("deps/mquickjs")
         .arg("--ridl-register-h")
-        .arg(out.ridl_register_h)
+        .arg(&out.ridl_register_h)
         .arg("--out")
-        .arg(out_dir);
+        .arg(&out_dir);
     run(cmd);
+
+    // 5) join: romclass index (from ROM builder) + module class ids (from ridl-tool)
+    //    and generate mquickjs_ext_romclass_map.c as a build artifact.
+    //
+    // NOTE: This file is *not* included by generated C sources. It is compiled and linked
+    // by the Rust build (mquickjs-rs build.rs) when present.
+    let include_dir = PathBuf::from(&out_dir).join("include");
+    let romclass_index = romclass_map::RomclassIndex::read_json(
+        &include_dir.join("mquickjs_romclass_index.json"),
+    )
+    .unwrap_or_else(|e| {
+        panic!(
+            "failed to read mquickjs_romclass_index.json (ridl build expected to produce it): {e}"
+        )
+    });
+
+    let module_ids = romclass_map::parse_module_class_ids_header(
+        &out
+            .ridl_register_h
+            .parent()
+            .unwrap()
+            .join("mquickjs_ridl_module_class_ids.h"),
+    )
+    .unwrap_or_else(|e| panic!("failed to parse mquickjs_ridl_module_class_ids.h: {e}"));
+
+    romclass_map::generate_ext_romclass_map_c(
+        &include_dir.join("mquickjs_ext_romclass_map.c"),
+        &romclass_index,
+        &module_ids,
+    )
+    .unwrap_or_else(|e| panic!("failed to write mquickjs_ext_romclass_map.c: {e}"));
 
     // TODO: class-id rs generation will be added once the header is stabilized.
 }

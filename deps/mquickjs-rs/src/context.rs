@@ -176,6 +176,7 @@ impl Context {
             mquickjs_ffi::JS_SetContextUserData(ctx, arc_ptr, Some(user_data_finalizer));
         }
 
+
         Ok(Context {
             ctx,
             inner,

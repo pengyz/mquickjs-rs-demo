@@ -24,6 +24,7 @@ pub struct RidlModule {
 pub struct GeneratedPaths {
     pub out_dir: PathBuf,
     pub mquickjs_ridl_register_h: PathBuf,
+    pub mquickjs_ridl_module_class_ids_h: PathBuf,
     pub mqjs_ridl_user_class_ids_h: PathBuf,
     pub ridl_class_id_rs: PathBuf,
 }

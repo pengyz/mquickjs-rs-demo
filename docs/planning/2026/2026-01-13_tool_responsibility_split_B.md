@@ -65,7 +65,7 @@ replaced_by:
 **输出**：C 静态库与可被 Rust 消费的构建输出描述
 
 - `libmquickjs.a`
-- `include/`（`mquickjs.h`、`mquickjs_atom.h`、`mqjs_ridl_stdlib.h`、`mqjs_ridl_class_id.h` 等）
+- `include/`（`mquickjs.h`、`mquickjs_atom.h`、`mqjs_ridl_stdlib.h`、`mquickjs_ridl_api.h` 等）
 - `mquickjs_build_output.json`（给 sys/rs crate 提供 link/include 路径）
 
 **建议归属**：`mquickjs-build`。
@@ -133,13 +133,13 @@ replaced_by:
 - 核心头 `mquickjs.h` 不依赖 atoms 头，这使得 core bindgen 可以与 stdlib 构建解耦。
 - atoms 的权威来源：**mquickjs-build**（通过 `mqjs_ridl_stdlib -a` 导出）。
 
-### 4.2 class-id（方案A：权威来自 mquickjs）
+### 4.2 class-id（权威来自 ridl-tool 输出）
 - mquickjs 不允许运行时动态扩展内置 class（无 `JS_NewClassID` 路径），因此 class-id 必须由编译期固化的 stdlib/class 定义决定。
-- `mqjs_ridl_class_id.h` 已由 `mqjs_ridl_stdlib -c` 导出，内容来自 mquickjs 构建工具对 class 表的最终编号（`class_idx`）。
-- 为避免 `ridl-builder` 复刻 mquickjs 内部编号规则、产生强绑定与维护负担：
-  - class-id 的权威来源固定为：**mquickjs-build**（`mqjs_ridl_stdlib -c`）。
-  - `ridl-builder` 不分配 class-id 数值；它只负责聚合输出（register.h / class defs 等）作为 mquickjs-build 的输入。
-- Rust 侧 glue 如需 class-id：通过“前置流水线”先由 mquickjs-build 生成 `mqjs_ridl_class_id.h`，再由聚合层把该头转换为 Rust 常量模块并供各模块引用（不通过每个模块的 build.rs 读取 OUT_DIR）。
+- class-id 常量的权威来源：`ridl-tool` 生成的 `mquickjs_ridl_api.h`（`JS_CLASS_*`）。该文件会随 `mquickjs_ridl_register.h` 一并被 mquickjs-build 消费。
+- 为避免 `ridl-builder`/Rust 侧复刻 mquickjs 内部编号规则、产生强绑定与维护负担：
+  - `ridl-tool` 负责输出 `JS_CLASS_*` 数值（与聚合输出同源）。
+  - `ridl-builder` 只负责聚合/分发这些产物，不额外引入 `-c` 导出链路。
+- Rust 侧 glue 如需 class-id：应解析 `mquickjs_ridl_api.h` 并生成稳定 Rust 常量模块（避免依赖 bindgen 细节，也避免额外头文件）。
 
 ## 5. 符号保活（必须保持策略不变）
 

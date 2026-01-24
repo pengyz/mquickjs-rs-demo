@@ -1,47 +1,8 @@
-use crate::plan::RidlPlan;
 use askama::Template;
+
+use crate::plan::RidlPlan;
 use std::collections::BTreeMap;
 use std::path::Path;
-
-fn find_register_class_id(
-    ir: Option<&super::AggregateIR>,
-    parsed: &crate::parser::ParsedIDL,
-    plan_module: &crate::plan::RidlModule,
-    class: &crate::parser::ast::Class,
-) -> Result<u32, Box<dyn std::error::Error>> {
-    let Some(ir) = ir else {
-        return Err("internal error: missing aggregate IR for class_id mapping".into());
-    };
-
-    let module_name = parsed
-        .module
-        .as_ref()
-        .map(|m| m.module_path.as_str())
-        .unwrap_or("GLOBAL");
-
-    let reg_cls = ir
-        .classes
-        .iter()
-        .find(|c| c.module_name == module_name && c.name == class.name)
-        .ok_or_else(|| {
-            let mut available: Vec<String> = ir
-                .classes
-                .iter()
-                .filter(|c| c.module_name == module_name)
-                .map(|c| c.name.clone())
-                .collect();
-            available.sort();
-            format!(
-                "internal error: class '{}::{}' not found in aggregate IR (crate={}). Available classes in module: [{}]",
-                module_name,
-                class.name,
-                plan_module.crate_name,
-                available.join(", ")
-            )
-        })?;
-
-    Ok(reg_cls.class_id)
-}
 
 
 #[derive(Template)]
@@ -49,15 +10,14 @@ fn find_register_class_id(
 struct RidlContextExtTemplate {
     slots: Vec<Slot>,
     slot_inits: Vec<SlotInit>,
-    proto_vars: Vec<ProtoVarInit>,
 }
 
 #[derive(Debug, Clone)]
-struct ProtoVarInit {
-    class_id: u32,
-    field_name: String,
-    field_type: crate::parser::ast::Type,
-    init_literal: String,
+pub(super) struct ProtoVarInit {
+    pub(super) class_id_ident: String,
+    pub(super) field_name: String,
+    pub(super) field_type: crate::parser::ast::Type,
+    pub(super) init_literal: String,
 }
 
 #[derive(Debug, Clone)]
@@ -76,19 +36,60 @@ struct Slot {
     index: u32,
 }
 
+pub(super) fn collect_proto_vars(
+    plan: &RidlPlan,
+) -> Result<Vec<ProtoVarInit>, Box<dyn std::error::Error>> {
+    let mut proto_vars: Vec<ProtoVarInit> = Vec::new();
+
+    for m in &plan.modules {
+        for ridl_file in &m.ridl_files {
+            let src = std::fs::read_to_string(ridl_file)?;
+            let parsed = crate::parser::parse_ridl_file(&src)?;
+
+            for item in &parsed.items {
+                if let crate::parser::ast::IDLItem::Class(c) = item {
+                    let module_name_up = parsed
+                        .module
+                        .as_ref()
+                        .map(|m| sanitize_ident(&m.module_path).to_uppercase())
+                        .unwrap_or_else(|| "GLOBAL".to_string());
+                    let class_id_ident = format!(
+                        "{}_{}",
+                        module_name_up,
+                        sanitize_ident(&c.name).to_uppercase()
+                    );
+                    for f in &c.js_fields {
+                        if !f.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto) {
+                            continue;
+                        }
+                        proto_vars.push(ProtoVarInit {
+                            class_id_ident: class_id_ident.clone(),
+                            field_name: f.name.clone(),
+                            field_type: f.field_type.clone(),
+                            init_literal: f.init_literal.clone(),
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    Ok(proto_vars)
+}
+
 pub(super) fn generate_ridl_context_ext(
     plan: &RidlPlan,
     out_dir: &Path,
-    ir: Option<&super::AggregateIR>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // We share the same slot ordering and singleton init ordering with the legacy generator.
     // Slot indices are global within an app aggregate.
     let mut slots: Vec<Slot> = Vec::new();
     let mut slot_inits: Vec<SlotInit> = Vec::new();
-    let mut proto_vars: Vec<ProtoVarInit> = Vec::new();
     // Temporary: used for mapping slot_key -> final sorted index (filled after sorting).
     let mut slot_map: BTreeMap<String, u32> = BTreeMap::new();
     let mut proto_keys: BTreeMap<String, String> = BTreeMap::new();
+
+    // proto vars are installed by JS_RIDL_StdlibInit (generated into mquickjs_ridl_register.c).
 
     for m in &plan.modules {
         for ridl_file in &m.ridl_files {
@@ -141,20 +142,8 @@ pub(super) fn generate_ridl_context_ext(
                             // We still need to collect them even when there's no proto state.
                         }
 
-                        // Collect proto vars to be installed as JS prototype data properties.
-                        // We must reuse the same class_id allocation used by mquickjs_ridl_register.h.
-                        let class_id = find_register_class_id(ir, &parsed, m, &c)?;
-                        for f in &c.js_fields {
-                            if !f.modifiers.contains(&crate::parser::ast::PropertyModifier::Proto) {
-                                continue;
-                            }
-                            proto_vars.push(ProtoVarInit {
-                                class_id,
-                                field_name: f.name.clone(),
-                                field_type: f.field_type.clone(),
-                                init_literal: f.init_literal.clone(),
-                            });
-                        }
+                        // proto vars are installed by JS_RIDL_StdlibInit (mquickjs_ridl_register.c),
+                        // so ridl_context_ext.rs generation does not emit them.
 
                         if !has_proto {
                             continue;
@@ -260,11 +249,7 @@ pub(super) fn generate_ridl_context_ext(
         }
     }
 
-    let t = RidlContextExtTemplate {
-        slots,
-        slot_inits,
-        proto_vars,
-    };
+    let t = RidlContextExtTemplate { slots, slot_inits };
     std::fs::write(out_dir.join("ridl_context_ext.rs"), t.render()?)?;
     Ok(())
 }

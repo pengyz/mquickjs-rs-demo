@@ -84,6 +84,7 @@ pub fn resolve_from_cargo_toml(cargo_toml_path: &Path, out_dir: &Path) -> Result
     let generated = GeneratedPaths {
         out_dir: out_dir.to_path_buf(),
         mquickjs_ridl_register_h: out_dir.join("mquickjs_ridl_register.h"),
+        mquickjs_ridl_module_class_ids_h: out_dir.join("mquickjs_ridl_module_class_ids.h"),
         mqjs_ridl_user_class_ids_h: out_dir.join("mqjs_ridl_user_class_ids.h"),
         ridl_class_id_rs: out_dir.join("ridl_class_id.rs"),
     };
@@ -101,6 +102,7 @@ fn empty_plan(cargo_toml: &Path, out_dir: &Path, inputs: BTreeSet<PathBuf>) -> R
     let generated = GeneratedPaths {
         out_dir: out_dir.to_path_buf(),
         mquickjs_ridl_register_h: out_dir.join("mquickjs_ridl_register.h"),
+        mquickjs_ridl_module_class_ids_h: out_dir.join("mquickjs_ridl_module_class_ids.h"),
         mqjs_ridl_user_class_ids_h: out_dir.join("mqjs_ridl_user_class_ids.h"),
         ridl_class_id_rs: out_dir.join("ridl_class_id.rs"),
     };

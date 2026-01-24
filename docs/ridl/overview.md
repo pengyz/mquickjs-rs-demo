@@ -34,8 +34,10 @@
 
 ## 4. require 语义（与类导出）
 
-- require 保留：**ROMClass → ctor materialize + DefineProperty 写回替换**。
-- 行为：当模块对象的导出属性值为 ROMClass 时，`require()` 会将其 materialize 为 constructor function，并把 ctor 写回到模块对象属性。
+- require 负责：**ROMClass → ctor materialize**，保证模块导出在 JS 侧可 `new`。
+- 行为：当模块对象（或其 prototype）上的导出属性值为 ROMClass 时，`require()` 会将其 materialize 为 constructor function。
+- 写回语义：materialize 的结果**允许**写回到 module prototype（proto exports），不要求写回为 module instance 的 own property。
+  - 因此：`Object.keys(require("...")).length` 允许为 0；但 `require("...").Foo` 必须可访问。
 
 ## 5. module 模式与 globalThis
 

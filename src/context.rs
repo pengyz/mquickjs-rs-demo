@@ -13,6 +13,8 @@ impl Context {
         #[cfg(feature = "ridl-extensions")]
         unsafe {
             crate::ridl_context_ext::ridl_context_init(inner.ctx as *mut mquickjs_ffi::JSContext);
+
+            let _rc = mquickjs_ffi::JS_RIDL_StdlibInit(inner.ctx as *mut mquickjs_ffi::JSContext);
         }
 
         Ok(Self { inner })

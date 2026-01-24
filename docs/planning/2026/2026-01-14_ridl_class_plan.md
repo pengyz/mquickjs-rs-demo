@@ -31,7 +31,7 @@ replaced_by:
 ### 本计划的目标（验收口径）
 1. RIDL `class` 支持 `new` 构造、实例方法、实例属性 getter/setter、finalizer drop。
 2. `proto property`：per-JSContext 共享状态（走 ctx-ext），并支持 `proto readonly`。
-3. class-id 管线端到端：`mqjs_ridl_class_id.h`（mquickjs-build 生成）→ `mquickjs-sys` 提供 include_dir → `mquickjs-rs` bindgen `-include mqjs_ridl_class_id.h`，并提供稳定 Rust 常量路径（**自解析**）。
+3. class-id 管线端到端：`mquickjs_ridl_api.h`（ridl-tool 生成，定义 `JS_CLASS_*`）→ `mquickjs-sys` 提供 include_dir → Rust 侧解析/绑定 `mquickjs_ridl_api.h` 并提供稳定常量路径（**自解析或绑定生成物**）。
 4. 符号保活：class 的 ctor/method/getset/finalizer 以及 class_def/proto_funcs 的 keep-alive 确保不被链接裁剪。
 5. 测试：Rust 单测（ridl-tool 生成快照/语法）+ JS 集成用例（`cargo run -- tests`）覆盖 class 关键路径与负例。
 
@@ -56,8 +56,8 @@ replaced_by:
 - 需要收敛为“glue 负责转换，impl 只接收纯 Rust 参数”。
 
 ### 1.4 class-id 常量路径需要统一
-- 当前仓库已在 `deps/mquickjs-rs/build.rs` 自解析 `mqjs_ridl_class_id.h` 生成 `OUT_DIR/ridl_class_id.rs`。
-- 本计划明确：对外稳定路径应基于“自解析输出 + re-export”，避免 bindgen 输出受版本/生成细节影响。
+- 权威来源改为 `mquickjs_ridl_api.h`（`JS_CLASS_*`）。
+- 对外稳定路径应基于“自解析输出 + re-export”，避免 bindgen 输出受版本/生成细节影响。
 
 ### 1.5 proto property 的运行时存储模型未落地
 - AST/grammar 已支持 `PropertyModifier::Proto` 与 `proto` 语法。
@@ -71,7 +71,7 @@ replaced_by:
 
 ## 2. 关键选择（已确认）
 
-1) class-id 常量：**自解析**（以 `mquickjs-rs/build.rs` 读取 `mqjs_ridl_class_id.h` 生成的 Rust 常量为 SoT）。
+1) class-id 常量：**自解析**（以 `mquickjs_ridl_api.h` 中的 `JS_CLASS_*` 为 SoT，并生成稳定 Rust 常量路径）。
 
 2) class 实例承载：接受与 singleton 同款 **thin-pointer** 模式：`Box<Box<dyn Trait>>` 或等价薄指针容器（严禁 fat pointer 直接进 `*mut c_void`）。
 
@@ -90,7 +90,7 @@ replaced_by:
   - `ridl_symbols.rs`（或 app-side aggregated_symbols）：强引用所有 `js_*` 导出与 class keep-alive stub。
 
 ### 3.2 class-id 常量访问（拟定）
-- `mquickjs_rs::ridl_class_id::RIDL_CLASS_<module>_<class>`（由 mquickjs-rs 统一 re-export；生成器只依赖此路径）。
+- `mquickjs_rs::ridl_js_class_id::JS_CLASS_<...>`（由 mquickjs-rs 统一 re-export；生成器只依赖此路径）。
 
 ### 3.2.1 产物收束约束（拟定）
 - class 的 trait 必须生成到模块 `api.rs`。
@@ -133,14 +133,14 @@ replaced_by:
 ### Phase 0：接口确认与探测（实现期第一步）
 - 确认本 fork 的 FFI：
   - `JS_NewObjectClassUser` / `JS_SetOpaque` / `JS_GetOpaque` / `JS_GetClassID` 的函数签名。
-- 明确 class-id 常量 re-export 的最终路径（`mquickjs_rs::ridl_class_id::*`）。
+- 明确 class-id 常量 re-export 的最终路径（`mquickjs_rs::ridl_js_class_id::*`）。
 
 交付物：可编译的最小探测/对齐提交（如需）。
 
 ### Phase 1：mquickjs-rs（class-id 稳定导出）
-- 以 `OUT_DIR/ridl_class_id.rs` 为 SoT：
-  - 在 `mquickjs-rs` crate 中新增模块 `ridl_class_id`，`include!(concat!(env!("OUT_DIR"), "/ridl_class_id.rs"))`。
-  - 生成器与 glue 全部只依赖 `mquickjs_rs::ridl_class_id::RIDL_CLASS_*`。
+- 以 `OUT_DIR/ridl_js_class_id.rs`（或等价生成物）为 SoT：
+  - 在 `mquickjs-rs` crate 中新增模块 `ridl_js_class_id`，`include!(concat!(env!("OUT_DIR"), "/ridl_js_class_id.rs"))`。
+  - 生成器与 glue 全部只依赖 `mquickjs_rs::ridl_js_class_id::JS_CLASS_*`。
 
 交付物：`cargo test` 通过。
 
@@ -152,7 +152,7 @@ replaced_by:
 - class glue 对齐点：
   - 不再引用 `crate::generated::api`，统一走 `crate::api`。
   - ctor 改为纯 Rust 参数，不向 impl 传 `JSValue/argv`。
-  - receiver 校验：`JS_GetClassID` 比较 `mquickjs_rs::ridl_class_id::RIDL_CLASS_*`。
+  - receiver 校验：`JS_GetClassID` 比较 `mquickjs_rs::ridl_js_class_id::JS_CLASS_*`。
   - opaque：thin-pointer 反序列化为 `*mut Box<dyn Trait>` 并解引用。
 - 扩展 `ridl_symbols.rs` keep-alive：
   - 引用 ctor/method/getset/finalizer

@@ -84,7 +84,7 @@ replaced_by:
    - 每个模块 crate 的 `*_api.rs`/`*_glue.rs`/`*_symbols.rs` 等（由模块 build.rs include）
 3. `mquickjs-build` 消费 `mquickjs_ridl_register.h` 生成 ROM：
    - 生成/安装 class defs、constructor、proto entries
-   - 生成 `mqjs_ridl_class_id.h`（class-id 数值权威来源）
+   - class-id 常量权威来源：`mquickjs_ridl_api.h`（由 ridl-tool 生成并随 `mquickjs_ridl_register.h` 一起被消费/传播）
 
 #### 3.1.2 运行时初始化阶段（每个 JSContext）
 1. `mquickjs_rs::Context::new()` 创建 JSContext 并安装 user_data（Arc<ContextInner>）。
@@ -103,7 +103,7 @@ replaced_by:
 
 - `foo.method(x)`：
   1) QuickJS 调用 glue 入口 `js_<module>_<foo>_<method>`
-  2) glue 校验 receiver：`JS_GetClassID(ctx,this) == RIDL_CLASS_*`
+  2) glue 校验 receiver：`JS_GetClassID(ctx,this) == JS_CLASS_*`
   3) glue 取 opaque（thin-pointer）-> `&mut dyn FooClass`
   4) glue 转换参数 -> 调用 trait 方法 -> 转换返回值
 
@@ -151,7 +151,7 @@ replaced_by:
   - `if !p.is_null() { drop(Box::from_raw(p)); }`
 
 #### 4.1.2 receiver 校验
-- glue 必须先做：`JS_GetClassID(ctx, this_val) == RIDL_CLASS_*`
+- glue 必须先做：`JS_GetClassID(ctx, this_val) == JS_CLASS_*`
 - 否则抛 `TypeError("invalid receiver")`
 
 > 注意：本 fork 的 `JS_GetOpaque` 不携带 class_id 参数，因此 receiver 校验必须显式做。
@@ -159,16 +159,16 @@ replaced_by:
 ### 4.2 class-id 常量：自解析稳定导出
 
 #### 4.2.1 SoT
-- SoT 是 `mqjs_ridl_class_id.h`（mquickjs-build 生成）。
-- `mquickjs-rs/build.rs` 已实现：读该头文件，自解析 enum，写 `OUT_DIR/ridl_class_id.rs`。
+- SoT 是 `mquickjs_ridl_api.h`（ridl-tool 生成），以 `#define JS_CLASS_<...> (JS_CLASS_USER + N)` 形式暴露。
+- Rust 侧应从 `mquickjs_ridl_api.h` 生成稳定的常量模块（自解析或绑定生成物），避免依赖 bindgen 细节。
 
 #### 4.2.2 稳定路径契约（生成器只依赖这一条）
-- `mquickjs_rs::ridl_class_id::RIDL_CLASS_<module>_<class>`
+- `mquickjs_rs::ridl_js_class_id::JS_CLASS_<...>`
 
 实现方式（设计约束）：
 - 在 `mquickjs-rs` crate 根引入：
-  - `pub mod ridl_class_id { include!(concat!(env!("OUT_DIR"), "/ridl_class_id.rs")); }`
-- 且不要在生成器里引用 bindgen 输出的 `mquickjs_ffi::RIDL_CLASS_*`。
+  - `pub mod ridl_js_class_id { include!(concat!(env!("OUT_DIR"), "/ridl_js_class_id.rs")); }`
+- 且不要在生成器里引用 bindgen 输出的 `mquickjs_ffi::JS_CLASS_*`（避免生成细节耦合）。
 
 ### 4.3 proto property：ctx-ext vtable 扩展（关键设计）
 
@@ -271,7 +271,7 @@ ABI 语义（冻结）：
 ### 5.2 class glue 的对齐点（并入 glue.rs）
 - 不再依赖 `crate::generated::api`，统一走 `crate::api`。
 - ctor 不再要求 `new_<class>(ctx,this,argv_vec)`：改为纯 Rust 参数，复用 `rust_glue.rs.j2` 的参数转换与报错 helper。
-- receiver 校验：`JS_GetClassID(ctx, this_val) == mquickjs_rs::ridl_class_id::RIDL_CLASS_*`。
+- receiver 校验：`JS_GetClassID(ctx, this_val) == mquickjs_rs::ridl_js_class_id::JS_CLASS_*`。
 - opaque 往返：thin-pointer（`*mut Box<dyn Trait>`）规范，finalizer 仅做 drop。
 
 ### 5.3 class api 的对齐点（并入 api.rs）
@@ -315,7 +315,7 @@ ctx 获取约定（确认版）：
 ### 6.2 关键失败模式与建议报错信息
 
 1) receiver 错误（method/getset 用在非本类对象上）
-- 条件：`JS_GetClassID != RIDL_CLASS_*`
+- 条件：`JS_GetClassID != JS_CLASS_*`
 - 报错：`"invalid receiver"`
 
 2) opaque 缺失

@@ -118,7 +118,7 @@ extern const int js_ridl_require_table_len;
 - V1 以 ROM/build 生成的 `JS_CLASS_*` 编译期常量作为 class id 的唯一来源。
 - module class 作为 RIDL user class 的一种，应被 ROM/build 分配为 `JS_CLASS_USER + i`，并在生成的 `mquickjs_ridl_register.h` 中以 `#define JS_CLASS_<...> (JS_CLASS_USER + i)` 形式出现。
 
-> 说明：本仓库当前没有可用的 `-c` 导出命令链路，因此 V1 不使用 `RIDL_CLASS_*`。
+> 说明：本仓库已移除 `-c` 导出链路；V1 以 `mquickjs_ridl_api.h` 中的 `JS_CLASS_*` 为准。
 
 ---
 
@@ -259,7 +259,7 @@ JS 用例：
 ## 6. 仍需确认的少量细节（实现前冻结）
 
 1) `require("xxx")` 找不到模块时：错误类型是否固定为 `TypeError`？消息文本是否需要规范化？
-2) module class 的 class_id 宏命名规则（`RIDL_CLASS_<...>__MODULE` 的 `<...>` 具体 normalize 规则）。
+2) module class 的 class_id 宏命名规则（`JS_CLASS_<...>` 的 `<...>` normalize 规则与生成约束）。
 3) module 内 `interface` / `type` 是否需要作为 JS 属性导出？（V1 建议不导出，纯类型系统输入）
 
 ---

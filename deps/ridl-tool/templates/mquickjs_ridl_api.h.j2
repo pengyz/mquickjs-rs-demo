@@ -160,4 +160,11 @@ typedef struct {
 extern const RidlRequireEntry js_ridl_require_table[];
 extern const int js_ridl_require_table_len;
 
+/* stdlib-normalization init (called once per JSContext by host glue).
+   - materialize module exports onto module prototypes
+   - install proto vars once
+   Returns 0 on success, -1 on exception.
+*/
+int JS_RIDL_StdlibInit(JSContext *ctx);
+
 #endif // MJS_RIDL_API_H

@@ -247,22 +247,24 @@ static JSValue js_global_require(JSContext *ctx, JSValue *this_val, int argc, JS
     }
 
     // Create a new module instance each call.
+    // Ensure the class prototype exists so exports installed on module prototype are visible.
+    JSValue module_proto = JS_EnsureClassProto(ctx, best->module_class_id);
+    if (JS_IsException(module_proto)) {
+        return JS_EXCEPTION;
+    }
+
     JSValue obj = JS_NewObjectClassUser(ctx, best->module_class_id);
     if (JS_IsException(obj)) {
         return obj;
     }
 
-    /*
-     * RIDL module exports include ROMClass entries (JS_DEF_CLASS). They need to be
-     * materialized into ctor functions on the returned module instance so userland
-     * can do: new require("m").MyClass().
-     *
-     * Scope: instance + one-level prototype (write back as own property).
-     */
-    {
-        if (JS_MaterializeModuleClassExports(ctx, obj) < 0)
-            return JS_EXCEPTION;
+    // Materialize exports onto the module instance for stable lookup paths.
+    // (Some test suites assert exports become own properties of the returned instance.)
+    if (JS_MaterializeModuleClassExports(ctx, obj) < 0) {
+        return JS_EXCEPTION;
     }
+
+    // NOTE: proto vars are installed in the stdlib normalization stage (once per JSContext).
 
     return obj;
 }

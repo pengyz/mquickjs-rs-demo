@@ -303,15 +303,9 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 #define JS_STDLIB_EXTENSIONS_{{ module_name|upper }} \
     JS_CFUNC_DEF("require", 1, js_ridl_require), \
     JS_PROP_CLASS_DEF("__ridl_modules", &js_ridl_modules_ns_obj), \
-/* Ensure module classes are initialized by stdlib_init_class(), so that */ \
-/* ctx->class_proto[class_id] is set and module instances see exports. */ \
+/* NOTE: module namespaces are exposed under __ridl_modules (module mode). */ \
 {%- for module in modules %}
-{%- if module.module_decl.is_some() %}
-    JS_PROP_CLASS_DEF("{{ module.require_full_name }}", &js_{{ module.require_full_name|normalize_ident|lower }}_module_class_def), \
-{%- endif %}
-{%- endfor %}
-/* (module namespaces are also exposed under __ridl_modules) */ \
-{%- for module in modules %}
+{%- if module.module_decl.is_none() %}
 {%- for function in module.functions %}
     JS_CFUNC_DEF("{{ function.name }}", {{ function.params|length }}, js_{{ function.name|lower }}), \
 {%- endfor %}
@@ -328,6 +322,7 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 {%- for class in module.classes %}
     JS_PROP_CLASS_DEF("{{ class.name }}", &js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|normalize_ident|lower }}_class_def), \
 {%- endfor %}
+{%- endif %}
 {%- endfor %}
 
 #endif // MJS_RIDL_REGISTER_H

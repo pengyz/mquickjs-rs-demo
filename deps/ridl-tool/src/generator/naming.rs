@@ -145,33 +145,6 @@ pub fn to_upper_camel_case(s: &str) -> String {
     }
 }
 
-#[allow(dead_code)]
-pub fn to_lower_camel_case(s: &str) -> String {
-    let mut out = to_upper_camel_case(s);
-    if out.is_empty() {
-        return out;
-    }
-    // For leading acronyms like URLValue, keep URL as-is.
-    // Only downcase the first char when it's a normal word.
-    let chars: Vec<char> = out.chars().collect();
-    if chars.is_empty() {
-        return out;
-    }
-
-    // If the prefix is an acronym (2+ uppercase letters), keep it.
-    // Example: URLValue -> URLValue
-    if chars.len() >= 2 && chars[0].is_ascii_uppercase() && chars[1].is_ascii_uppercase() {
-        return out;
-    }
-
-    if chars[0].is_ascii_uppercase() {
-        let mut chars = chars;
-        chars[0] = chars[0].to_ascii_lowercase();
-        out = chars.into_iter().collect();
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,12 +168,5 @@ mod tests {
         assert_eq!(to_upper_camel_case("URLValue"), "URLValue");
         assert_eq!(to_upper_camel_case("url_value2"), "UrlValue2");
         assert_eq!(to_upper_camel_case("m.testFn"), "MTestFn");
-    }
-
-    #[test]
-    fn lower_camel_case_from_snake_and_acronyms() {
-        assert_eq!(to_lower_camel_case("test_fn"), "testFn");
-        assert_eq!(to_lower_camel_case("getName"), "getName");
-        assert_eq!(to_lower_camel_case("URLValue"), "URLValue");
     }
 }

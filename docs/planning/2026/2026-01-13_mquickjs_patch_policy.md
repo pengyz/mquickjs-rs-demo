@@ -50,25 +50,23 @@ Files:
 
 Rationale:
 
-- RIDL user classes (`RIDL_CLASS_*`) receive **final numeric** class ids at
-  build-time.
-- Rust glue (bindgen consumers) needs a stable, compilable header that maps
-  `RIDL_CLASS_* -> <int>`.
-- This mapping is authoritative inside the ROM generation tool.
+- RIDL user classes receive **final numeric** class ids at build-time.
+- Rust/C glue needs a stable, compilable mapping from symbolic names to numeric
+  ids.
 
 Behavior:
 
-- Add `-c` option to the `build_atoms()` host tool to print `mqjs_ridl_class_id.h`
-  to stdout.
-- The header contains an `enum { RIDL_CLASS_xxx = <int>, ... }`.
-- When no RIDL classes are present, emit `RIDL_CLASS__DUMMY = 0` to keep the
-  header valid.
+- `ridl-tool` generates `mquickjs_ridl_api.h` containing:
+  - `#define JS_CLASS_<...> (JS_CLASS_USER + <int>)`
+- `mquickjs_ridl_register.h` includes `mquickjs_ridl_api.h`, and mquickjs ROM
+  generation consumes `mquickjs_ridl_register.h`.
 
 Consumers:
 
-- `deps/mquickjs-build` writes the tool output to
-  `${include_dir}/mqjs_ridl_class_id.h`.
-- `deps/mquickjs-rs` bindgen includes it via `-include mqjs_ridl_class_id.h`.
+- `deps/mquickjs-build` ensures `mquickjs_ridl_api.h` is available in the
+  `${include_dir}` it produces.
+- Rust code should consume/parse `mquickjs_ridl_api.h` (or its derived Rust
+  constants module) and must not rely on `mqjs_ridl_class_id.h` / `RIDL_CLASS_*`.
 
 ## Upgrade / rebase procedure
 

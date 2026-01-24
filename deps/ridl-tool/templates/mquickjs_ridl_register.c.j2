@@ -2,10 +2,126 @@
 #include "mquickjs_ridl_api.h"
 #include "mquickjs_ridl_register.h"
 
-// RIDL module require-table (generated)
+
+// RIDL module require-table + runtime init helpers (generated)
 //
 // This file is runtime-only (linked into libmquickjs.a). It intentionally stays out of
 // the host ROM-generation compilation path.
+
+typedef struct {
+    int class_id;
+    const char *field_name;
+    JSValue (*make_value)(JSContext *ctx);
+} RidlProtoVarEntry;
+
+{%- for pv in proto_vars %}
+{%- if pv.field_type == crate::parser::ast::Type::Int %}
+static JSValue ridl_make_i32_{{ pv.init_literal|normalize_ident|lower }}(JSContext *ctx) {
+    return JS_NewInt32(ctx, {{ pv.init_literal }});
+}
+{%- else if pv.field_type == crate::parser::ast::Type::Bool %}
+static JSValue ridl_make_bool_{{ pv.init_literal|normalize_ident|lower }}(JSContext *ctx) {
+    return JS_NewBool(ctx, {{ pv.init_literal }} ? 1 : 0);
+}
+{%- else if pv.field_type == crate::parser::ast::Type::Null %}
+static JSValue ridl_make_null(JSContext *ctx) {
+    (void)ctx;
+    return JS_NULL;
+}
+{%- else if pv.field_type == crate::parser::ast::Type::String %}
+static JSValue ridl_make_str_{{ loop.index0 }}(JSContext *ctx) {
+    return JS_NewString(ctx, "{{ pv.init_literal }}");
+}
+{%- else %}
+{#- proto var literal currently limited to int/bool/null/string by RIDL rules -#}
+{%- endif %}
+{%- endfor %}
+
+static const RidlProtoVarEntry ridl_proto_var_entries[] = {
+{%- for pv in proto_vars %}
+    { JS_CLASS_{{ pv.class_id_ident }}, "{{ pv.field_name }}", ridl_make_{% if pv.field_type == crate::parser::ast::Type::Int %}i32_{{ pv.init_literal|normalize_ident|lower }}{% else if pv.field_type == crate::parser::ast::Type::Bool %}bool_{{ pv.init_literal|normalize_ident|lower }}{% else if pv.field_type == crate::parser::ast::Type::Null %}null{% else if pv.field_type == crate::parser::ast::Type::String %}str_{{ loop.index0 }}{% endif %} },
+{%- endfor %}
+};
+
+static int ridl_install_proto_vars_all(JSContext *ctx) {
+{%- if proto_vars.len() == 0 %}
+    (void)ctx;
+    return 0;
+{%- else %}
+    for (int j = 0; j < (int)(sizeof(ridl_proto_var_entries) / sizeof(ridl_proto_var_entries[0])); j++) {
+        const RidlProtoVarEntry *e = &ridl_proto_var_entries[j];
+        JSValue proto = JS_EnsureClassProto(ctx, e->class_id);
+        if (JS_IsException(proto))
+            return -1;
+        if (proto == JS_NULL)
+            continue;
+
+        JSValue v = e->make_value(ctx);
+        if (JS_IsException(v))
+            return -1;
+        if (JS_SetPropertyStr(ctx, proto, e->field_name, v) < 0)
+            return -1;
+    }
+    return 0;
+{%- endif %}
+}
+
+#ifdef MQUICKJS_ENABLE_RIDL_EXTENSIONS
+{%- for m in modules %}
+{%- if m.module_decl.is_some() %}
+JSValue js_ext_romclass__{{ m.require_full_name|normalize_ident|lower }}(JSContext *ctx);
+{%- endif %}
+{%- endfor %}
+#endif
+
+static int ridl_module_extensions_init_once(JSContext *ctx) {
+    // Per-context once: tests run multiple JSContext instances in one process.
+    // Re-entry on the same ctx is considered an error.
+    static const char k_ridl_ext_init_marker[] = "__ridl_ext_module_extensions_inited";
+
+    JSValue global_obj = JS_GetGlobalObject(ctx);
+    JSValue v = JS_GetPropertyStr(ctx, global_obj, k_ridl_ext_init_marker);
+    if (!JS_IsUndefined(v)) {
+        return -1;
+    }
+
+    if (JS_SetPropertyStr(ctx, global_obj, k_ridl_ext_init_marker, JS_NewBool(1)) < 0) {
+        return -1;
+    }
+
+#ifdef MQUICKJS_ENABLE_RIDL_EXTENSIONS
+{%- for m in modules %}
+{%- if m.module_decl.is_some() %}
+    if (JS_IsException(JS_MaterializeROMClass(ctx, js_ext_romclass__{{ m.require_full_name|normalize_ident|lower }}(ctx))))
+        return -1;
+
+    JSValue module_proto_{{ m.require_full_name|normalize_ident|lower }} = JS_EnsureClassProto(ctx, JS_CLASS_{{ m.require_full_name|normalize_ident|upper }}_MODULE);
+    if (JS_IsException(module_proto_{{ m.require_full_name|normalize_ident|lower }}))
+        return -1;
+    if (JS_MaterializeModuleClassExportsToProto(ctx, module_proto_{{ m.require_full_name|normalize_ident|lower }}) < 0)
+        return -1;
+{%- endif %}
+{%- endfor %}
+#else
+    (void)ctx;
+#endif
+
+    return 0;
+}
+
+int JS_RIDL_StdlibInit(JSContext *ctx) {
+    if (!ctx)
+        return 0;
+
+    if (ridl_module_extensions_init_once(ctx) < 0)
+        return -1;
+
+    // Install proto vars once (after module classes are materialized).
+    if (ridl_install_proto_vars_all(ctx) < 0)
+        return -1;
+
+    return 0;
+}
 
 {%- for m in modules %}
 {%- if m.module_decl.is_some() %}

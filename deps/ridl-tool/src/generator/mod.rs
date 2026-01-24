@@ -402,12 +402,14 @@ fn generate_register_h_and_symbols(
     )?;
 
     std::fs::write(
-        out_dir.join("mquickjs_ridl_register.c"),
-        MquickjsRidlRegisterCTemplate {
+        out_dir.join("mquickjs_ridl_module_class_ids.h"),
+        MquickjsRidlModuleClassIdsHeaderTemplate {
             modules: ridl_register_all.modules.clone(),
         }
         .render()?,
     )?;
+
+    // NOTE: mquickjs_ridl_register.c is generated from the aggregate plan (needs ridl_files).
 
     // Aggregated symbols (extern declarations + keep-alive references).
     let agg_symbols = AggSymbolsTemplate { modules };
@@ -422,6 +424,12 @@ fn generate_register_h_and_symbols(
 
 // singleton aggregation (Option A: erased slots)
 pub mod singleton_aggregate;
+
+mod template_modules;
+use template_modules::build_template_modules;
+
+mod mquickjs_register_c;
+use mquickjs_register_c::generate_mquickjs_ridl_register_c;
 
 #[derive(Debug, Clone)]
 pub(super) struct AggregateIR {
@@ -448,10 +456,11 @@ struct MquickjsRidlApiHeaderTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "mquickjs_ridl_register.c.j2", escape = "none")]
-struct MquickjsRidlRegisterCTemplate {
+#[template(path = "mquickjs_ridl_module_class_ids.h.j2", escape = "none")]
+struct MquickjsRidlModuleClassIdsHeaderTemplate {
     modules: Vec<TemplateModule>,
 }
+
 
 trait RustGlueLikeTemplate {
     fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface>;
@@ -472,6 +481,7 @@ struct RustGlueTemplate {
     singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
 }
+
 
 impl RustGlueLikeTemplate for RustGlueTemplate {
     fn interfaces_mut(&mut self) -> &mut Vec<TemplateInterface> {
@@ -910,6 +920,7 @@ pub fn generate_module_files(
     let rust_glue_code = rust_glue_template.render()?;
     std::fs::write(output_path.join("glue.rs"), rust_glue_code)?;
 
+
     // 生成 Rust API（trait/类型声明），供用户 impl 层与 glue 层共享引用。
     // 注意：这里不生成任何 `todo!()` 实现骨架，避免误导用户编辑 OUT_DIR 生成物。
     let union_types = union_types;
@@ -992,7 +1003,11 @@ pub fn generate_aggregate_consolidated(
 
         // (2) ridl_context_ext.rs (ctx_ext + slot indices + ridl_context_init)
         // Reuse the same class_id allocation produced by register.h generation.
-        crate::generator::singleton_aggregate::generate_ridl_context_ext(plan, output_dir, ir.as_ref())?;
+        crate::generator::singleton_aggregate::generate_ridl_context_ext(plan, output_dir)?;
+
+        // (2.1) mquickjs_ridl_register.c (runtime glue): stdlib normalization init.
+        // It uses the same AggregateIR class_id mapping for proto vars.
+        generate_mquickjs_ridl_register_c(plan, output_dir, ir.as_ref())?;
     }
 
     // (3) ridl_bootstrap.rs (modules keep-alive + process initialize)

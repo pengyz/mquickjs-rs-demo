@@ -110,8 +110,9 @@ replaced_by:
 
 ### CLASS_ID 生成与对齐
 - class id 的整数值由 build-time 生成。
-- 选定方案：额外导出一个头文件 `mqjs_ridl_class_id.h`（由 mquickjs-build 写入 include_dir），用 `enum { RIDL_CLASS_xxx = <int>, ... };` 的方式暴露。
-- bindgen（在 mquickjs-rs/build.rs）需要 `-I include_dir` + `-include mqjs_ridl_class_id.h` 以便 Rust glue 能使用 `RIDL_CLASS_*` 常量。
+- 权威来源：`ridl-tool` 生成的 `mquickjs_ridl_api.h`（以 `#define JS_CLASS_<...> (JS_CLASS_USER + N)` 形式暴露）。
+- C 聚合入口仍是 `mquickjs_ridl_register.h`（会 include `mquickjs_ridl_api.h`）。
+- Rust 如需 class id 常量：应解析/消费 `mquickjs_ridl_api.h`（或对应生成的 Rust 常量模块），不再依赖 `mqjs_ridl_class_id.h` / `RIDL_CLASS_*`。
 
 ## B. Rust 侧（每模块 OUT_DIR）
 
@@ -179,7 +180,7 @@ replaced_by:
 - `JS_GetOpaque`
 - `JS_GetClassID`
 - `JSGCRef` 与 `JS_AddGCRef/JS_DeleteGCRef`（用于 `Global<Value>`）
-- `mqjs_ridl_class_id.h` 中的 `RIDL_CLASS_*` enum 常量（通过 bindgen include）。
+- `mquickjs_ridl_api.h` 中的 `JS_CLASS_*` 常量（通过 bindgen include 或自解析生成 Rust 常量）。
 
 ## 2) deps/mquickjs-rs
 - 在 `mquickjs_rs::mquickjs_ffi` 层 re-export 以上符号与 class id 常量。

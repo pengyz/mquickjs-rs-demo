@@ -34,3 +34,6 @@
 - Git commit message format: subject/title line < 50 columns; body lines < 88 columns.
 - After finishing a plan’s implementation, do not commit by default; ask the user whether they want a commit.
 - AGENTS.md is the single source of truth for working rules in this repo.
+
+## Mi Code Added Memories
+- 用户说明：当前 RIDL 会被编译进 ROMClass 的 props 与 proto_props；当初实现时并未充分理解 ROM 机制，因此需要重新审视 RIDL 扩展机制与 ROM/标准库的关系与编译阶段考量。

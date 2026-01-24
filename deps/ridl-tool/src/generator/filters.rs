@@ -128,13 +128,6 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
     Ok(w.into_string())
 }
 
-#[allow(dead_code)]
-pub fn emit_return_convert(return_type: &Type, result_name: &str) -> ::askama::Result<String> {
-    // Backward compatible entry: use type-derived rust type.
-    let rust_ty = rust_type_from_idl(return_type)?;
-    emit_return_convert_typed(&rust_ty, return_type, result_name)
-}
-
 pub fn emit_return_convert_typed(
     result_rust_ty: &str,
     return_type: &Type,
@@ -343,18 +336,7 @@ pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
 }
 
 
-#[allow(dead_code)]
-pub fn proto_module_ns(
-    module_decl: &Option<crate::parser::ast::ModuleDeclaration>,
-    fallback_module_name: &str,
-) -> ::askama::Result<String> {
-    Ok(module_decl
-        .as_ref()
-        .map(|m| m.module_path.clone())
-        .unwrap_or_else(|| fallback_module_name.to_string()))
-}
-
-pub fn methods_total(
+pub fn methods_total_filter(
     interfaces: &[crate::generator::TemplateInterface],
     classes: &[crate::generator::TemplateClass],
 ) -> ::askama::Result<usize> {
@@ -366,13 +348,6 @@ pub fn methods_total(
         total += c.methods.len();
     }
     Ok(total)
-}
-
-pub fn methods_total_filter(
-    interfaces: &[crate::generator::TemplateInterface],
-    classes: &[crate::generator::TemplateClass],
-) -> ::askama::Result<usize> {
-    methods_total(interfaces, classes)
 }
 
 pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askama::Result<String> {

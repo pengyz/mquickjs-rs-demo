@@ -1,0 +1,15 @@
+module test_module_basic@1.0
+
+// Phase 0: minimal module-mode coverage.
+fn mping() -> int;
+
+class MFoo {
+    // Phase 1: instance JS-only fields
+    var x: int = 1;
+    var y: string = "foo";
+
+    // Phase 1: proto var
+    proto var px: int = 100;
+
+    fn add(a: int, b: int) -> int;
+}

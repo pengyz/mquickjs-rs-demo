@@ -124,40 +124,8 @@ pub unsafe fn ridl_context_init(ctx: *mut mquickjs_ffi::JSContext) {
     }
 {%- endfor %}
 
-    // Install proto vars as JS prototype data properties.
-    //
-    // IMPORTANT:
-    // - We do not rely on globalThis ctor lookup (module mode must not leak ctors to globalThis).
-    // - We do not rely on ROMClass materialization paths or engine hooks.
-    //
-    // Instead, we ensure each class prototype exists via JS_EnsureClassProto(class_id)
-    // and then write the field to that prototype.
-{%- if proto_vars.len() > 0 %}
-    unsafe {
-{%- for pv in proto_vars %}
-        {
-            let proto = mquickjs_ffi::JS_EnsureClassProto(ctx, {{ pv.class_id }});
+    // NOTE: proto vars are installed in the stdlib normalization stage (once per JSContext),
+    // after all module exports and class prototypes have been materialized.
+    // This keeps proto vars from being overwritten by late ROMClass initialization paths.
 
-            let field_name = ::std::ffi::CString::new("{{ pv.field_name }}")
-                .unwrap_or_else(|_| ::std::ffi::CString::new("").unwrap());
-
-{%- if pv.field_type == crate::parser::ast::Type::String %}
-            let value_cstr = ::std::ffi::CString::new("{{ pv.init_literal }}")
-                .unwrap_or_else(|_| ::std::ffi::CString::new("").unwrap());
-            let value = mquickjs_ffi::JS_NewString(ctx, value_cstr.as_ptr());
-{%- else if pv.field_type == crate::parser::ast::Type::Int %}
-            let value = mquickjs_ffi::JS_NewInt32(ctx, {{ pv.init_literal }});
-{%- else if pv.field_type == crate::parser::ast::Type::Bool %}
-            let value = mquickjs_ffi::JS_NewBool(if {{ pv.init_literal }} { 1 } else { 0 });
-{%- else if pv.field_type == crate::parser::ast::Type::Null %}
-            let value = mquickjs_ffi::JS_NULL;
-{%- else %}
-            unreachable!();
-{%- endif %}
-
-            let _rc = mquickjs_ffi::JS_SetPropertyStr(ctx, proto, field_name.as_ptr(), value);
-        }
-{%- endfor %}
-    }
-{%- endif %}
 }

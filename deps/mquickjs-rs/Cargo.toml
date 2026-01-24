@@ -15,6 +15,7 @@ ridl-extensions = ["mquickjs-sys/ridl-extensions"]
 
 [build-dependencies]
 bindgen = "0.72"
+cc = "1"
 mquickjs-sys = { path = "../mquickjs-sys" }
 
 [dev-dependencies]

@@ -10,6 +10,7 @@ pub mod ridl_initialize {
     pub fn initialize() {
         modules::initialize_modules();
         symbols::ensure_symbols();
+        symbols::ensure_modules();
     }
 
     pub mod symbols {
