@@ -13,6 +13,25 @@ impl MFooClass for MFooImpl {
         a + b
     }
 
+    fn echo_bool(&mut self, v: bool) -> bool {
+        v
+    }
+
+    fn echo_int(&mut self, v: i32) -> i32 {
+        v
+    }
+
+    fn echo_double(&mut self, v: f64) -> f64 {
+        v
+    }
+
+    fn echo_string(&mut self, v: String) -> String {
+        v
+    }
+
+    fn echo_any(&mut self, _env: &mut mquickjs_rs::Env<'_>, _v: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>) {
+    }
+
     fn make_bar(&mut self, v: i32) -> Box<dyn MBarClass> {
         Box::new(MBarImpl { v })
     }

@@ -460,6 +460,15 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
         return js_throw_type_error(ctx, "missing opaque");
     }
 
+    {%- if method.needs_scope %}
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextToken::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+
+    let scope = h.enter_scope();
+    let mut env = mquickjs_rs::Env::new(&scope);
+    {%- endif %}
+
     {%- for p in method.params %}
     {{ p|emit_param_extract(loop.index0, loop.index, class.module_name_normalized)|safe }}
     {%- endfor %}

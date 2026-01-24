@@ -13,6 +13,14 @@ class MFoo {
 
     fn add(a: int, b: int) -> int;
 
+    // C1: basic param/return types coverage
+    fn echo_bool(v: bool) -> bool;
+    fn echo_int(v: int) -> int;
+    fn echo_double(v: double) -> double;
+    fn echo_string(v: string) -> string;
+    // NOTE: class methods with any return need dedicated glue support; keep param-only here.
+    fn echo_any(v: any) -> void;
+
     // Phase 1: cross-class construction
     fn make_bar(v: int) -> MBar;
 
