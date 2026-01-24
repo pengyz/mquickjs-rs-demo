@@ -15,7 +15,7 @@ typedef struct {
 } RidlProtoVarEntry;
 
 {%- for pv in proto_vars %}
-{%- if pv.field_type == crate::parser::ast::Type::Int %}
+{%- if pv.field_type == crate::parser::ast::Type::I32 %}
 static JSValue ridl_make_i32_{{ pv.init_literal|normalize_ident|lower }}(JSContext *ctx) {
     return JS_NewInt32(ctx, {{ pv.init_literal }});
 }
@@ -39,7 +39,7 @@ static JSValue ridl_make_str_{{ loop.index0 }}(JSContext *ctx) {
 
 static const RidlProtoVarEntry ridl_proto_var_entries[] = {
 {%- for pv in proto_vars %}
-    { JS_CLASS_{{ pv.class_id_ident }}, "{{ pv.field_name }}", ridl_make_{% if pv.field_type == crate::parser::ast::Type::Int %}i32_{{ pv.init_literal|normalize_ident|lower }}{% else if pv.field_type == crate::parser::ast::Type::Bool %}bool_{{ pv.init_literal|normalize_ident|lower }}{% else if pv.field_type == crate::parser::ast::Type::Null %}null{% else if pv.field_type == crate::parser::ast::Type::String %}str_{{ loop.index0 }}{% endif %} },
+    { JS_CLASS_{{ pv.class_id_ident }}, "{{ pv.field_name }}", ridl_make_{% if pv.field_type == crate::parser::ast::Type::I32 %}i32_{{ pv.init_literal|normalize_ident|lower }}{% else if pv.field_type == crate::parser::ast::Type::Bool %}bool_{{ pv.init_literal|normalize_ident|lower }}{% else if pv.field_type == crate::parser::ast::Type::Null %}null{% else if pv.field_type == crate::parser::ast::Type::String %}str_{{ loop.index0 }}{% endif %} },
 {%- endfor %}
 };
 

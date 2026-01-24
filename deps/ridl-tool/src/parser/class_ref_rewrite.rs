@@ -82,9 +82,10 @@ fn rewrite_type_class_refs(ty: &mut Type, class_names: &HashSet<String>) {
         }
         Type::ClassRef(_) => {}
         Type::Bool
-        | Type::Int
-        | Type::Float
-        | Type::Double
+        | Type::I32
+        | Type::I64
+        | Type::F32
+        | Type::F64
         | Type::String
         | Type::Void
         | Type::Object

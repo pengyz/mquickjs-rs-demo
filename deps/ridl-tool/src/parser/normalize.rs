@@ -190,9 +190,10 @@ fn try_parse_paren_union(s: &str) -> Result<Option<Type>, Box<dyn std::error::Er
 fn parse_atom_type(s: &str) -> Type {
     match s {
         "bool" => Type::Bool,
-        "int" => Type::Int,
-        "float" => Type::Float,
-        "double" => Type::Double,
+        "i32" => Type::I32,
+        "i64" => Type::I64,
+        "f32" => Type::F32,
+        "f64" => Type::F64,
         "string" => Type::String,
         "void" => Type::Void,
         "object" => Type::Object,

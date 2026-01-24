@@ -1,37 +1,39 @@
 module test_module_basic@1.0
 
 // Phase 0: minimal module-mode coverage.
-fn mping() -> int;
+fn mping() -> i32;
 
 class MFoo {
     // Phase 1: instance JS-only fields
-    var x: int = 1;
+    var x: i32 = 1;
     var y: string = "foo";
 
     // Phase 1: proto var
-    proto var px: int = 100;
+    proto var px: i32 = 100;
 
-    fn add(a: int, b: int) -> int;
+    fn add(a: i32, b: i32) -> i32;
 
     // C1: basic param/return types coverage
     fn echo_bool(v: bool) -> bool;
-    fn echo_int(v: int) -> int;
-    fn echo_double(v: double) -> double;
+    fn echo_i32(v: i32) -> i32;
+    fn echo_f64(v: f64) -> f64;
+    fn echo_f32(v: f32) -> f32;
+    fn echo_i64(v: i64) -> i64;
     fn echo_string(v: string) -> string;
     // NOTE: class methods with any return need dedicated glue support; keep param-only here.
     fn echo_any(v: any) -> void;
 
     // Phase 1: cross-class construction
-    fn make_bar(v: int) -> MBar;
+    fn make_bar(v: i32) -> MBar;
 
     // Phase 2: cross-class parameter passing
-    fn use_bar(b: MBar) -> int;
+    fn use_bar(b: MBar) -> i32;
 
     // MC2: same-name method across classes should not pollute prototypes
-    fn get_v() -> int;
+    fn get_v() -> i32;
 }
 
 class MBar {
-    var v: int = 0;
-    fn get_v() -> int;
+    var v: i32 = 0;
+    fn get_v() -> i32;
 }

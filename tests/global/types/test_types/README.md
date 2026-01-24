@@ -6,7 +6,7 @@
 
 本阶段先收敛到最小可回归的 V1 default 基线：
 
-- bool/int/double：参数与返回 roundtrip
+- bool/i32/f64：参数与返回 roundtrip
 - any：透传（primitive 保持类型/值，object 保持引用 identity）
 
 ## 暂不支持（待补齐到 V1 合规）

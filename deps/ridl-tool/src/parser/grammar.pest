@@ -85,7 +85,7 @@ field_def = { identifier ~ WS ~ ":" ~ WS ~ type }
 type = { union_type | nullable_type | primary_type }
 // We need to make sure basic_type comes before custom_type to avoid basic types being parsed as custom types
 primary_type = { array_type | map_type | callback_type | group_type | basic_type | custom_type }
-basic_type = { "bool" | "int" | "float" | "double" | "string" | "void" | "object" | "null" | "any" }
+basic_type = { "bool" | "i32" | "i64" | "f32" | "f64" | "string" | "void" | "object" | "null" | "any" }
 array_type = { "array" ~ WS ~ "<" ~ WS ~ type ~ WS ~ ">" }
 map_type = { "map" ~ WS ~ "<" ~ WS ~ type ~ WS ~ "," ~ WS ~ type ~ WS ~ ">" }
 union_type = { primary_type ~ (WS ~ "|" ~ WS ~ primary_type)+ }

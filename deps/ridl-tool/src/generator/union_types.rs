@@ -108,11 +108,23 @@ fn map_union_member(ty: &Type) -> Option<TemplateUnionMember> {
             variant: "String".to_string(),
             rust_ty: "String".to_string(),
         }),
-        Type::Int => Some(TemplateUnionMember {
-            variant: "Int".to_string(),
+        Type::I32 => Some(TemplateUnionMember {
+            variant: "I32".to_string(),
             rust_ty: "i32".to_string(),
         }),
-        // Keep narrow for v1; other complex member types will be added incrementally.
+        Type::I64 => Some(TemplateUnionMember {
+            variant: "I64".to_string(),
+            rust_ty: "i64".to_string(),
+        }),
+        Type::F32 => Some(TemplateUnionMember {
+            variant: "F32".to_string(),
+            rust_ty: "f32".to_string(),
+        }),
+        Type::F64 => Some(TemplateUnionMember {
+            variant: "F64".to_string(),
+            rust_ty: "f64".to_string(),
+        }),
+        // Keep narrow for now; other complex member types will be added in V1-B2.
         other => {
             let _ = rust_type_from_idl(other);
             None
@@ -159,7 +171,10 @@ fn union_name_from_members(member_types: &[Type]) -> String {
     for t in member_types {
         match t {
             Type::String => keys.push("String"),
-            Type::Int => keys.push("Int"),
+            Type::I32 => keys.push("I32"),
+            Type::I64 => keys.push("I64"),
+            Type::F32 => keys.push("F32"),
+            Type::F64 => keys.push("F64"),
             _ => {}
         }
     }

@@ -17,11 +17,19 @@ impl MFooClass for MFooImpl {
         v
     }
 
-    fn echo_int(&mut self, v: i32) -> i32 {
+    fn echo_i32(&mut self, v: i32) -> i32 {
         v
     }
 
-    fn echo_double(&mut self, v: f64) -> f64 {
+    fn echo_f64(&mut self, v: f64) -> f64 {
+        v
+    }
+
+    fn echo_f32(&mut self, v: f32) -> f32 {
+        v
+    }
+
+    fn echo_i64(&mut self, v: i64) -> i64 {
         v
     }
 

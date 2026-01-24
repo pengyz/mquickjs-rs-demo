@@ -1,18 +1,20 @@
 singleton TestTypes {
     fn echoBool(v: bool) -> bool;
-    fn echoInt(v: int) -> int;
-    fn echoDouble(v: double) -> double;
+    fn echoI32(v: i32) -> i32;
+    fn echoF64(v: f64) -> f64;
+    fn echoF32(v: f32) -> f32;
+    fn echoI64(v: i64) -> i64;
     fn echoString(v: string) -> string;
 
     fn echoStringNullable(v: string?) -> string?;
-    fn echoIntNullable(v: int?) -> int?;
+    fn echoI32Nullable(v: i32?) -> i32?;
 
     fn echoAny(v: any) -> any;
     fn maybeAny(v: bool) -> any?;
 
-    // any? nested in union: Optional(Union(string | int)) where union itself is optional
-    fn maybeUnionAny(v: any?) -> (string | int)?;
+    // any? nested in union: Optional(Union(string | i32)) where union itself is optional
+    fn maybeUnionAny(v: any?) -> (string | i32)?;
 
-    fn echoStringOrInt(v: string | int) -> string | int;
-    fn echoStringOrIntNullable(v: string | int | null) -> (string | int)?;
+    fn echoStringOrI32(v: string | i32) -> string | i32;
+    fn echoStringOrI32Nullable(v: string | i32 | null) -> (string | i32)?;
 }

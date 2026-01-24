@@ -1,11 +1,11 @@
 module test.require@1.0
 
-fn ping() -> int;
+fn ping() -> i32;
 
 class Foo {
-    fn value() -> int;
+    fn value() -> i32;
 }
 
 class Bar {
-    fn value() -> int;
+    fn value() -> i32;
 }

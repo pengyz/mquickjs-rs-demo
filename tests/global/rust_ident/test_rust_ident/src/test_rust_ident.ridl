@@ -4,15 +4,15 @@
 
 singleton RustIdent {
     // Rust keywords (as RIDL identifiers)
-    fn type(type: int, match: int) -> int;
-    fn ref(ref: int) -> int;
-    fn self(self: int) -> int;
-    fn crate(crate: int) -> int;
-    fn super(super: int) -> int;
-    fn dyn(dyn: int) -> int;
+    fn type(type: i32, match: i32) -> i32;
+    fn ref(ref: i32) -> i32;
+    fn self(self: i32) -> i32;
+    fn crate(crate: i32) -> i32;
+    fn super(super: i32) -> i32;
+    fn dyn(dyn: i32) -> i32;
 
     // Non-identifier characters and leading digits (expect sanitized)
     // NOTE: if RIDL grammar rejects these identifiers, adjust to the nearest
     // accepted syntax and keep this test focused on Rust keyword sanitization.
-    fn foo_bar(foo_bar: int, _1st: int) -> int;
+    fn foo_bar(foo_bar: i32, _1st: i32) -> i32;
 }

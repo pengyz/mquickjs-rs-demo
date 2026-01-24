@@ -20,7 +20,7 @@ var t = globalThis.TestFn;
 assert(t, 'TestFn singleton must exist')
 
 // quick diagnostics if exports are missing
-assertEq(typeof t.addInt, 'function', 'TestFn.addInt missing')
+assertEq(typeof t.addI32, 'function', 'TestFn.addI32 missing')
 assertEq(typeof t.echoAny, 'function', 'TestFn.echoAny missing')
 assertEq(typeof t.makeAnyString, 'function', 'TestFn.makeAnyString missing')
 assertEq(typeof t.anyToString, 'function', 'TestFn.anyToString missing')
@@ -32,9 +32,9 @@ assertEq(typeof t.arrGet, 'function', 'TestFn.arrGet missing')
 
 // primitive smoke
 {
-  var f = t.addInt;
+  var f = t.addI32;
   var r = f.call(t, 1, 2);
-  assertEq(r, 3, 'addInt failed')
+  assertEq(r, 3, 'addI32 failed')
 }
 
 // any return (closure-based escape)

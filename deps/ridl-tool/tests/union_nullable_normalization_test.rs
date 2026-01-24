@@ -20,8 +20,8 @@ fn nullable_union_is_normalized_in_api_and_glue() {
         r#"
 module test@1.0
 interface Test {
-    fn a(v: string | int | null) -> string | int | null;
-    fn b(v: string | int | null) -> string | int | null;
+    fn a(v: string | i32 | null) -> string | i32 | null;
+    fn b(v: string | i32 | null) -> string | i32 | null;
 }
 "#,
     )
@@ -38,21 +38,21 @@ interface Test {
 
     // Never leak raw RIDL union syntax into Rust type positions.
     assert!(
-        !api.contains("(string | int)"),
+        !api.contains("(string | i32)"),
         "api.rs must not contain raw union syntax; got:\n{api}"
     );
     assert!(
-        !glue.contains("(string | int)"),
+        !glue.contains("(string | i32)"),
         "glue.rs must not contain raw union syntax; got:\n{glue}"
     );
 
     // Both nullable union spellings must be normalized to Option<...>.
     assert!(
-        api.contains("Option<crate::api::test::union::UnionIntString>"),
-        "expected Option<...UnionIntString> in api.rs; got:\n{api}"
+        api.contains("Option<crate::api::test::union::UnionI32String>"),
+        "expected Option<...UnionI32String> in api.rs; got:\n{api}"
     );
     assert!(
-        glue.contains("Option<crate::api::test::union::UnionIntString>"),
-        "expected Option<...UnionIntString> in glue.rs; got:\n{glue}"
+        glue.contains("Option<crate::api::test::union::UnionI32String>"),
+        "expected Option<...UnionI32String> in glue.rs; got:\n{glue}"
     );
 }

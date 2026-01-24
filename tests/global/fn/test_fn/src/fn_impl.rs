@@ -3,7 +3,7 @@ use crate::api::TestFnSingleton;
 pub struct DefaultTestFnSingleton;
 
 impl TestFnSingleton for DefaultTestFnSingleton {
-    fn add_int(&mut self, a: i32, b: i32) -> i32 {
+    fn add_i32(&mut self, a: i32, b: i32) -> i32 {
         a + b
     }
 

@@ -984,9 +984,10 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                 let type_str = inner_pair.as_str();
                 return match type_str {
                     "bool" => Ok(Type::Bool),
-                    "int" => Ok(Type::Int),
-                    "float" => Ok(Type::Float),
-                    "double" => Ok(Type::Double),
+                    "i32" => Ok(Type::I32),
+                    "i64" => Ok(Type::I64),
+                    "f32" => Ok(Type::F32),
+                    "f64" => Ok(Type::F64),
                     "string" => Ok(Type::String),
                     "void" => Ok(Type::Void),
                     "object" => Ok(Type::Object),
@@ -1110,9 +1111,10 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
             let type_str = pair.as_str();
             match type_str {
                 "bool" => Ok(Type::Bool),
-                "int" => Ok(Type::Int),
-                "float" => Ok(Type::Float),
-                "double" => Ok(Type::Double),
+                "i32" => Ok(Type::I32),
+                "i64" => Ok(Type::I64),
+                "f32" => Ok(Type::F32),
+                "f64" => Ok(Type::F64),
                 "string" => Ok(Type::String),
                 "void" => Ok(Type::Void),
                 "object" => Ok(Type::Object),
@@ -1428,11 +1430,11 @@ mod tests {
         let ridl = r#"
         class Person {
             var name: string = "";
-            var age: int = 0;
-            Person(name: string, age: int);
+            var age: i32 = 0;
+            Person(name: string, age: i32);
             fn getName() -> string;
-            fn getAge() -> int;
-            fn setAge(age: int) -> void;
+            fn getAge() -> i32;
+            fn setAge(age: i32) -> void;
         }
         "#;
 
@@ -1453,7 +1455,7 @@ mod tests {
 
                         let f2 = &class.js_fields[1];
                         assert_eq!(f2.name, "age");
-                        assert_eq!(f2.field_type, Type::Int);
+                        assert_eq!(f2.field_type, Type::I32);
 
                         let constructor = class.constructor.as_ref().unwrap();
                         assert_eq!(constructor.name, "Person");
@@ -1480,7 +1482,7 @@ mod tests {
             fn handleNullable(data: string?) -> void;
             fn handleUnion(data: (bool | object)) -> void;
 fn handleUnionNullable(data: (bool | object | null)) -> void;
-            fn handleMap(data: map<string, int>) -> void;
+            fn handleMap(data: map<string, i32>) -> void;
             fn handleArray(data: array<string>) -> void;
             fn handleOptionalParam(data: string?) -> void;
             fn setCallback(cb: callback(success: bool)) -> void;  // 修复：使用cb而不是callback作为方法名
@@ -1581,7 +1583,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
                         .unwrap();
                     if let Type::Map(key_type, value_type) = &handle_map.params[0].param_type {
                         assert_eq!(**key_type, Type::String);
-                        assert_eq!(**value_type, Type::Int);
+                        assert_eq!(**value_type, Type::I32);
                     } else {
                         panic!(
                             "Expected map parameter type, got {:?}",
@@ -1689,7 +1691,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
         struct LogEntry {
             level: LogLevel;
             message: string;
-            timestamp: int;
+            timestamp: i64;
             metadata: map<string, string>;
             tags: array<string>;
             callback_func: callback(success: bool, result: string);
@@ -1700,7 +1702,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
             fn log(message: string) -> void;
             fn logWithLevel(message: string, level: LogLevel) -> void;
             fn error(message: string?) -> void;  // 可空类型
-            fn processMultiple(items: array<string>) -> (bool | int);  // 联合类型
+            fn processMultiple(items: array<string>) -> (bool | i32);  // 联合类型
             fn setCallback(cb: callback(success: bool)) -> void;
         }
 
@@ -1848,7 +1850,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
                     if let Type::Union(types) = return_type {
                         assert_eq!(types.len(), 2);
                         assert!(types.iter().any(|t| matches!(t, Type::Bool)));
-                        assert!(types.iter().any(|t| matches!(t, Type::Int)));
+                        assert!(types.iter().any(|t| matches!(t, Type::I32)));
                     } else {
                         panic!(
                             "Expected union return type for processMultiple method, got {:?}",

@@ -4,5 +4,5 @@ mode strict;
 // We will add import/using *module semantics* cases after V1 defines them.
 
 singleton TestImportUsing {
-    fn ping() -> int;
+    fn ping() -> i32;
 }

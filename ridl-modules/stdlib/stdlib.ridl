@@ -3,21 +3,21 @@
 
 // 日期相关
 class Date {
-    fn now() -> double;
+    fn now() -> f64;
 }
 
 // 垃圾回收函数
 fn gc();
 
 // 性能相关函数
-fn performance_now() -> float;
+fn performance_now() -> f32;
 
 // 加载脚本函数
 fn load(filename: string) -> object;
 
 // 定时器相关函数
-fn setTimeout(cb: callback(success: bool), delay: int) -> int;
-fn clearTimeout(timerId: int);
+fn setTimeout(cb: callback(success: bool), delay: i32) -> i32;
+fn clearTimeout(timerId: i32);
 
 // 控制台对象
 singleton console {

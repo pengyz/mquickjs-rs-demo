@@ -8,7 +8,7 @@ mode strict;
 
 class A {
   fn js_var() -> void;
-  var js_var: int = 1;
+  var js_var: i32 = 1;
 }
 "#;
 

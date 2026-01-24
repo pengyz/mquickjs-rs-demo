@@ -16,13 +16,34 @@ assert(t, 'TestTypes singleton must exist')
 assertEq(t.echoBool(true), true)
 assertEq(t.echoBool(false), false)
 
-assertEq(t.echoInt(0), 0)
-assertEq(t.echoInt(123), 123)
+assertEq(t.echoI32(0), 0)
+assertEq(t.echoI32(123), 123)
 
 {
   var v = 1.5
-  var r = t.echoDouble(v)
+  var r = t.echoF64(v)
   assertNear(r, v, 1e-12)
+}
+
+{
+  var v = 1.25
+  var r = t.echoF32(v)
+  // f32 roundtrip tolerance
+  assertNear(r, v, 1e-6)
+}
+
+{
+  // i64 safe integer range
+  var v = 9007199254740991
+  var r = t.echoI64(v)
+  assertEq(r, v)
+  var threw = false
+  try {
+    t.echoI64(9007199254740992)
+  } catch (e) {
+    threw = true
+  }
+  assert(threw, 'expected TypeError for echoI64(2^53)')
 }
 
 assertEq(t.echoAny(null), null)
@@ -54,10 +75,10 @@ assertEq(t.echoStringNullable(null), null)
 assertEq(t.echoStringNullable(undefined), null)
 assertEq(t.echoStringNullable('hi'), 'hi')
 
-// Optional(int)
-assertEq(t.echoIntNullable(null), null)
-assertEq(t.echoIntNullable(undefined), null)
-assertEq(t.echoIntNullable(123), 123)
+// Optional(i32)
+assertEq(t.echoI32Nullable(null), null)
+assertEq(t.echoI32Nullable(undefined), null)
+assertEq(t.echoI32Nullable(123), 123)
 
 // TypeError cases (RIDL is strict even in default mode)
 var threw = false
@@ -70,37 +91,37 @@ assert(threw, 'expected TypeError for echoStringNullable(123)')
 
 threw = false
 try {
-  t.echoIntNullable(1.5)
+  t.echoI32Nullable(1.5)
 } catch (e2) {
   threw = true
 }
-assert(threw, 'expected TypeError for echoIntNullable(1.5)')
+assert(threw, 'expected TypeError for echoI32Nullable(1.5)')
 
-// Union(string | int)
-assertEq(t.echoStringOrInt('hello'), 'hello')
-assertEq(t.echoStringOrInt(123), 123)
+// Union(string | i32)
+assertEq(t.echoStringOrI32('hello'), 'hello')
+assertEq(t.echoStringOrI32(123), 123)
 
 threw = false
 try {
-  t.echoStringOrInt(1.5)
+  t.echoStringOrI32(1.5)
 } catch (e3) {
   threw = true
 }
-assert(threw, 'expected TypeError for echoStringOrInt(1.5)')
+assert(threw, 'expected TypeError for echoStringOrI32(1.5)')
 
-// Optional(Union(string | int))
-assertEq(t.echoStringOrIntNullable(null), null)
-assertEq(t.echoStringOrIntNullable(undefined), null)
-assertEq(t.echoStringOrIntNullable('hi'), 'hi')
-assertEq(t.echoStringOrIntNullable(456), 456)
+// Optional(Union(string | i32))
+assertEq(t.echoStringOrI32Nullable(null), null)
+assertEq(t.echoStringOrI32Nullable(undefined), null)
+assertEq(t.echoStringOrI32Nullable('hi'), 'hi')
+assertEq(t.echoStringOrI32Nullable(456), 456)
 
 threw = false
 try {
-  t.echoStringOrIntNullable(1.5)
+  t.echoStringOrI32Nullable(1.5)
 } catch (e4) {
   threw = true
 }
-assert(threw, 'expected TypeError for echoStringOrIntNullable(1.5)')
+assert(threw, 'expected TypeError for echoStringOrI32Nullable(1.5)')
 
 {
   var obj = { a: 1 }
@@ -109,14 +130,14 @@ assert(threw, 'expected TypeError for echoStringOrIntNullable(1.5)')
   assertEq(ret.a, 1)
 }
 
-// Optional(any) param + Optional(Union(string | int)) return
+// Optional(any) param + Optional(Union(string | i32)) return
 assertEq(t.maybeUnionAny(null), null)
 assertEq(t.maybeUnionAny(undefined), null)
 assertEq(t.maybeUnionAny('hi'), 'hi')
 {
   var out = t.maybeUnionAny(456)
-  // engine numeric tagging may vary; accept either (int) number or (double) string fallback
-  assert(out == 456, 'maybeUnionAny(int) must be loosely 456')
+  // engine numeric tagging may vary; accept either (i32) number or (f64) string fallback
+  assert(out == 456, 'maybeUnionAny(i32) must be loosely 456')
 }
 // object handling is engine-defined for number/string coercion; just ensure it doesn't crash
 assert(t.maybeUnionAny({}) !== undefined)

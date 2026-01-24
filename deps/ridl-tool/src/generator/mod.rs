@@ -129,9 +129,10 @@ fn union_enum_path_for_ty(
                 for part in inner.split('|') {
                     match part.trim() {
                         "string" => keys.push("String"),
-                        "int" => keys.push("Int"),
-                        "float" => keys.push("Float"),
-                        "double" => keys.push("Double"),
+                        "i32" => keys.push("I32"),
+                        "i64" => keys.push("I64"),
+                        "f32" => keys.push("F32"),
+                        "f64" => keys.push("F64"),
                         _ => return None,
                     }
                 }
@@ -155,7 +156,10 @@ fn union_enum_path_for_ty(
             for t in types {
                 match t {
                     Type::String => keys.push("String"),
-                    Type::Int => keys.push("Int"),
+                    Type::I32 => keys.push("I32"),
+                    Type::I64 => keys.push("I64"),
+                    Type::F32 => keys.push("F32"),
+                    Type::F64 => keys.push("F64"),
                     Type::Null => nullable = true,
                     _ => {}
                 }

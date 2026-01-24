@@ -46,9 +46,10 @@ pub fn rust_ident(name: &str) -> ::askama::Result<String> {
 pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
     let rust_type = match idl_type {
         Type::Bool => "bool".to_string(),
-        Type::Int => "i32".to_string(),
-        Type::Float => "f32".to_string(),
-        Type::Double => "f64".to_string(),
+        Type::I32 => "i32".to_string(),
+        Type::I64 => "i64".to_string(),
+        Type::F32 => "f32".to_string(),
+        Type::F64 => "f64".to_string(),
         Type::String => "String".to_string(),
         Type::Void => "()".to_string(),
 
@@ -101,15 +102,27 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
                 value = value_expr
             ));
         }
-        Type::Int => {
+        Type::I32 => {
             w.push_line(format!(
                 "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, {value}) }}",
                 value = value_expr
             ));
         }
-        Type::Double | Type::Float => {
+        Type::I64 => {
+            w.push_line(format!(
+                "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, {value}) }}",
+                value = value_expr
+            ));
+        }
+        Type::F64 => {
             w.push_line(format!(
                 "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, {value}) }}",
+                value = value_expr
+            ));
+        }
+        Type::F32 => {
+            w.push_line(format!(
+                "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, ({value}) as f64) }}",
                 value = value_expr
             ));
         }
@@ -151,9 +164,15 @@ pub fn emit_return_convert_typed(
             ));
             w.push_line("unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }");
         }
-        Type::Int => {
+        Type::I32 => {
             w.push_line(format!(
                 "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, {result_name}) }}",
+                result_name = result_name
+            ));
+        }
+        Type::I64 => {
+            w.push_line(format!(
+                "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, {result_name}) }}",
                 result_name = result_name
             ));
         }
@@ -163,9 +182,15 @@ pub fn emit_return_convert_typed(
                 result_name = result_name
             ));
         }
-        Type::Double | Type::Float => {
+        Type::F64 => {
             w.push_line(format!(
                 "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, {result_name}) }}",
+                result_name = result_name
+            ));
+        }
+        Type::F32 => {
+            w.push_line(format!(
+                "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, ({result_name}) as f64) }}",
                 result_name = result_name
             ));
         }
@@ -195,7 +220,7 @@ pub fn emit_return_convert_typed(
             w.push_line("        unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
             w.push_line("    }".to_string());
             w.push_line(format!(
-                "    {ty}::Int(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
+                "    {ty}::I32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
                 ty = result_rust_ty
             ));
             w.push_line("}".to_string());
@@ -233,13 +258,22 @@ pub fn emit_return_convert_typed(
                     w.push_line("    }".to_string());
                     w.push_line("}".to_string());
                 }
-                Type::Int => {
+                Type::I32 => {
                     w.push_line(format!(
                         "match {result_name} {{",
                         result_name = result_name
                     ));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) },".to_string());
+                    w.push_line("}".to_string());
+                }
+                Type::I64 => {
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt64(ctx, v) },".to_string());
                     w.push_line("}".to_string());
                 }
                 Type::Bool => {
@@ -251,13 +285,22 @@ pub fn emit_return_convert_typed(
                     w.push_line("    Some(v) => mquickjs_rs::mquickjs_ffi::js_mkbool(v),".to_string());
                     w.push_line("}".to_string());
                 }
-                Type::Double | Type::Float => {
+                Type::F64 => {
                     w.push_line(format!(
                         "match {result_name} {{",
                         result_name = result_name
                     ));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
                     w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v) },".to_string());
+                    w.push_line("}".to_string());
+                }
+                Type::F32 => {
+                    w.push_line(format!(
+                        "match {result_name} {{",
+                        result_name = result_name
+                    ));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => unsafe { mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, v as f64) },".to_string());
                     w.push_line("}".to_string());
                 }
                 Type::Union(_types) => {
@@ -279,7 +322,7 @@ pub fn emit_return_convert_typed(
                     w.push_line("                unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string());
                     w.push_line("            }".to_string());
                     w.push_line(format!(
-                        "            {ty}::Int(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
+                        "            {ty}::I32(v) => unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, v) }},",
                         ty = enum_ty
                     ));
                     w.push_line("        }".to_string());
@@ -377,16 +420,21 @@ pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askam
         Type::Bool => {
             w.push_line("let v0: bool = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToBool(ctx, v0) } != 0;".to_string());
         }
-        Type::Int => {
+        Type::I32 => {
             emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
             // Avoid shadowing the JSValue `v0`.
-            emit_to_i32_expr(&mut w, "v0", "out0", "\"arg1: failed to convert to int\"");
+            emit_to_i32_expr(&mut w, "v0", "out0", "\"arg1: failed to convert to i32\"");
             w.push_line("let v0: i32 = out0;".to_string());
         }
-        Type::Double | Type::Float => {
+        Type::I64 => {
+            emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
+            emit_to_i64_expr(&mut w, "v0", "out0", "\"arg1: failed to convert to i64\"");
+            w.push_line("let v0: i64 = out0;".to_string());
+        }
+        Type::F64 | Type::F32 => {
             emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
             emit_to_f64_expr(&mut w, "v0", "v0", "\"arg1: failed to convert to number\"");
-            if matches!(prop.property_type, Type::Float) {
+            if matches!(prop.property_type, Type::F32) {
                 w.push_line("let v0: f32 = v0 as f32;".to_string());
             }
         }
@@ -567,10 +615,10 @@ fn emit_union_param_extract_from_jsvalue(
         return Ok(w.into_string());
     };
 
-    // v1 supports only discriminable unions. Numeric unions are rejected by validator.
+    // v1 supports only discriminable unions. Numeric unions were previously rejected by validator.
     // Try members in a fixed order for determinism.
     let want_string = types.iter().any(|t| matches!(t, Type::String));
-    let want_int = types.iter().any(|t| matches!(t, Type::Int));
+    let want_i32 = types.iter().any(|t| matches!(t, Type::I32));
 
     w.push_line(format!("let mut {out_name}: {rust_ty};", out_name = out_name, rust_ty = rust_ty));
 
@@ -584,11 +632,11 @@ fn emit_union_param_extract_from_jsvalue(
         w.dedent();
     }
 
-    if want_int {
+    if want_i32 {
         w.push_line("if unsafe { mquickjs_rs::mquickjs_ffi::JS_IsNumber(ctx, v) } != 0 {".to_string());
         w.indent();
         emit_to_i32_expr(&mut w, "v", "out", &format!("\"invalid union argument: {name}\""));
-        w.push_line(format!("{out_name} = {rust_ty}::Int(out);", out_name = out_name, rust_ty = rust_ty));
+        w.push_line(format!("{out_name} = {rust_ty}::I32(out);", out_name = out_name, rust_ty = rust_ty));
         w.dedent();
         w.push_line("} else {".to_string());
         w.indent();
@@ -708,6 +756,36 @@ fn emit_to_f64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
     w.push_line(format!("let {shadow}: f64 = {out};", shadow = shadow_name, out = out_name));
 }
 
+fn emit_to_i64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_expr: &str) {
+    // V1 rule: JS number -> i64 only accepts safe integers (|n| <= 2^53-1) and must be integer.
+    let value_raw = format!("{value_expr}_raw");
+    w.push_line(format!("let {value_raw}: JSValue = {value_expr};", value_raw = value_raw, value_expr = value_expr));
+
+    w.push_line(format!("let mut {out}: f64 = 0.0;", out = out_name));
+    w.push_line(format!(
+        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut {out} as *mut _, {v}) }} < 0 {{ return js_throw_type_error(ctx, {err}); }}",
+        out = out_name,
+        v = value_raw,
+        err = err_expr
+    ));
+
+    w.push_line(format!(
+        "if !{out}.is_finite() || {out}.fract() != 0.0 {{ return js_throw_type_error(ctx, {err}); }}",
+        out = out_name,
+        err = err_expr
+    ));
+    w.push_line(format!(
+        "if {out}.abs() > 9007199254740991.0 {{ return js_throw_type_error(ctx, {err}); }}",
+        out = out_name,
+        err = err_expr
+    ));
+
+    w.push_line(format!("let {out}: i64 = {out} as i64;", out = out_name));
+
+    let shadow_name = format!("_{value_expr}");
+    w.push_line(format!("let {shadow}: i64 = {out};", shadow = shadow_name, out = out_name));
+}
+
 
 fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_expr: &str) {
     w.push_line("use std::os::raw::c_char;");
@@ -786,19 +864,30 @@ fn emit_single_param_extract_from_jsvalue(
                 name = name
             ));
         }
-        Type::Int => {
-            let err = format!("invalid int argument: {name}");
+        Type::I32 => {
+            let err = format!("invalid i32 argument: {name}");
             emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
             emit_to_i32_expr(&mut w, "v", name, &format!("\"{}\"", err));
+        }
+        Type::I64 => {
+            let err = format!("invalid i64 argument: {name}");
+            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_i64_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
         Type::Bool => {
             let err = format!("invalid bool argument: {name}");
             emit_extract_bool_expr(&mut w, "v", name, &format!("\"{}\"", err));
         }
-        Type::Double => {
-            let err = format!("invalid double argument: {name}");
+        Type::F64 => {
+            let err = format!("invalid f64 argument: {name}");
             emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
             emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
+        }
+        Type::F32 => {
+            let err = format!("invalid f32 argument: {name}");
+            emit_check_is_number_expr(&mut w, "v", &format!("\"{}\"", err));
+            emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
+            w.push_line(format!("let {name}: f32 = {name} as f32;", name = name));
         }
         Type::Any => {
             w.push_line(format!(
@@ -937,17 +1026,33 @@ fn emit_varargs_collect(
             w.dedent();
             w.push_line("}");
         }
-        Type::Int => {
+        Type::I32 => {
             w.push_line(format!("let mut {name}: Vec<i32> = Vec::new();", name = name));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
-                "&format!(\"invalid int argument: {name}[{{}}]\", rel)",
+                "&format!(\"invalid i32 argument: {name}[{{}}]\", rel)",
                 name = name
             );
             emit_check_is_number_expr(&mut w, "v", &err_expr);
             emit_to_i32_expr(&mut w, "v", "out", &err_expr);
+            w.push_line(format!("{name}.push(out);", name = name));
+
+            w.dedent();
+            w.push_line("}");
+        }
+        Type::I64 => {
+            w.push_line(format!("let mut {name}: Vec<i64> = Vec::new();", name = name));
+            emit_varargs_loop_header(&mut w, start_idx0, true);
+            w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
+
+            let err_expr = format!(
+                "&format!(\"invalid i64 argument: {name}[{{}}]\", rel)",
+                name = name
+            );
+            emit_check_is_number_expr(&mut w, "v", &err_expr);
+            emit_to_i64_expr(&mut w, "v", "out", &err_expr);
             w.push_line(format!("{name}.push(out);", name = name));
 
             w.dedent();
@@ -968,18 +1073,34 @@ fn emit_varargs_collect(
             w.dedent();
             w.push_line("}");
         }
-        Type::Double => {
+        Type::F64 => {
             w.push_line(format!("let mut {name}: Vec<f64> = Vec::new();", name = name));
             emit_varargs_loop_header(&mut w, start_idx0, true);
             w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
 
             let err_expr = format!(
-                "&format!(\"invalid double argument: {name}[{{}}]\", rel)",
+                "&format!(\"invalid f64 argument: {name}[{{}}]\", rel)",
                 name = name
             );
             emit_check_is_number_expr(&mut w, "v", &err_expr);
             emit_to_f64_expr(&mut w, "v", "out", &err_expr);
             w.push_line(format!("{name}.push(out);", name = name));
+
+            w.dedent();
+            w.push_line("}");
+        }
+        Type::F32 => {
+            w.push_line(format!("let mut {name}: Vec<f32> = Vec::new();", name = name));
+            emit_varargs_loop_header(&mut w, start_idx0, true);
+            w.push_line("let v: JSValue = unsafe { *argv.add(i) };");
+
+            let err_expr = format!(
+                "&format!(\"invalid f32 argument: {name}[{{}}]\", rel)",
+                name = name
+            );
+            emit_check_is_number_expr(&mut w, "v", &err_expr);
+            emit_to_f64_expr(&mut w, "v", "out", &err_expr);
+            w.push_line(format!("{name}.push(out as f32);", name = name));
 
             w.dedent();
             w.push_line("}");

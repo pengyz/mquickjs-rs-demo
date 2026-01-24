@@ -4,7 +4,7 @@ use std::fs;
 fn glue_varargs_string_double_bool_have_rel_and_conversions() {
     let ridl = r#"
 fn f(...rest_s: string) -> void;
-fn g(...rest_d: double) -> void;
+fn g(...rest_d: f64) -> void;
 fn h(...rest_b: bool) -> void;
 "#;
 
@@ -25,8 +25,8 @@ fn h(...rest_b: bool) -> void;
     assert!(glue.contains("JS_IsString"));
     assert!(glue.contains("JS_ToCString"));
 
-    // double varargs: check + to number.
-    assert!(glue.contains("invalid double argument: rest_d["));
+    // f64 varargs: check + to number.
+    assert!(glue.contains("invalid f64 argument: rest_d["));
     assert!(glue.contains("JS_ToNumber"));
 
     // bool varargs: tag check.

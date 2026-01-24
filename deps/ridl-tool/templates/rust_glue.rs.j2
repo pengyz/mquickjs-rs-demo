@@ -380,7 +380,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
         {%- if f.field_type == crate::parser::ast::Type::String %}
         let value_cstr = CString::new("{{ f.init_literal }}").unwrap_or_else(|_| CString::new("").unwrap());
         let value = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, value_cstr.as_ptr()) };
-        {%- else if f.field_type == crate::parser::ast::Type::Int %}
+        {%- else if f.field_type == crate::parser::ast::Type::I32 %}
         let value = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, {{ f.init_literal }}) };
         {%- else if f.field_type == crate::parser::ast::Type::Bool %}
         let value = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewBool(ctx, if {{ f.init_literal }} { 1 } else { 0 }) };

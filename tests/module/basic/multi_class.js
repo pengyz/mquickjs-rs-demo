@@ -4,6 +4,12 @@ function assert(cond, msg) {
   if (!cond) throw new Error(msg || "assert failed");
 }
 
+function assertNear(actual, expected, eps, msg) {
+  var d = actual - expected;
+  if (d < 0) d = -d;
+  if (!(d <= eps)) throw new Error(msg || ("assertNear failed: " + actual + " vs " + expected));
+}
+
 assert(typeof m === "object", "module should be object");
 
 // B0/B1/R0/R1: import + require interop + require (no cache) semantics
@@ -36,8 +42,10 @@ assert(f instanceof m.MFoo, "MFoo instanceof mismatch");
 // C1: basic types
 assert(f.add(1, 2) === 3, "MFoo.add mismatch");
 assert(f.echo_bool(true) === true, "MFoo.echo_bool mismatch");
-assert(f.echo_int(-7) === -7, "MFoo.echo_int mismatch");
-assert(f.echo_double(1.25) === 1.25, "MFoo.echo_double mismatch");
+assert(f.echo_i32(-7) === -7, "MFoo.echo_i32 mismatch");
+assertNear(f.echo_f64(1.25), 1.25, 1e-12, "MFoo.echo_f64 mismatch");
+assertNear(f.echo_f32(1.25), 1.25, 1e-6, "MFoo.echo_f32 mismatch");
+assert(f.echo_i64(9007199254740991) === 9007199254740991, "MFoo.echo_i64 mismatch");
 assert(f.echo_string("hello") === "hello", "MFoo.echo_string mismatch");
 
 var any_obj = { k: 1 };

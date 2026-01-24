@@ -7,11 +7,19 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         v
     }
 
-    fn echo_int(&mut self, v: i32) -> i32 {
+    fn echo_i32(&mut self, v: i32) -> i32 {
         v
     }
 
-    fn echo_double(&mut self, v: f64) -> f64 {
+    fn echo_f64(&mut self, v: f64) -> f64 {
+        v
+    }
+
+    fn echo_f32(&mut self, v: f32) -> f32 {
+        v
+    }
+
+    fn echo_i64(&mut self, v: i64) -> i64 {
         v
     }
 
@@ -23,7 +31,7 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         v
     }
 
-    fn echo_int_nullable(&mut self, v: Option<i32>) -> Option<i32> {
+    fn echo_i32_nullable(&mut self, v: Option<i32>) -> Option<i32> {
         v
     }
 
@@ -54,23 +62,23 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         &mut self,
         env: &mut mquickjs_rs::Env<'ctx>,
         v: Option<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>>,
-    ) -> Option<crate::api::global::union::UnionIntString> {
+    ) -> Option<crate::api::global::union::UnionI32String> {
         let Some(v) = v else {
             return None;
         };
 
-        // Decode only string/int to validate Optional(any) param decoding.
+        // Decode only string/i32 to validate Optional(any) param decoding.
         // Other types map to None.
         let raw = v.as_raw();
         let v_str = env.scope().value(raw);
         if let Ok(s) = env.get_string(v_str) {
-            return Some(crate::api::global::union::UnionIntString::String(s));
+            return Some(crate::api::global::union::UnionI32String::String(s));
         }
 
         let v_num = env.scope().value(raw);
         if let Ok(n) = env.get_number(v_num) {
             if n.fract() == 0.0 {
-                return Some(crate::api::global::union::UnionIntString::Int(n as i32));
+                return Some(crate::api::global::union::UnionI32String::I32(n as i32));
             }
         }
 
@@ -79,23 +87,23 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         // without relying on exact numeric tagging in this engine.
         let v_num2 = env.scope().value(raw);
         if let Ok(n) = env.get_number(v_num2) {
-            return Some(crate::api::global::union::UnionIntString::String(n.to_string()));
+            return Some(crate::api::global::union::UnionI32String::String(n.to_string()));
         }
 
         None
     }
 
-    fn echo_string_or_int(
+    fn echo_string_or_i32(
         &mut self,
-        v: crate::api::global::union::UnionIntString,
-    ) -> crate::api::global::union::UnionIntString {
+        v: crate::api::global::union::UnionI32String,
+    ) -> crate::api::global::union::UnionI32String {
         v
     }
 
-    fn echo_string_or_int_nullable(
+    fn echo_string_or_i32_nullable(
         &mut self,
-        v: Option<crate::api::global::union::UnionIntString>,
-    ) -> Option<crate::api::global::union::UnionIntString> {
+        v: Option<crate::api::global::union::UnionI32String>,
+    ) -> Option<crate::api::global::union::UnionI32String> {
         v
     }
 }

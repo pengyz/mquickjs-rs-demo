@@ -226,7 +226,7 @@ impl SemanticValidator {
                         ));
                     }
 
-                    if matches!(t, Type::Int | Type::Float | Type::Double) {
+                    if matches!(t, Type::I32 | Type::I64 | Type::F32 | Type::F64) {
                         numeric_count += 1;
                     }
 
@@ -235,7 +235,7 @@ impl SemanticValidator {
 
                 if numeric_count >= 2 {
                     self.errors.push(RIDLError::new(
-                        "Union 不支持数值类型联合（例如 int | double）。若不确定数值类型，请使用 double".to_string(),
+                        "Union 不支持数值类型联合（例如 i32 | f64）。若不确定数值类型，请使用 f64".to_string(),
                         0,
                         0,
                         self.file_path.clone(),
@@ -248,9 +248,10 @@ impl SemanticValidator {
             }
             // 基础类型不需要验证
             Type::Bool
-            | Type::Int
-            | Type::Float
-            | Type::Double
+            | Type::I32
+            | Type::I64
+            | Type::F32
+            | Type::F64
             | Type::String
             | Type::Void
             | Type::Object
@@ -414,7 +415,7 @@ impl SemanticValidator {
                 // - Only primitive + null are supported for now.
                 // - Custom types may only be initialized with null.
                 match &f.field_type {
-                    Type::Bool | Type::Int | Type::Float | Type::Double | Type::String | Type::Null => {}
+                    Type::Bool | Type::I32 | Type::I64 | Type::F32 | Type::F64 | Type::String | Type::Null => {}
                     Type::Any => {
                         // any is allowed to be initialized with null (and other literals in the future).
                     }

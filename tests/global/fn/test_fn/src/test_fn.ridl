@@ -2,15 +2,15 @@
 
 singleton TestFn {
     // v1 glue currently supports primitive conversions for strict mode.
-    fn addInt(a: int, b: int) -> int;
+    fn addI32(a: i32, b: i32) -> i32;
 
     fn echoAny(v: any) -> any;
     fn makeAnyString(s: string) -> any;
     fn anyToString(v: any) -> string;
 
-    fn makeArrayWithLen(len: int) -> any;
-    fn arrLen(arr: any) -> int;
-    fn arrPush(arr: any, v: any) -> int;
-    fn arrSet(arr: any, index: int, v: any) -> void;
-    fn arrGet(arr: any, index: int) -> any;
+    fn makeArrayWithLen(len: i32) -> any;
+    fn arrLen(arr: any) -> i32;
+    fn arrPush(arr: any, v: any) -> i32;
+    fn arrSet(arr: any, index: i32, v: any) -> void;
+    fn arrGet(arr: any, index: i32) -> any;
 }

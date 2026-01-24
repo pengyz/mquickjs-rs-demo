@@ -185,9 +185,10 @@ pub enum SerializationFormat {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum Type {
     Bool,
-    Int,
-    Float,
-    Double,
+    I32,
+    I64,
+    F32,
+    F64,
     String,
     Void,
     Object,
@@ -213,9 +214,10 @@ impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Type::Bool => write!(f, "bool"),
-            Type::Int => write!(f, "int"),
-            Type::Float => write!(f, "float"),
-            Type::Double => write!(f, "double"),
+            Type::I32 => write!(f, "i32"),
+            Type::I64 => write!(f, "i64"),
+            Type::F32 => write!(f, "f32"),
+            Type::F64 => write!(f, "f64"),
             Type::String => write!(f, "string"),
             Type::Void => write!(f, "void"),
             Type::Object => write!(f, "object"),
