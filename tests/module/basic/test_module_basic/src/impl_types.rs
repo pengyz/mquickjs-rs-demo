@@ -20,6 +20,10 @@ impl MFooClass for MFooImpl {
     fn use_bar(&mut self, mut b: Box<dyn MBarClass>) -> i32 {
         b.get_v()
     }
+
+    fn get_v(&mut self) -> i32 {
+        777
+    }
 }
 
 impl MBarClass for MBarImpl {

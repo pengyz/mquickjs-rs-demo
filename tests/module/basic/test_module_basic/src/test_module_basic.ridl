@@ -18,6 +18,9 @@ class MFoo {
 
     // Phase 2: cross-class parameter passing
     fn use_bar(b: MBar) -> int;
+
+    // MC2: same-name method across classes should not pollute prototypes
+    fn get_v() -> int;
 }
 
 class MBar {
