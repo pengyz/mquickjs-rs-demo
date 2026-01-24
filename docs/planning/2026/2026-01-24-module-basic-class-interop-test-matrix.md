@@ -54,8 +54,10 @@
 
 ### 5. require()/import 边界（module_basic 的“稍难”）
 
-- [ ] **[R0] 同一模块重复 require 返回同一 module 对象**（缓存语义）
-- [ ] **[R1] import 与 require 互操作一致**（导出的 class/fn 引用相等）
+- [x] **[R0] 同一模块重复 require 返回新 module 对象**（无缓存语义）
+  - 现状：`tests/module/basic/multi_class.js` 已断言 `require()` 两次返回对象不相等（`m2 !== m3`）。
+  - 注意：虽然 module 对象不相等，但其导出成员（例如 class 构造器）应保持引用一致，见 [R1]。
+- [x] **[R1] import 与 require 互操作一致**（导出的 class/fn 引用相等）
 - [ ] **[R2] require 在 RIDL stdlib normalization 后仍可用**（与 runtime normalization 相关）
 
 ### 6. ROM/标准库 materialize 路径（最难但必要）
