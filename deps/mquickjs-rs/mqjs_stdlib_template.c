@@ -29,12 +29,17 @@
 #include "mquickjs.h"
 #include "mquickjs_build.h"
 
-/* Include RIDL-generated standard library extensions (from build.rs copied into mquickjs/) */
+#ifdef MQUICKJS_ENABLE_RIDL_EXTENSIONS
+/* Include RIDL-generated standard library extensions (copied into include_dir). */
 #include "mquickjs_ridl_register.h"
-
 
 /* File-scope declarations/definitions for RIDL extensions */
 JS_RIDL_DECLS_EXPAND;
+#else
+/* Base build: no RIDL headers required. */
+#define JS_RIDL_DECLS_EXPAND /* empty */
+#define JS_RIDL_EXTENSIONS   /* empty */
+#endif
 
 /* defined in mqjs_example.c */
 //#define CONFIG_CLASS_EXAMPLE
