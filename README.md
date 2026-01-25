@@ -19,6 +19,7 @@ cargo build
 
 ```bash
 cargo test
+cargo run -p ridl-builder -- selftest-gc-mark
 cargo run -- tests
 ```
 
