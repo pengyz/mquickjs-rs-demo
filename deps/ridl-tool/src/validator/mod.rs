@@ -209,6 +209,22 @@ impl SemanticValidator {
                 self.validate_type(element_type);
             }
             Type::Map(key_type, value_type) => {
+                // V1: map key must be a primitive so JS object property keys can be validated
+                // by glue (key comes from property name string).
+                // NOTE: Rust HashMap requires K: Eq + Hash, so f32/f64 cannot be used as keys.
+                if !matches!(
+                    key_type.as_ref(),
+                    Type::String | Type::Bool | Type::I32 | Type::I64
+                ) {
+                    self.errors.push(RIDLError::new(
+                        "map<K, V> 的 key 仅支持 primitive：string/bool/i32/i64".to_string(),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+
                 self.validate_type(key_type);
                 self.validate_type(value_type);
             }
@@ -226,6 +242,8 @@ impl SemanticValidator {
                         ));
                     }
 
+                    // V1 final rule: union may contain at most one numeric primitive.
+                    // Note: only one of {i32,i64,f32,f64} is allowed in a union.
                     if matches!(t, Type::I32 | Type::I64 | Type::F32 | Type::F64) {
                         numeric_count += 1;
                     }

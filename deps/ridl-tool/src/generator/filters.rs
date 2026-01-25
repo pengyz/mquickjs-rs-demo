@@ -89,6 +89,18 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
             ));
         }
 
+        Type::Array(inner) => {
+            format!("Vec<{}>", rust_type_from_idl(inner)?)
+        }
+
+        Type::Map(key, value) => {
+            format!(
+                "std::collections::HashMap<{}, {}>",
+                rust_type_from_idl(key)?,
+                rust_type_from_idl(value)?
+            )
+        }
+
         // Keep explicit: fail fast for types we haven't implemented yet.
         other => {
             return Err(askama::Error::Custom(
@@ -135,14 +147,65 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
         }
         Type::String => {
             w.push_line(format!(
-                "let cstr = CString::new({value}).unwrap_or_else(|_| CString::new(\"\").unwrap());",
+                "let cstr = CString::new({value}.as_str()).unwrap_or_else(|_| CString::new(\"\").unwrap());",
                 value = value_expr
             ));
-            w.push_line("unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }");
+            w.push_line("let v = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) };");
+            w.push_line("v");
         }
-        _ => {
-            w.push_line("compile_error!(\"v1 glue: unsupported value conversion\");");
-            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED");
+        Type::Map(key_ty, value_ty) => {
+            // v1: map is represented as a plain JS object.
+            // NOTE: key is stored as JS property name string.
+            w.push_line("let obj = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewObject(ctx) };".to_string());
+            w.push_line(format!("for (k, v) in {value}.iter() {{", value = value_expr));
+            w.indent();
+
+            // key -> String
+            match key_ty.as_ref() {
+                Type::String => {
+                    w.push_line("let k_str: &str = k.as_str();".to_string());
+                }
+                Type::Bool | Type::I32 | Type::I64 | Type::F32 | Type::F64 => {
+                    w.push_line("let k_str = k.to_string();".to_string());
+                }
+                _ => {
+                    w.push_line(
+                        "compile_error!(\"v1 glue: map key type must be primitive\");".to_string(),
+                    );
+                    w.push_line("let k_str = \"\".to_string();".to_string());
+                }
+            }
+
+            w.push_line("let k_cstr = CString::new(k_str).unwrap_or_else(|_| CString::new(\"\").unwrap());".to_string());
+
+            let value_to_js = emit_value_to_js(value_ty, "v")?;
+            // emit_value_to_js can generate multiple statements.
+            // If it ends with an expression (e.g. `v`), we must not emit it as a standalone statement.
+            let mut lines: Vec<&str> = value_to_js.lines().collect();
+            if let Some(&last) = lines.last() {
+                let trimmed = last.trim();
+                if trimmed == "v" || trimmed == "obj" {
+                    lines.pop();
+                }
+            }
+            for line in lines {
+                w.push_line(line.to_string());
+            }
+            w.push_line("let v_js: JSValue = v;".to_string());
+
+            w.push_line(
+                "unsafe { mquickjs_rs::mquickjs_ffi::JS_SetPropertyStr(ctx, obj, k_cstr.as_ptr(), v_js) };"
+                    .to_string(),
+            );
+
+            w.dedent();
+            w.push_line("}".to_string());
+            w.push_line("obj".to_string());
+        }
+        other => {
+            return Err(askama::Error::Custom(
+                format!("v1 glue: unsupported value conversion: {other:?}").into(),
+            ));
         }
     }
 
@@ -231,6 +294,10 @@ pub fn emit_return_convert_typed(
         Type::Any => {
             // any return is a Handle<Value> at the Rust boundary.
             w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
+        }
+        Type::Map(_, _) => {
+            let value_to_js = emit_value_to_js(return_type, result_name)?;
+            w.push_line(value_to_js);
         }
         Type::ClassRef(name) => {
             w.push_line(format!(
@@ -414,17 +481,21 @@ pub fn emit_return_convert_typed(
                     w.push_line("    Some(v) => env.pin_return(v),".to_string());
                     w.push_line("}".to_string());
                 }
-                _ => {
-                    w.push_line(
-                        "compile_error!(\"v1 glue: unsupported return type\");".to_string(),
-                    );
-                    w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
+                Type::Map(_, _) => {
+                    let value_to_js = emit_value_to_js(cur, result_name)?;
+                    w.push_line(value_to_js);
+                }
+                other => {
+                    return Err(askama::Error::Custom(
+                        format!("v1 glue: unsupported return type: Optional({other:?})").into(),
+                    ));
                 }
             }
         }
-        _ => {
-            w.push_line("compile_error!(\"v1 glue: unsupported return type\");".to_string());
-            w.push_line("mquickjs_rs::mquickjs_ffi::JS_UNDEFINED".to_string());
+        other => {
+            return Err(askama::Error::Custom(
+                format!("v1 glue: unsupported return type: {other:?}").into(),
+            ));
         }
     }
 
@@ -717,14 +788,13 @@ fn emit_union_param_extract_from_jsvalue(
         );
         w.indent();
         // Inline string conversion so error path can return `Result::Err(...)` from this closure.
-        w.push_line("use std::os::raw::c_char;".to_string());
         w.push_line(
             "let mut ptr_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };"
                 .to_string(),
         );
         w.push_line("let ptr_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut ptr_buf as *mut _) };".to_string());
         w.push_line(format!("if ptr_ptr.is_null() {{ return Err(js_throw_type_error(ctx, \"invalid union argument: {name}\")); }}", name = name));
-        w.push_line("let ptr: *const c_char = ptr_ptr;".to_string());
+        w.push_line("let ptr: *const core::ffi::c_char = ptr_ptr;".to_string());
         w.push_line("let s = unsafe { core::ffi::CStr::from_ptr(ptr) };".to_string());
         w.push_line(format!(
             "return Ok({rust_ty}::String(s.to_string_lossy().into_owned()));",
@@ -944,7 +1014,7 @@ fn emit_to_i64_expr(w: &mut CodeWriter, value_expr: &str, out_name: &str, err_ex
 }
 
 fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, err_expr: &str) {
-    w.push_line("use std::os::raw::c_char;");
+    // c_char is already imported at top-level in generated glue; avoid re-importing it in nested blocks.
     w.push_line(format!(
         "let mut {name}_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf {{ buf: [0u8; 5] }};",
         name = name
@@ -960,7 +1030,7 @@ fn emit_to_cstring_ptr_expr(w: &mut CodeWriter, value_expr: &str, name: &str, er
         err = err_expr
     ));
     w.push_line(format!(
-        "let {name}: *const c_char = {name}_ptr;",
+        "let {name}: *const core::ffi::c_char = {name}_ptr;",
         name = name
     ));
 }
@@ -1127,10 +1197,150 @@ fn emit_single_param_extract_from_jsvalue(
                 name = name,
                 class = class_name
             ));
-            w.push_line(format!(
-                "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_SetOpaque(ctx, v, core::ptr::null_mut()) }};"
-            ));
+            w.push_line(
+                "unsafe { mquickjs_rs::mquickjs_ffi::JS_SetOpaque(ctx, v, core::ptr::null_mut()) };"
+                    .to_string(),
+            );
             w.push_line(format!("let _ = \"{class_snake}\";"));
+        }
+
+        Type::Map(key_ty, value_ty) => {
+            let map_rust_ty = rust_type_from_idl(ty)?;
+            let key_rust_ty = rust_type_from_idl(key_ty)?;
+
+            // std::collections::HashMap requires K: Eq + Hash. f32/f64 do not implement these.
+            // For now we only support primitive keys that satisfy Eq+Hash.
+            // (Validator currently allows f32/f64; we reject them here with a hard error.)
+            if matches!(key_ty.as_ref(), Type::F32 | Type::F64) {
+                return Err(askama::Error::Custom(
+                    "map key f32/f64 is not supported: HashMap requires Eq+Hash"
+                        .to_string()
+                        .into(),
+                ));
+            }
+
+            w.push_line("let v0 = v;".to_string());
+            // We treat map as a plain object with string keys.
+            // mquickjs C API exposes JS_GetClassID/JS_CLASS_OBJECT but not JS_IsObject.
+            w.push_line(
+                "if v0 == mquickjs_rs::mquickjs_ffi::JS_NULL || unsafe { mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, v0) } != mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_OBJECT as i32 { return js_throw_type_error(ctx, \"map: expected object\"); }"
+                    .to_string(),
+            );
+
+            // keys_arr = Object.keys(v0)
+            w.push_line("let global = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetGlobalObject(ctx) };".to_string());
+            w.push_line("use std::ffi::CString;".to_string());
+            w.push_line("let __ridl_prop_object = CString::new(\"Object\").unwrap();".to_string());
+            w.push_line("let __ridl_prop_keys = CString::new(\"keys\").unwrap();".to_string());
+            w.push_line("let obj_ctor = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetPropertyStr(ctx, global, __ridl_prop_object.as_ptr()) };".to_string());
+            w.push_line("let keys_fn = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetPropertyStr(ctx, obj_ctor, __ridl_prop_keys.as_ptr()) };".to_string());
+            w.push_line("unsafe { mquickjs_rs::mquickjs_ffi::JS_PushArg(ctx, v0); }".to_string());
+            w.push_line("unsafe { mquickjs_rs::mquickjs_ffi::JS_PushArg(ctx, keys_fn); }".to_string());
+            w.push_line("unsafe { mquickjs_rs::mquickjs_ffi::JS_PushArg(ctx, obj_ctor); }".to_string());
+            w.push_line("let keys_arr = unsafe { mquickjs_rs::mquickjs_ffi::JS_Call(ctx, 1) };".to_string());
+            w.push_line("if mquickjs_rs::mquickjs_ffi::js_value_special_tag(keys_arr) == (mquickjs_rs::mquickjs_ffi::JS_TAG_EXCEPTION as u32) { return keys_arr; }".to_string());
+
+            w.push_line(format!(
+                "let mut {name}_map: {map_rust_ty} = std::collections::HashMap::new();",
+                name = name,
+                map_rust_ty = map_rust_ty
+            ));
+
+            // len = keys_arr.length
+            w.push_line("let __ridl_prop_length = CString::new(\"length\").unwrap();".to_string());
+            w.push_line(
+                "let len_val = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetPropertyStr(ctx, keys_arr, __ridl_prop_length.as_ptr()) };"
+                    .to_string(),
+            );
+            w.push_line("let mut len_num: f64 = 0.0;".to_string());
+            w.push_line(
+                "if unsafe { mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut len_num as *mut _, len_val) } < 0 { return js_throw_type_error(ctx, \"map: failed to read keys length\"); }"
+                    .to_string(),
+            );
+            w.push_line("let len: i32 = len_num as i32;".to_string());
+
+            w.push_line("for i in 0..len {".to_string());
+            w.indent();
+
+            w.push_line(
+                "let key_js = unsafe { mquickjs_rs::mquickjs_ffi::JS_GetPropertyUint32(ctx, keys_arr, i as u32) };"
+                    .to_string(),
+            );
+            emit_to_cstring_ptr_expr(
+                &mut w,
+                "key_js",
+                &format!("{name}_kstr"),
+                "\"map: invalid key string\"",
+            );
+            w.push_line(format!(
+                "let {name}_kstr_s = unsafe {{ core::ffi::CStr::from_ptr({name}_kstr) }}.to_string_lossy().into_owned();",
+                name = name
+            ));
+
+            w.push_line(format!("let {name}_k: {key_rust_ty} = ", name = name, key_rust_ty = key_rust_ty));
+            match key_ty.as_ref() {
+                Type::String => {
+                    w.push_line(format!("{name}_kstr_s;", name = name));
+                }
+                Type::Bool => {
+                    w.push_line(format!(
+                        "match {name}_kstr_s.as_str() {{ \"true\" => true, \"false\" => false, _ => return js_throw_type_error(ctx, \"map<bool,_>: invalid key\") }};",
+                        name = name
+                    ));
+                }
+                Type::I32 => {
+                    w.push_line(format!(
+                        "match {name}_kstr_s.parse::<i32>() {{ Ok(v) => v, Err(_) => return js_throw_type_error(ctx, \"map<i32,_>: invalid key\") }};",
+                        name = name
+                    ));
+                }
+                Type::I64 => {
+                    w.push_line(format!(
+                        "match {name}_kstr_s.parse::<i64>() {{ Ok(v) => v, Err(_) => return js_throw_type_error(ctx, \"map<i64,_>: invalid key\") }};",
+                        name = name
+                    ));
+                }
+                Type::F64 => {
+                    w.push_line(format!(
+                        "match {name}_kstr_s.parse::<f64>() {{ Ok(v) if v.is_finite() => if v == 0.0 {{ 0.0 }} else {{ v }}, _ => return js_throw_type_error(ctx, \"map<f64,_>: invalid key\") }};",
+                        name = name
+                    ));
+                }
+                Type::F32 => {
+                    w.push_line(format!(
+                        "match {name}_kstr_s.parse::<f64>() {{ Ok(v) if v.is_finite() => {{ let v = if v == 0.0 {{ 0.0 }} else {{ v }}; v as f32 }}, _ => return js_throw_type_error(ctx, \"map<f32,_>: invalid key\") }};",
+                        name = name
+                    ));
+                }
+                _ => {
+                    w.push_line("return js_throw_type_error(ctx, \"map: unsupported key type\");".to_string());
+                }
+            }
+
+            w.push_line(format!(
+                "let {name}_prop_val = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetPropertyStr(ctx, v0, {name}_kstr) }};",
+                name = name
+            ));
+
+            // Decode value from the property JSValue.
+            // emit_single_param_extract_from_jsvalue expects the source JSValue to be named `v`.
+            // Keep the HashMap variable name `{name}` intact.
+            w.push_line(format!("let v = {name}_prop_val;", name = name));
+            let inner_extract = emit_single_param_extract_from_jsvalue(
+                &format!("{name}_val"),
+                value_ty,
+                module_name_normalized,
+            )?;
+            for line in inner_extract.lines() {
+                w.push_line(line.to_string());
+            }
+
+            w.push_line(format!("{name}_map.insert({name}_k, {name}_val);", name = name));
+
+            w.dedent();
+            w.push_line("}".to_string());
+
+            w.push_line(format!("let {name} = {name}_map;", name = name));
         }
 
         _ => {
@@ -1166,7 +1376,7 @@ fn emit_varargs_collect(
     match ty {
         Type::String => {
             w.push_line(format!(
-                "let mut {name}: Vec<*const c_char> = Vec::new();",
+                "let mut {name}: Vec<*const core::ffi::c_char> = Vec::new();",
                 name = name
             ));
             emit_varargs_loop_header(&mut w, start_idx0, true);

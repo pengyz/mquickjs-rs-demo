@@ -123,15 +123,14 @@ try {
 }
 assert(threw, 'expected TypeError for echoStringOrI32Nullable(1.5)')
 
-// Union(i32 | f64)
-assertEq(t.echoI32OrF64(1), 1)
-assertNear(t.echoI32OrF64(1.25), 1.25, 1e-12)
+// f64 + f64?
+assertNear(t.echoF64New(1), 1, 1e-12)
+assertNear(t.echoF64New(1.25), 1.25, 1e-12)
 
-// Optional(Union(i32 | f64))
-assertEq(t.echoI32OrF64Nullable(null), null)
-assertEq(t.echoI32OrF64Nullable(undefined), null)
-assertEq(t.echoI32OrF64Nullable(2), 2)
-assertNear(t.echoI32OrF64Nullable(2.5), 2.5, 1e-12)
+assertEq(t.echoF64NewNullable(null), null)
+assertEq(t.echoF64NewNullable(undefined), null)
+assertNear(t.echoF64NewNullable(2), 2, 1e-12)
+assertNear(t.echoF64NewNullable(2.5), 2.5, 1e-12)
 
 {
   var obj = { a: 1 }
@@ -151,3 +150,33 @@ assertEq(t.maybeUnionAny('hi'), 'hi')
 }
 // object handling is engine-defined for number/string coercion; just ensure it doesn't crash
 assert(t.maybeUnionAny({}) !== undefined)
+
+// map<i32, string>
+assertEq(t.sumMapI32String({ "1": "a", "-2": "bb" }), 1 + 1 + (-2) + 2)
+threw = false
+try {
+  t.sumMapI32String({ "1.2": "a" })
+} catch (e5) {
+  threw = true
+}
+assert(threw, 'expected TypeError for map<i32,_> invalid key')
+
+// map<bool, i32>
+assertEq(t.sumMapBoolI32({ "true": 10, "false": 20 }), 1 + 10 + 0 + 20)
+threw = false
+try {
+  t.sumMapBoolI32({ "True": 1 })
+} catch (e6) {
+  threw = true
+}
+assert(threw, 'expected TypeError for map<bool,_> invalid key')
+
+// map<i64, i32> (no safe-int restriction)
+assertEq(t.sumMapI64I32({ "9007199254740993": 1 }), 993 + 1)
+
+// return map<i32, string>
+{
+  var m = t.makeMapI32String()
+  assertEq(m["1"], "a")
+  assertEq(m["-2"], "bb")
+}

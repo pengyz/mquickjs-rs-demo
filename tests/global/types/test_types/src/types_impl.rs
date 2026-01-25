@@ -106,18 +106,31 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         v
     }
 
-    fn echo_i32_or_f64(
-        &mut self,
-        v: crate::api::global::union::UnionF64I32,
-    ) -> crate::api::global::union::UnionF64I32 {
+    fn echo_f64_new(&mut self, v: f64) -> f64 {
         v
     }
 
-    fn echo_i32_or_f64_nullable(
-        &mut self,
-        v: Option<crate::api::global::union::UnionF64I32>,
-    ) -> Option<crate::api::global::union::UnionF64I32> {
+    fn echo_f64_new_nullable(&mut self, v: Option<f64>) -> Option<f64> {
         v
+    }
+
+    fn sum_map_i32_string(&mut self, v: std::collections::HashMap<i32, String>) -> i32 {
+        v.iter().map(|(k, s)| k + (s.len() as i32)).sum()
+    }
+
+    fn sum_map_bool_i32(&mut self, v: std::collections::HashMap<bool, i32>) -> i32 {
+        v.iter().map(|(k, n)| (if *k { 1 } else { 0 }) + *n).sum()
+    }
+
+    fn sum_map_i64_i32(&mut self, v: std::collections::HashMap<i64, i32>) -> i32 {
+        v.iter().map(|(k, n)| ((*k % 1000) as i32) + *n).sum()
+    }
+
+    fn make_map_i32_string(&mut self) -> std::collections::HashMap<i32, String> {
+        let mut out = std::collections::HashMap::new();
+        out.insert(1, "a".to_string());
+        out.insert(-2, "bb".to_string());
+        out
     }
 }
 

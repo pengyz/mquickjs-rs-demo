@@ -110,6 +110,8 @@ fn normalize_type(ty: Type) -> Result<Type, Box<dyn std::error::Error>> {
     };
 
     // 2) Union(..., Null) -> Optional(Union(...))
+    //    If the union becomes a single member after removing Null, collapse it:
+    //    Union(T, Null) -> Optional(T)
     let ty = match ty {
         Type::Union(ts) => {
             let mut non_null: Vec<Type> = Vec::new();
@@ -122,7 +124,11 @@ fn normalize_type(ty: Type) -> Result<Type, Box<dyn std::error::Error>> {
                 }
             }
             if has_null {
-                Type::Optional(Box::new(Type::Union(non_null)))
+                match non_null.len() {
+                    0 => Type::Optional(Box::new(Type::Union(non_null))),
+                    1 => Type::Optional(Box::new(non_null.into_iter().next().unwrap())),
+                    _ => Type::Optional(Box::new(Type::Union(non_null))),
+                }
             } else {
                 Type::Union(non_null)
             }
@@ -149,6 +155,17 @@ fn normalize_type(ty: Type) -> Result<Type, Box<dyn std::error::Error>> {
     let ty = match ty {
         Type::Optional(inner) => match *inner {
             Type::Optional(x) => Type::Optional(x),
+            other => Type::Optional(Box::new(other)),
+        },
+        other => other,
+    };
+
+    // 5) Optional(Union([T])) -> Optional(T)
+    let ty = match ty {
+        Type::Optional(inner) => match *inner {
+            Type::Union(mut ts) if ts.len() == 1 => {
+                Type::Optional(Box::new(ts.pop().unwrap()))
+            }
             other => Type::Optional(Box::new(other)),
         },
         other => other,

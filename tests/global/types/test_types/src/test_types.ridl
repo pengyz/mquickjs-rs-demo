@@ -18,6 +18,13 @@ singleton TestTypes {
     fn echoStringOrI32(v: string | i32) -> string | i32;
     fn echoStringOrI32Nullable(v: string | i32 | null) -> (string | i32)?;
 
-    fn echoI32OrF64(v: i32 | f64) -> i32 | f64;
-    fn echoI32OrF64Nullable(v: i32 | f64 | null) -> (i32 | f64)?;
+    fn echoF64New(v: f64) -> f64;
+    fn echoF64NewNullable(v: f64 | null) -> f64?;
+
+    fn sumMapI32String(v: map<i32, string>) -> i32;
+    fn sumMapBoolI32(v: map<bool, i32>) -> i32;
+    fn sumMapI64I32(v: map<i64, i32>) -> i32;
+
+    fn makeMapI32String() -> map<i32, string>;
 }
+
