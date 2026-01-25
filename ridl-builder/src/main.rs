@@ -27,6 +27,7 @@ fn main() {
         "export-unit-graph" => export_unit_graph_cmd(args.collect()),
         "export-deps" => export_deps_cmd(args.collect()),
         "probe-bindgen" => probe_bindgen::run(),
+        "selftest-gc-mark" => selftest_gc_mark_cmd(),
         _ => {
             eprintln!("Unknown command: {cmd}");
             usage();
@@ -45,6 +46,7 @@ fn usage() {
         "  prepare            Build tools, aggregate RIDL, then build mquickjs with the aggregated header"
     );
     eprintln!("  probe-bindgen      Compile a tiny crate to probe bindgen API");
+    eprintln!("  selftest-gc-mark   Build and run engine-level GC mark selftest");
     eprintln!("");
     eprintln!("Debug/Audit commands:");
     eprintln!("  export-unit-graph  Export raw cargo -Z --unit-graph JSON (debugging only)");
@@ -558,6 +560,117 @@ fn build_mquickjs(args: Vec<String>) {
     }
 
     run(cmd);
+}
+
+fn selftest_gc_mark_cmd() {
+    let workspace_root = find_workspace_root();
+
+    let selftest_c = workspace_root
+        .join("deps")
+        .join("mquickjs")
+        .join("selftest_gc_mark.c");
+
+    if !selftest_c.exists() {
+        panic!(
+            "selftest source not found: {}",
+            selftest_c.to_string_lossy()
+        );
+    }
+
+    let tmp_dir = env::temp_dir().join("ridl-builder-tests");
+    std::fs::create_dir_all(&tmp_dir)
+        .unwrap_or_else(|e| panic!("failed to create tmp dir {}: {e}", tmp_dir.display()));
+
+    let out_bin = tmp_dir.join(if cfg!(windows) {
+        "mquickjs_gc_mark_selftest.exe"
+    } else {
+        "mquickjs_gc_mark_selftest"
+    });
+
+    let out_fw = tmp_dir.join("mquickjs-build");
+
+    // Ensure mquickjs_atom.h (and other generated headers) exist.
+    // We reuse mquickjs-build's "base" build, which is already the canonical way
+    // this repo builds the engine headers/libs.
+    {
+        let target_triple = resolve_target_triple();
+        let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+        let mode = if profile == "release" { "release" } else { "debug" };
+
+        let base_out = out_fw
+            .join("framework")
+            .join(target_triple)
+            .join(mode)
+            .join("base");
+
+        let mut cmd = Command::new("cargo");
+        cmd.arg("run")
+            .arg("-p")
+            .arg("mquickjs-build")
+            .arg("--")
+            .arg("build")
+            .arg("--mquickjs-dir")
+            .arg("deps/mquickjs")
+            .arg("--out")
+            .arg(base_out);
+
+        eprintln!("[selftest-gc-mark] building base framework outputs via mquickjs-build");
+        run(cmd);
+    }
+
+    let target_triple = resolve_target_triple();
+    let profile = env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+    let mode = if profile == "release" { "release" } else { "debug" };
+    let base_dir = out_fw
+        .join("framework")
+        .join(&target_triple)
+        .join(mode)
+        .join("base");
+
+    let include_dir = base_dir.join("include");
+    let lib_dir = base_dir.join("lib");
+    let lib_file = lib_dir.join("libmquickjs.a");
+    if !lib_file.exists() {
+        panic!("missing static lib: {}", lib_file.display());
+    }
+
+
+    // Keep this list explicit: if linking fails after engine refactors, update it here.
+    let c_files = [selftest_c];
+
+    let mut cmd = Command::new("cc");
+    cmd.arg("-O0")
+        .arg("-g")
+        .arg("-Wall")
+        .arg("-Wextra")
+        .arg("-I")
+        .arg(&include_dir)
+        .arg("-I")
+        .arg(workspace_root.join("deps/mquickjs"))
+        .arg("-o")
+        .arg(&out_bin);
+
+    for f in c_files {
+        if !f.exists() {
+            panic!("C source not found: {}", f.display());
+        }
+        cmd.arg(f);
+    }
+
+    // Put the library after the object(s) to satisfy static link ordering.
+    cmd.arg(&lib_file);
+
+    // libmquickjs pulls in libm.
+    cmd.arg("-lm");
+
+    eprintln!("[selftest-gc-mark] compiling: {}", out_bin.display());
+    run(cmd);
+
+    let mut run_cmd = Command::new(&out_bin);
+    run_cmd.stdout(Stdio::inherit()).stderr(Stdio::inherit());
+
+    eprintln!("[selftest-gc-mark] running: {}", out_bin.display());
+    run(run_cmd);
 }
 
 fn prepare_cmd(args: Vec<String>) {
