@@ -539,6 +539,35 @@ pub fn has_opaque_fields(class: &crate::generator::TemplateClass) -> ::askama::R
     Ok(!class.opaque_fields.is_empty())
 }
 
+/// Check if a class has any opaque fields containing Traced<T> types.
+/// Used by templates to conditionally generate gc_mark implementations.
+pub fn has_traced_fields(class: &crate::generator::TemplateClass) -> ::askama::Result<bool> {
+    Ok(class.opaque_fields.iter().any(|f| contains_traced_type(&f.field_type)))
+}
+
+/// Template filter to check if a type contains Traced<T> anywhere in its structure.
+pub fn contains_traced(ty: &Type) -> ::askama::Result<bool> {
+    Ok(contains_traced_type(ty))
+}
+
+/// Recursively check if a type contains Traced<T> at any nesting level.
+/// Traverses through Optional, Array, Map (both key and value), and Group wrappers.
+fn contains_traced_type(ty: &Type) -> bool {
+    match ty {
+        Type::Traced(_) => true,
+        Type::Optional(inner) => contains_traced_type(inner),
+        Type::Array(inner) => contains_traced_type(inner),
+        Type::Map(k, v) => contains_traced_type(k) || contains_traced_type(v),
+        Type::Group(inner) => contains_traced_type(inner),
+        _ => false,
+    }
+}
+
+/// Check if a type is Optional<T>.
+pub fn is_optional(ty: &Type) -> ::askama::Result<bool> {
+    Ok(matches!(ty, Type::Optional(_)))
+}
+
 pub fn normalize_ident(s: &str) -> ::askama::Result<String> {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {

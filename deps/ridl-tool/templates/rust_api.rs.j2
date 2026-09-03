@@ -199,6 +199,32 @@ pub struct {{ class.name|to_upper_camel_case }}Opaque {
     pub {{ field.name|to_snake_case }}: {{ field.field_type|rust_type_from_idl }},
 {%- endfor %}
 }
+
+{%- if class|has_traced_fields %}
+
+impl {{ class.name|to_upper_camel_case }}Opaque {
+    /// Mark GC-traced fields during garbage collection.
+    ///
+    /// `mf` is the engine-provided mark function pointer (see
+    /// `mquickjs_rs::roots::RootsRegistry::gc_mark` for the convention).
+    ///
+    /// TODO(phase-3): `mquickjs_rs::Traced<T>::gc_mark` does not exist yet;
+    /// this call site is a placeholder until Phase 3 implements `Traced<T>`.
+    pub(crate) unsafe fn gc_mark(&self, mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
+{%- for field in class.opaque_fields %}
+{%- if field.field_type|contains_traced %}
+{%- if field.field_type|is_optional %}
+        if let Some(ref inner) = self.{{ field.name|to_snake_case }} {
+            inner.gc_mark(mf);
+        }
+{%- else %}
+        self.{{ field.name|to_snake_case }}.gc_mark(mf);
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+    }
+}
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 
