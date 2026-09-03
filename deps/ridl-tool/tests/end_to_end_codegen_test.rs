@@ -1,5 +1,8 @@
 /// 端到端编译测试
 /// 验证 RIDL → 代码生成 → 编译 的完整管线
+///
+/// 注意：v1 版本中 enum/struct/callback/using/global_function 不生成 Rust 代码，
+/// 映射为 any(JSValue)。只有 class、singleton、interface 生成 Rust trait。
 
 use ridl_tool::parser::FileMode;
 
@@ -246,6 +249,197 @@ class NestedTraced {
     assert!(api_content.contains("for item in &self.items"), "Should iterate array");
     assert!(api_content.contains("for (_key, value) in &self.cache"), "Should iterate map");
     assert!(api_content.contains("if let Some(ref inner) = self.optional"), "Should unwrap optional");
+}
+
+/// 测试 singleton 生成
+#[test]
+fn test_singleton_generation() {
+    let ridl_input = r#"
+singleton MyService {
+    fn initialize() -> void;
+    fn process(x: i32) -> bool;
+    readonly property name: string;
+    property count: i32;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    )
+    .unwrap();
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证 singleton trait 生成
+    assert!(api_content.contains("pub trait MyServiceSingleton"), "Should generate singleton trait");
+    assert!(api_content.contains("fn initialize"), "Should have initialize method");
+    assert!(api_content.contains("fn process"), "Should have process method");
+    assert!(api_content.contains("fn name"), "Should have name property");
+    assert!(api_content.contains("fn count"), "Should have count property");
+    assert!(api_content.contains("fn set_count"), "Should have count setter");
+}
+
+/// 测试 interface 生成
+#[test]
+fn test_interface_generation() {
+    let ridl_input = r#"
+interface Drawable {
+    fn draw(ctx: object) -> void;
+    fn isVisible() -> bool;
+    fn getName() -> string;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    )
+    .unwrap();
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证 interface trait 生成
+    assert!(api_content.contains("pub trait DrawableInterface"), "Should generate interface trait");
+    assert!(api_content.contains("fn draw"), "Should have draw method");
+    assert!(api_content.contains("fn is_visible"), "Should have is_visible method");
+    assert!(api_content.contains("fn get_name"), "Should have get_name method");
+}
+
+/// 测试 v1 不生成的类型（enum/struct/callback/using/global_function）
+#[test]
+fn test_v1_types_not_generated() {
+    let ridl_input = r#"
+enum Color { RED, GREEN, BLUE }
+json struct Config { name: string; }
+callback EventHandler(event: object);
+using StringMap = map<string, string>;
+fn helper(x: i32) -> i32;
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    )
+    .unwrap();
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // v1 不生成这些类型的 Rust 代码
+    assert!(!api_content.contains("pub enum Color"), "v1 should not generate enum");
+    assert!(!api_content.contains("pub struct Config"), "v1 should not generate struct");
+    assert!(!api_content.contains("EventHandler"), "v1 should not generate callback");
+    assert!(!api_content.contains("StringMap"), "v1 should not generate using alias");
+    assert!(!api_content.contains("fn helper"), "v1 should not generate global function");
+}
+
+/// 测试综合 RIDL 文件（包含所有类型）
+#[test]
+fn test_comprehensive_ridl_generation() {
+    let ridl_input = r#"
+module my.app@1.0.0;
+
+import { Helper } from "utils";
+
+using StringMap = map<string, string>;
+
+callback ErrorCallback(error: string?);
+
+interface Serializable {
+    fn serialize() -> string;
+    fn deserialize(data: string) -> void;
+}
+
+enum LogLevel {
+    DEBUG = 0,
+    INFO = 1,
+    WARN = 2,
+    ERROR = 3,
+}
+
+json struct Config {
+    name: string;
+    version: string;
+    debug: bool;
+}
+
+class Logger {
+    var maxEntries: i32 = 1000;
+
+    readonly property level: i32;
+    property format: string;
+
+    constructor(level: i32);
+
+    fn log(message: string) -> void;
+    fn getEntries() -> array<string>;
+
+    opaque {
+        buffer: array<Traced<Value>>
+    }
+}
+
+singleton AppService {
+    fn initialize(config: Config) -> void;
+    fn getLogger(name: string) -> Logger;
+    readonly property version: string;
+    property debug: bool;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    )
+    .unwrap();
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证生成的类型
+    assert!(api_content.contains("pub trait SerializableInterface"), "Should have interface");
+    assert!(api_content.contains("pub trait LoggerClass"), "Should have class trait");
+    assert!(api_content.contains("pub struct LoggerOpaque"), "Should have opaque struct");
+    assert!(api_content.contains("pub trait AppServiceSingleton"), "Should have singleton trait");
+
+    // v1 不生成的类型
+    assert!(!api_content.contains("pub enum LogLevel"), "v1 should not generate enum");
+    assert!(!api_content.contains("pub struct Config"), "v1 should not generate struct");
 }
 
 /// 测试错误情况：语法错误

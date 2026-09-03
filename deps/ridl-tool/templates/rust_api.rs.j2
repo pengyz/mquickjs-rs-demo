@@ -74,6 +74,9 @@ pub trait {{ s.name|to_upper_camel_case }}Singleton {
     {%- for prop in s.properties %}
     {%- if prop.modifiers|is_readonly_prop %}
     fn {{ prop.name|to_snake_case|rust_ident }}(&self) -> {{ prop.property_type|rust_type_from_idl|safe }};
+    {%- else %}
+    fn {{ prop.name|to_snake_case|rust_ident }}(&self) -> {{ prop.property_type|rust_type_from_idl|safe }};
+    fn set_{{ prop.name|to_snake_case|rust_ident }}(&mut self, v: {{ prop.property_type|rust_type_from_idl|safe }});
     {%- endif %}
     {%- endfor %}
 }

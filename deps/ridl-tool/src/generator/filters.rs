@@ -210,6 +210,37 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
             w.push_line("}".to_string());
             w.push_line("obj".to_string());
         }
+        Type::Array(inner_ty) => {
+            // v1: array is represented as a JS array.
+            w.push_line(format!(
+                "let arr = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewArray(ctx, {value}.len() as i32) }};",
+                value = value_expr
+            ));
+            w.push_line(format!("for (i, item) in {value}.iter().enumerate() {{", value = value_expr));
+            w.indent();
+
+            let item_to_js = emit_value_to_js(inner_ty, "item")?;
+            let mut lines: Vec<&str> = item_to_js.lines().collect();
+            if let Some(&last) = lines.last() {
+                let trimmed = last.trim();
+                if trimmed == "item" || trimmed == "arr" {
+                    lines.pop();
+                }
+            }
+            for line in lines {
+                w.push_line(line.to_string());
+            }
+            w.push_line("let item_js: JSValue = item;".to_string());
+
+            w.push_line(
+                "unsafe { mquickjs_rs::mquickjs_ffi::JS_SetPropertyUint32(ctx, arr, i as u32, item_js) };"
+                    .to_string(),
+            );
+
+            w.dedent();
+            w.push_line("}".to_string());
+            w.push_line("arr".to_string());
+        }
         Type::Traced(_) => {
             return Err(askama::Error::Custom(
                 "Type::Traced is not yet supported in code generation (phase 0)".into(),
@@ -309,6 +340,10 @@ pub fn emit_return_convert_typed(
             w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
         Type::Map(_, _) => {
+            let value_to_js = emit_value_to_js(return_type, result_name)?;
+            w.push_line(value_to_js);
+        }
+        Type::Array(_) => {
             let value_to_js = emit_value_to_js(return_type, result_name)?;
             w.push_line(value_to_js);
         }
@@ -495,6 +530,10 @@ pub fn emit_return_convert_typed(
                     w.push_line("}".to_string());
                 }
                 Type::Map(_, _) => {
+                    let value_to_js = emit_value_to_js(cur, result_name)?;
+                    w.push_line(value_to_js);
+                }
+                Type::Array(_) => {
                     let value_to_js = emit_value_to_js(cur, result_name)?;
                     w.push_line(value_to_js);
                 }
