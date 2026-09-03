@@ -291,7 +291,7 @@ mquickjs-rs-demo/
 
 - [mquickjs](https://github.com/bellard/mquickjs) — Micro QuickJS 引擎
 - [QuickJS](https://bellard.org/quickjs/) — 原始 QuickJS 引擎
-- [RIDL 规范](docs/ridl-spec.md) — RIDL 语言规范（待完善）
+- [RIDL 语法规范](docs/ridl-spec.md) — 完整的 RIDL 语言规范
 
 ## 许可证
 
