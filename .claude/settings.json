@@ -1,0 +1,46 @@
+{
+  "language": "chinese",
+  "permissions": {
+    "ask": [
+      "Bash(git push:*)",
+      "Bash(rm -rf:*)",
+      "Bash(cargo clean:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/protect-core-files.sh",
+            "statusMessage": "检查核心文件保护..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-unsafe-code.sh",
+            "statusMessage": "检查 unsafe 代码规范..."
+          },
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/check-ridl-conventions.sh",
+            "statusMessage": "检查 RIDL 模块规范..."
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/post-commit-review.sh",
+            "statusMessage": "检测 commit 并触发审查..."
+          }
+        ]
+      }
+    ]
+  }
+}

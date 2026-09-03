@@ -12,6 +12,8 @@ pub struct ContextInner {
     ridl_ext_ptr: std::cell::UnsafeCell<*mut c_void>,
     ridl_ext_drop: std::cell::UnsafeCell<Option<unsafe fn(*mut c_void)>>,
 
+    pub(crate) roots: crate::roots::RootsRegistry,
+
     pub(crate) alive: std::sync::atomic::AtomicBool,
 }
 
@@ -20,6 +22,7 @@ impl ContextInner {
         Self {
             ridl_ext_ptr: std::cell::UnsafeCell::new(std::ptr::null_mut()),
             ridl_ext_drop: std::cell::UnsafeCell::new(None),
+            roots: crate::roots::RootsRegistry::new(),
             alive: std::sync::atomic::AtomicBool::new(true),
         }
     }
@@ -175,6 +178,25 @@ impl Context {
             mquickjs_ffi::JS_SetContextUserData(ctx, arc_ptr, Some(user_data_finalizer));
         }
 
+        // Context-level roots (e.g. Rust async tasks) are reported via JS_SetContextGCMark.
+        // Safety: we only call mark_value from this callback.
+        unsafe extern "C" fn ctx_gc_mark(
+            ctx: *mut mquickjs_ffi::JSContext,
+            opaque: *mut c_void,
+            mf: *const mquickjs_ffi::JSMarkFunc,
+        ) {
+            if ctx.is_null() || opaque.is_null() || mf.is_null() {
+                return;
+            }
+
+            let inner = &*(opaque as *const ContextInner);
+            inner.roots.gc_mark(mf);
+        }
+
+        unsafe {
+            mquickjs_ffi::JS_SetContextGCMark(ctx, arc_ptr, Some(ctx_gc_mark));
+        }
+
         Ok(Context {
             ctx,
             inner,
@@ -182,7 +204,7 @@ impl Context {
         })
     }
 
-    pub fn eval(&mut self, code: &str) -> Result<String, String> {
+    pub fn eval_jsvalue(&mut self, code: &str) -> Result<mquickjs_ffi::JSValue, String> {
         let handle = self.token();
         let _g = handle.enter_current();
 
@@ -217,19 +239,23 @@ impl Context {
             } else {
                 return Err("Unknown error".to_string());
             }
+        }
+
+        Ok(result)
+    }
+
+    pub fn eval(&mut self, code: &str) -> Result<String, String> {
+        let result = self.eval_jsvalue(code)?;
+
+        // 创建一个临时缓冲区用于JS_ToCString
+        let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
+        let result_ptr = unsafe { mquickjs_ffi::JS_ToCString(self.ctx, result, &mut cstr_buf) };
+
+        if !result_ptr.is_null() {
+            let result_str = unsafe { CStr::from_ptr(result_ptr).to_string_lossy().into_owned() };
+            Ok(result_str)
         } else {
-            // 创建一个临时缓冲区用于JS_ToCString
-            let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
-            let result_ptr = unsafe { mquickjs_ffi::JS_ToCString(self.ctx, result, &mut cstr_buf) };
-
-            if !result_ptr.is_null() {
-                let result_str =
-                    unsafe { CStr::from_ptr(result_ptr).to_string_lossy().into_owned() };
-
-                Ok(result_str)
-            } else {
-                Ok("undefined".to_string())
-            }
+            Ok("undefined".to_string())
         }
     }
 

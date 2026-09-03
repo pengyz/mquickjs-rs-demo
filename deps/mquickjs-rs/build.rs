@@ -13,6 +13,23 @@ fn main() {
 
     let include_dir = mquickjs_sys::include_dir();
 
+    // mquickjs-sys::include_dir() points to the build output include dir for the active
+    // profile (base/ridl). bindgen currently requires mquickjs_ridl_api.h, which only
+    // exists in the "ridl" variant. Prefer that include dir when available.
+    let ridl_include_dir = include_dir
+        .parent()
+        .expect("include_dir has parent")
+        .parent()
+        .expect("include_dir has parent parent")
+        .join("ridl")
+        .join("include");
+
+    let include_dir = if ridl_include_dir.join("mquickjs_ridl_api.h").exists() {
+        ridl_include_dir
+    } else {
+        include_dir
+    };
+
     // Compile optional ROMClass handle exports produced by the ROM builder.
     // We intentionally compile this only if present so non-ridl profiles can still build.
     compile_optional_ext_romclass_map_c(&include_dir);

@@ -1,0 +1,13 @@
+[package]
+name = "ridl_test_g_gc_root_cycle"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["rlib", "cdylib"]
+
+[dependencies]
+mquickjs-rs = { path = "../../../../deps/mquickjs-rs" }
+
+[build-dependencies]
+ridl-builder = { path = "../../../../ridl-builder" }

@@ -1,5 +1,20 @@
 # Repository Rules (Source of Truth)
 
+> **知识库**：项目共享知识沉淀在 `docs/knowledge/`（踩坑经验、设计上下文、调试方法）。本文档（AGENTS.md）定义项目规则、约束、流程。
+
+## 知识管理
+
+- **docs/knowledge/** — 项目共享知识库（6 类：architecture、gotcha、pattern、debug、decision、reference）
+- **MEMORY.md** — 知识索引，按类型分组
+- **kairos/** — 事件流日志，作为 dream 整理的增量素材
+- **Skills** — `/post-commit-memory` 判定 commit 后是否写入知识；`/knowledge-dream` 定期整理知识库
+- **规则文档** — `RULES-KNOWLEDGE-MEMORY.md`（何时写、如何写）、`RULES-CODE-QUALITY.md`（Rust 质量规则）
+
+**写入时机**：commit 后、用户纠正方法、确认非显然方法有效、遇到平台坑。  
+**不写入**：代码可表达、git log 能查、本文档已有、个人偏好、临时调试。
+
+# Repository Rules (Source of Truth)
+
 ## Core Constraints
 - Treat a crate as a RIDL module **only if** the dependency path's `src/` directory contains at least one `*.ridl` file; otherwise exclude it from registry-driven RIDL aggregation.
 - mquickjs constraint: QuickJS C API registration cannot happen at runtime; registration must be compile-time.

@@ -1,0 +1,14 @@
+class Node {
+    fn setHeld(v: object) -> void;
+    fn clearHeld() -> void;
+    fn makeCycle() -> void;
+    fn dropAll() -> void;
+    fn finalizerCount() -> i32;
+
+    fn rootHeld() -> void;
+    fn unrootHeld() -> void;
+}
+
+singleton TestGc {
+    fn makeNode() -> Node;
+}

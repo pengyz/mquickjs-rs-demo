@@ -58,6 +58,9 @@ pub mod ridl_js_class_id {
 
 pub mod context;
 
+mod roots;
+pub use roots::Root;
+
 pub mod env;
 
 pub mod handles;
