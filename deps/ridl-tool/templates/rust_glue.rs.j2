@@ -421,6 +421,25 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     }
 }
 
+{%- if class|has_traced_fields %}
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark(
+    _ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
+    _obj: mquickjs_rs::mquickjs_ffi::JSValue,
+    opaque: *mut core::ffi::c_void,
+    mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc,
+) {
+    if opaque.is_null() || mf.is_null() {
+        return;
+    }
+    let holder_ptr = opaque as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
+    if !holder_ptr.is_null() {
+        let holder = unsafe { &*holder_ptr };
+        holder.gc_mark(mf);
+    }
+}
+{%- endif %}
+
 {%- for method in class.methods %}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|to_snake_case }}(

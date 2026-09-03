@@ -61,6 +61,9 @@ pub mod context;
 mod roots;
 pub use roots::Root;
 
+mod traced;
+pub use traced::Traced;
+
 pub mod env;
 
 pub mod handles;

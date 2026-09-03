@@ -143,6 +143,11 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
 {%- endif %}
 {%- endfor %}
 
+    /// Mark GC-traced fields during garbage collection.
+    /// Default implementation does nothing. Override for classes with Traced<T> fields.
+    fn gc_mark(&self, _mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
+        // Default: no-op. Classes with Traced<T> fields should override.
+    }
 }
 
 {%- if class.properties|any_proto_props %}
@@ -208,17 +213,16 @@ impl {{ class.name|to_upper_camel_case }}Opaque {
     /// `mf` is the engine-provided mark function pointer (see
     /// `mquickjs_rs::roots::RootsRegistry::gc_mark` for the convention).
     ///
-    /// TODO(phase-3): `mquickjs_rs::Traced<T>::gc_mark` does not exist yet;
-    /// this call site is a placeholder until Phase 3 implements `Traced<T>`.
+    /// Marks all Traced<T> fields as reachable during GC.
     pub(crate) unsafe fn gc_mark(&self, mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
 {%- for field in class.opaque_fields %}
 {%- if field.field_type|contains_traced %}
 {%- if field.field_type|is_optional %}
         if let Some(ref inner) = self.{{ field.name|to_snake_case }} {
-            inner.gc_mark(mf);
+            unsafe { inner.gc_mark(mf) };
         }
 {%- else %}
-        self.{{ field.name|to_snake_case }}.gc_mark(mf);
+        unsafe { self.{{ field.name|to_snake_case }}.gc_mark(mf) };
 {%- endif %}
 {%- endif %}
 {%- endfor %}

@@ -75,12 +75,16 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         // For class refs, treat them as trait objects at Rust boundary.
         Type::ClassRef(name) => format!("Box<dyn crate::api::{}Class>", name),
 
-        // Custom types are not supported as typed returns/params in v1.
-        // They should be lowered to `any` by higher-level generator logic if needed.
-        Type::Custom(_name) => {
-            return Err(askama::Error::Custom(
-                "v1 rust_type_from_idl: unsupported Custom named type".into(),
-            ))
+        // Custom types: map known names to Rust types.
+        Type::Custom(name) => {
+            match name.as_str() {
+                "Value" => "mquickjs_rs::Value".to_string(),
+                _ => {
+                    return Err(askama::Error::Custom(
+                        format!("v1 rust_type_from_idl: unsupported Custom named type: {}", name).into(),
+                    ))
+                }
+            }
         }
 
         Type::Union(_types) => {

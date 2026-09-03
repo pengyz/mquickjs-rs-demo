@@ -1,0 +1,7 @@
+class GcTracedNode {
+    opaque {
+        held: Traced<Value>
+    }
+
+    fn finalizerCount() -> i32;
+}
