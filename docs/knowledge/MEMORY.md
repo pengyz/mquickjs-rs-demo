@@ -18,6 +18,9 @@
 - [RIDL 自动生成 gc_mark](pattern_ridl_gc_mark_auto_gen.md) — RIDL 自动生成 user class gc_mark 枚举 Traced<T> 字段
 - [GC 测试用 finalizer 验证回收](pattern_gc_test_finalizer_verification.md) — 通过 finalizer 计数验证对象被回收，而非仅检查引用
 - [RIDL 模块按 *.ridl 文件检测](pattern_ridl_module_detection_by_ridl_file.md) — 仅当 src/ 目录包含 *.ridl 文件时才作为 RIDL 模块
+- [RIDL PEG 语法设计原则](pattern_ridl_grammar_design.md) — 关键字优先、左递归规避、类型优先级
+- [RIDL 解析器测试策略](pattern_ridl_parser_testing.md) — 三层测试架构：语法单元→集成→端到端
+- [RIDL 代码生成器测试策略](pattern_ridl_codegen_testing.md) — 类型映射、模板渲染、gc_mark 生成、端到端编译
 
 ## Debugging
 <!-- 调试方法、关键命令、排查路径 -->
@@ -33,3 +36,4 @@
 <!-- 外部资源指针、关键文件位置 -->
 
 - [ridl-builder prepare 命令](reference_ridl_builder_prepare_command.md) — 构建前准备：生成 RIDL 聚合、构建 QuickJS base/ridl 输出
+- [RIDL 测试覆盖分析](reference_ridl_test_coverage.md) — 当前状态、缺口、优先级（2026-09-04）
