@@ -123,6 +123,17 @@ void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower 
     void *opaque
 );
 
+{%- if class|has_traced_fields %}
+// GC mark function for classes with Traced<T> opaque fields.
+// TODO(phase-3): Rust-side FFI implementation (js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark)
+// is deferred until Traced<T> lands; see {{ class.name|to_upper_camel_case }}Opaque::gc_mark in the generated Rust API.
+void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark(
+    JSContext *ctx,
+    void *opaque,
+    const JSMarkFunc *mf
+);
+{%- endif %}
+
 {%- for method in class.methods %}
 JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_{{ method.name|to_snake_case }}(
     JSContext *ctx,
@@ -212,7 +223,11 @@ const JSClassDef js_{{ class.module_name|normalize_ident|lower }}_class_{{ class
         js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs,
         NULL,
         js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer,
+        {%- if class|has_traced_fields %}
+        js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark
+        {%- else %}
         NULL
+        {%- endif %}
     );
 
 void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_class(void) {
@@ -220,6 +235,9 @@ void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower 
     (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_proto_funcs;
     (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_constructor;
     (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_finalizer;
+    {%- if class|has_traced_fields %}
+    (void)&js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark;
+    {%- endif %}
 }
 {%- endfor %}
 {%- endfor %}
