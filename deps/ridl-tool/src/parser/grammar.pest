@@ -5,10 +5,12 @@ whitespace = _{ (" " | "\t" | "\n" | "\r")+ }
 comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 
 // Keywords - separate lexical rule for keywords
+// Must match exact keyword followed by non-word-character (word boundary)
+// Word characters: [a-zA-Z0-9_]
 keyword = _{
-    "interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "proto" |
+    ("interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "proto" |
     "array" | "map" | "true" | "false" | "fn" | "import" | "as" |
-    "from" | "using" | "module" | "singleton" | "opaque" | "Traced"
+    "from" | "using" | "module" | "singleton" | "opaque" | "Traced") ~ !(ASCII_ALPHANUMERIC | "_")
 }
 // Identifier - must not match keywords
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }

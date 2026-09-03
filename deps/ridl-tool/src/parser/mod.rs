@@ -2556,4 +2556,215 @@ interface Test {}"#;
         let result = IDLParser::parse(Rule::r#type, "Traced<object>");
         assert!(result.is_ok());
     }
+
+    // ========================================================================
+    // P0: 补充缺失的语法规则测试
+    // ========================================================================
+
+    // --- class_constructor ---
+
+    #[test]
+    fn test_class_constructor_basic() {
+        let result = IDLParser::parse(Rule::class_constructor, "constructor()");
+        assert!(result.is_ok(), "class_constructor 基本解析失败");
+    }
+
+    #[test]
+    fn test_class_constructor_with_params() {
+        let result = IDLParser::parse(Rule::class_constructor, "constructor(x: i32, y: string)");
+        assert!(result.is_ok(), "class_constructor 带参数解析失败");
+    }
+
+    #[test]
+    fn test_class_in_constructor() {
+        let input = r#"
+            class Foo {
+                constructor(x: i32);
+                fn bar() -> void;
+            }
+        "#;
+        let result = IDLParser::parse(Rule::class_def, input);
+        assert!(result.is_ok(), "class 含 constructor 解析失败: {:?}", result.err());
+    }
+
+    // --- class_constructor_compat ---
+
+    #[test]
+    fn test_class_constructor_compat() {
+        let result = IDLParser::parse(Rule::class_constructor_compat, "Foo(x: i32)");
+        assert!(result.is_ok(), "class_constructor_compat 解析失败");
+    }
+
+    #[test]
+    fn test_class_in_constructor_compat() {
+        let input = r#"
+            class Foo {
+                Foo(x: i32);
+                fn bar() -> void;
+            }
+        "#;
+        let result = IDLParser::parse(Rule::class_def, input);
+        assert!(result.is_ok(), "class 含兼容构造函数解析失败: {:?}", result.err());
+    }
+
+    // --- proto_var_member ---
+
+    #[test]
+    fn test_proto_var_member() {
+        let result = IDLParser::parse(Rule::proto_var_member, "proto var count: i32 = 0");
+        assert!(result.is_ok(), "proto_var_member 解析失败");
+    }
+
+    #[test]
+    fn test_class_in_proto_var() {
+        let input = r#"
+            class Foo {
+                proto var count: i32 = 0;
+                fn bar() -> void;
+            }
+        "#;
+        let result = IDLParser::parse(Rule::class_def, input);
+        assert!(result.is_ok(), "class 含 proto var 解析失败: {:?}", result.err());
+    }
+
+    // --- proto_readonly_prop ---
+
+    #[test]
+    fn test_proto_readonly_prop() {
+        let result = IDLParser::parse(Rule::proto_readonly_prop, "proto readonly property name: string");
+        assert!(result.is_ok(), "proto_readonly_prop 解析失败");
+    }
+
+    // --- proto_readwrite_prop ---
+
+    #[test]
+    fn test_proto_readwrite_prop() {
+        let result = IDLParser::parse(Rule::proto_readwrite_prop, "proto property value: i32");
+        assert!(result.is_ok(), "proto_readwrite_prop 解析失败");
+    }
+
+    // --- null_literal ---
+
+    #[test]
+    fn test_null_literal() {
+        let result = IDLParser::parse(Rule::literal, "null");
+        assert!(result.is_ok(), "null_literal 解析失败");
+    }
+
+    #[test]
+    fn test_const_with_null() {
+        let input = r#"
+            class Foo {
+                const x: object = null;
+                fn bar() -> void;
+            }
+        "#;
+        let result = IDLParser::parse(Rule::class_def, input);
+        assert!(result.is_ok(), "const 含 null 默认值解析失败: {:?}", result.err());
+    }
+
+    // --- mode_decl ---
+
+    #[test]
+    fn test_mode_decl_strict() {
+        let result = IDLParser::parse(Rule::mode_decl, "mode strict;");
+        assert!(result.is_ok(), "mode_decl strict 解析失败");
+    }
+
+    #[test]
+    fn test_mode_decl_in_idl() {
+        let input = r#"
+            mode strict;
+            class Foo {
+                fn bar() -> void;
+            }
+        "#;
+        let result = IDLParser::parse(Rule::idl, input);
+        assert!(result.is_ok(), "idl 含 mode 声明解析失败: {:?}", result.err());
+    }
+
+    // --- Traced<T> 嵌套类型 ---
+
+    #[test]
+    fn test_traced_in_array() {
+        let result = IDLParser::parse(Rule::r#type, "array<Traced<Value>>");
+        assert!(result.is_ok(), "Array<Traced<T>> 解析失败");
+    }
+
+    #[test]
+    fn test_traced_in_map_value() {
+        let result = IDLParser::parse(Rule::r#type, "map<string, Traced<Value>>");
+        assert!(result.is_ok(), "Map<K, Traced<T>> 解析失败");
+    }
+
+    #[test]
+    fn test_optional_traced() {
+        let result = IDLParser::parse(Rule::r#type, "Traced<Value>?");
+        assert!(result.is_ok(), "Traced<T>? 解析失败");
+    }
+
+    #[test]
+    fn test_traced_in_opaque_multiple_fields() {
+        let input = r#"
+            class Node {
+                opaque {
+                    held: Traced<Value>
+                    items: array<Traced<Value>>
+                    cache: map<string, Traced<Value>>
+                    optional: Traced<Value>?
+                    plain: i32
+                }
+                fn test() -> void;
+            }
+        "#;
+        let result = IDLParser::parse(Rule::class_def, input);
+        assert!(result.is_ok(), "opaque 含多种 Traced 嵌套类型解析失败: {:?}", result.err());
+    }
+
+    // --- variadic_param ---
+
+    #[test]
+    fn test_variadic_param() {
+        let result = IDLParser::parse(Rule::variadic_param, "...args: any");
+        assert!(result.is_ok(), "variadic_param 解析失败");
+    }
+
+    #[test]
+    fn test_function_with_variadic() {
+        let result = IDLParser::parse(Rule::global_function, "fn log(...args: any) -> void;");
+        assert!(result.is_ok(), "function 含 variadic 参数解析失败");
+    }
+
+    // --- normal_prop ---
+
+    #[test]
+    fn test_normal_prop() {
+        let result = IDLParser::parse(Rule::normal_prop, "name: string");
+        assert!(result.is_ok(), "normal_prop 解析失败");
+    }
+
+    // --- 综合：复杂 class 定义 ---
+
+    #[test]
+    fn test_complex_class_all_member_types() {
+        let input = r#"
+            class FullClass {
+                const MAX: i32 = 100;
+                var count: i32 = 0;
+                proto var protoCount: i32 = 0;
+                proto readonly property protoName: string;
+                proto property protoValue: i32;
+                readonly property name: string;
+                property value: i32;
+                constructor(x: i32);
+                fn doSomething(a: string, b: i32) -> bool;
+                opaque {
+                    held: Traced<Value>
+                    data: array<Traced<Value>>
+                }
+            }
+        "#;
+        let result = IDLParser::parse(Rule::class_def, input);
+        assert!(result.is_ok(), "复杂 class 定义解析失败: {:?}", result.err());
+    }
 }

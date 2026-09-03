@@ -128,18 +128,15 @@ class no_traced_fields {
     let api_file = output_dir.join("api.rs");
     let api_content = std::fs::read_to_string(&api_file).unwrap();
 
-    // Verify struct is generated but no gc_mark
+    // Verify struct is generated but no gc_mark impl block
     assert!(
         api_content.contains("pub struct NoTracedFieldsOpaque"),
         "Should generate opaque struct"
     );
+    // Trait always has gc_mark (default no-op), but impl block should not exist
     assert!(
         !api_content.contains("impl NoTracedFieldsOpaque"),
         "Should not generate impl block without Traced fields"
-    );
-    assert!(
-        !api_content.contains("fn gc_mark"),
-        "Should not generate gc_mark without Traced fields"
     );
 }
 
@@ -192,5 +189,101 @@ class mixed_fields {
     assert!(
         !api_content.contains("self.regular_count.gc_mark"),
         "Should not mark i32 field"
+    );
+}
+
+// ========================================================================
+// P0: Traced<T> 嵌套类型映射测试
+// ========================================================================
+
+#[test]
+fn test_gc_mark_traced_in_array() {
+    let ridl_input = r#"
+class array_node {
+    opaque {
+        items: array<Traced<Value>>
+        plain: i32
+    }
+
+    fn test() -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    )
+    .unwrap();
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // Verify opaque struct has correct type
+    assert!(
+        api_content.contains("pub items: Vec<mquickjs_rs::Traced<mquickjs_rs::Value>>"),
+        "Array<Traced<T>> should generate Vec<Traced<T>>"
+    );
+    // Verify gc_mark iterates array
+    assert!(
+        api_content.contains("for item in &self.items"),
+        "gc_mark should iterate array items"
+    );
+    assert!(
+        api_content.contains("item.gc_mark(mf)"),
+        "gc_mark should mark each array item"
+    );
+}
+
+#[test]
+fn test_gc_mark_traced_in_map_value() {
+    let ridl_input = r#"
+class map_node {
+    opaque {
+        cache: map<string, Traced<Value>>
+        plain: i32
+    }
+
+    fn test() -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    )
+    .unwrap();
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // Verify opaque struct has correct type
+    assert!(
+        api_content.contains("pub cache: std::collections::HashMap<String, mquickjs_rs::Traced<mquickjs_rs::Value>>"),
+        "Map<K, Traced<T>> should generate HashMap<K, Traced<T>>"
+    );
+    // Verify gc_mark iterates map values
+    assert!(
+        api_content.contains("for (_key, value) in &self.cache"),
+        "gc_mark should iterate map values"
+    );
+    assert!(
+        api_content.contains("value.gc_mark(mf)"),
+        "gc_mark should mark each map value"
     );
 }

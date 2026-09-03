@@ -221,9 +221,17 @@ impl {{ class.name|to_upper_camel_case }}Opaque {
         if let Some(ref inner) = self.{{ field.name|to_snake_case }} {
             unsafe { inner.gc_mark(mf) };
         }
+{%- else %}{% if field.field_type|is_array %}
+        for item in &self.{{ field.name|to_snake_case }} {
+            unsafe { item.gc_mark(mf) };
+        }
+{%- else %}{% if field.field_type|is_map %}
+        for (_key, value) in &self.{{ field.name|to_snake_case }} {
+            unsafe { value.gc_mark(mf) };
+        }
 {%- else %}
         unsafe { self.{{ field.name|to_snake_case }}.gc_mark(mf) };
-{%- endif %}
+{%- endif %}{% endif %}{% endif %}
 {%- endif %}
 {%- endfor %}
     }

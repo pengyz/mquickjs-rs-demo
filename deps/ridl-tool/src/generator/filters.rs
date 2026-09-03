@@ -572,6 +572,16 @@ pub fn is_optional(ty: &Type) -> ::askama::Result<bool> {
     Ok(matches!(ty, Type::Optional(_)))
 }
 
+/// Check if a type is Array<T>.
+pub fn is_array(ty: &Type) -> ::askama::Result<bool> {
+    Ok(matches!(ty, Type::Array(_)))
+}
+
+/// Check if a type is Map<K, V>.
+pub fn is_map(ty: &Type) -> ::askama::Result<bool> {
+    Ok(matches!(ty, Type::Map(_, _)))
+}
+
 pub fn normalize_ident(s: &str) -> ::askama::Result<String> {
     let mut out = String::with_capacity(s.len());
     for ch in s.chars() {
