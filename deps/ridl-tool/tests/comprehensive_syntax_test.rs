@@ -920,3 +920,228 @@ fn test_whitespace_handling() {
     parse_ok(Rule::class_def, "class\tFoo\t{\tfn\tbar()\t->\tvoid;\t}", "制表符");
     parse_ok(Rule::class_def, "class\nFoo\n{\nfn\nbar()\n->\nvoid;\n}", "换行符");
 }
+
+// ========================================================================
+// 补充反向测试 — 每个关键规则至少1个错误测试
+// ========================================================================
+
+// --- mode_decl 反向测试 ---
+
+#[test]
+fn test_mode_missing_name() {
+    parse_err(Rule::mode_decl, "mode ;", "缺少模式名称");
+}
+
+#[test]
+fn test_mode_invalid_name() {
+    parse_err(Rule::mode_decl, "mode 123;", "数字作为模式名");
+}
+
+// --- module_decl 反向测试 ---
+
+#[test]
+fn test_module_missing_version_v2() {
+    parse_err(Rule::module_decl, "module foo;", "缺少版本");
+}
+
+#[test]
+fn test_module_invalid_version_v2() {
+    parse_err(Rule::module_decl, "module foo@abc;", "无效版本格式");
+}
+
+#[test]
+fn test_module_missing_name_v2() {
+    parse_err(Rule::module_decl, "module @1.0;", "缺少模块名");
+}
+
+#[test]
+fn test_module_spaces_around_at_v2() {
+    parse_err(Rule::module_decl, "module foo @ 1.0;", "@周围有空格");
+}
+
+// --- interface_def 反向测试 ---
+
+#[test]
+fn test_interface_missing_brace_v2() {
+    parse_err(Rule::interface_def, "interface Foo fn bar() -> void; }", "缺少左花括号");
+}
+
+#[test]
+fn test_interface_missing_method_semicolon() {
+    parse_err(Rule::interface_def, "interface Foo { fn bar() -> void }", "方法缺少分号");
+}
+
+#[test]
+fn test_interface_empty_v2() {
+    // 空接口是合法的（grammar 允许零个方法）
+    parse_ok(Rule::interface_def, "interface Foo { }", "空接口");
+}
+
+// --- global_function 反向测试 ---
+
+#[test]
+fn test_function_missing_name() {
+    parse_err(Rule::global_function, "fn () -> void;", "缺少函数名");
+}
+
+#[test]
+fn test_function_missing_semicolon() {
+    parse_err(Rule::global_function, "fn foo() -> void", "缺少分号");
+}
+
+#[test]
+fn test_function_missing_paren() {
+    parse_err(Rule::global_function, "fn foo -> void;", "缺少括号");
+}
+
+// --- import_stmt 反向测试 ---
+
+#[test]
+fn test_import_empty_braces() {
+    parse_err(Rule::import_stmt, r#"import { } from "lib";"#, "空花括号");
+}
+
+// --- opaque_block 反向测试 ---
+
+#[test]
+fn test_opaque_missing_field_type_v2() {
+    parse_err(Rule::opaque_block, "opaque { x: }", "缺少字段类型");
+}
+
+#[test]
+fn test_opaque_missing_field_name() {
+    parse_err(Rule::opaque_block, "opaque { : i32 }", "缺少字段名");
+}
+
+#[test]
+fn test_opaque_missing_brace_v2() {
+    parse_err(Rule::opaque_block, "opaque { x: i32", "缺少右花括号");
+}
+
+// --- param 反向测试 ---
+
+#[test]
+fn test_param_missing_type() {
+    parse_err(Rule::normal_param, "x:", "缺少参数类型");
+}
+
+#[test]
+fn test_param_missing_name() {
+    parse_err(Rule::normal_param, ": i32", "缺少参数名");
+}
+
+#[test]
+fn test_param_missing_colon() {
+    parse_err(Rule::normal_param, "x i32", "缺少冒号");
+}
+
+// --- class_def 反向测试 ---
+
+#[test]
+fn test_class_missing_name() {
+    parse_err(Rule::class_def, "class { fn bar() -> void; }", "缺少类名");
+}
+
+#[test]
+fn test_class_missing_brace() {
+    parse_err(Rule::class_def, "class Foo fn bar() -> void; }", "缺少左花括号");
+}
+
+// --- enum_def 反向测试 ---
+
+#[test]
+fn test_enum_missing_name() {
+    parse_err(Rule::enum_def, "enum { A, B }", "缺少枚举名");
+}
+
+#[test]
+fn test_enum_missing_brace() {
+    parse_err(Rule::enum_def, "enum Foo A, B }", "缺少左花括号");
+}
+
+// --- struct_def 反向测试 ---
+
+#[test]
+fn test_struct_missing_name() {
+    parse_err(Rule::struct_def, "struct { x: i32; }", "缺少结构体名");
+}
+
+#[test]
+fn test_struct_missing_brace() {
+    parse_err(Rule::struct_def, "struct Foo x: i32; }", "缺少左花括号");
+}
+
+// --- callback_def 反向测试 ---
+
+#[test]
+fn test_callback_missing_name_v2() {
+    parse_err(Rule::callback_def, "callback (x: i32);", "缺少回调名");
+}
+
+#[test]
+fn test_callback_missing_semicolon_v2() {
+    parse_err(Rule::callback_def, "callback Foo(x: i32)", "缺少分号");
+}
+
+// --- using_def 反向测试 ---
+
+#[test]
+fn test_using_missing_name_v2() {
+    parse_err(Rule::using_def, "using = i32;", "缺少别名");
+}
+
+#[test]
+fn test_using_missing_equals() {
+    parse_err(Rule::using_def, "using Foo i32;", "缺少等号");
+}
+
+#[test]
+fn test_using_missing_semicolon_v2() {
+    parse_err(Rule::using_def, "using Foo = i32", "缺少分号");
+}
+
+// --- singleton_def 反向测试 ---
+
+#[test]
+fn test_singleton_missing_name() {
+    parse_err(Rule::singleton_def, "singleton { fn bar() -> void; }", "缺少单例名");
+}
+
+#[test]
+fn test_singleton_missing_brace() {
+    parse_err(Rule::singleton_def, "singleton Foo fn bar() -> void; }", "缺少左花括号");
+}
+
+// --- type 反向测试 ---
+
+#[test]
+fn test_type_array_missing_close() {
+    parse_err(Rule::r#type, "array<i32", "Array 缺少关闭尖括号");
+}
+
+#[test]
+fn test_type_map_missing_close() {
+    parse_err(Rule::r#type, "map<string, i32", "Map 缺少关闭尖括号");
+}
+
+#[test]
+fn test_type_traced_missing_close() {
+    parse_err(Rule::r#type, "Traced<Value", "Traced 缺少关闭尖括号");
+}
+
+// --- literal 反向测试 ---
+
+#[test]
+fn test_string_unterminated() {
+    parse_err(Rule::string_literal, r#""hello"#, "未终止字符串");
+}
+
+#[test]
+fn test_float_no_integer() {
+    parse_err(Rule::float_literal, ".14", "浮点数缺少整数部分");
+}
+
+#[test]
+fn test_float_no_decimal() {
+    parse_err(Rule::float_literal, "3.", "浮点数缺少小数部分");
+}
