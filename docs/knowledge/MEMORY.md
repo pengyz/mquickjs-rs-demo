@@ -10,6 +10,7 @@
 <!-- 平台坑、反直觉行为（QuickJS/Rust FFI/构建系统） -->
 
 - [QuickJS ROM 机制与 RIDL 扩展关系](gotcha_quickjs_rom_ridl_mechanism.md) — 当初实现时未充分理解 ROM，需要重新审视
+- [mquickjs gc_mark 签名与 quickjs 不同](gotcha_mquickjs_gc_mark_signature.md) — 实际签名 (ctx, void *opaque, const JSMarkFunc *mf)，勿凭 quickjs 知识假设
 
 ## Patterns
 <!-- 代码约定、RIDL 模块/测试开发模式 -->

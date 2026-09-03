@@ -71,7 +71,7 @@ pub struct Class {
 }
 ```
 
-- [ ] **Step 2: 定义 OpaqueField 结构**
+- [x] **Step 2: 定义 OpaqueField 结构**
 
 在 ast.rs 文件末尾添加：
 
@@ -86,7 +86,7 @@ pub struct OpaqueField {
 }
 ```
 
-- [ ] **Step 3: 扩展 Type 枚举支持 Traced**
+- [x] **Step 3: 扩展 Type 枚举支持 Traced**
 
 在 `Type` enum 中添加新变体（在 Callback 之后）：
 
@@ -101,7 +101,7 @@ pub enum Type {
 }
 ```
 
-- [ ] **Step 4: 为 Type::Traced 实现 Display trait**
+- [x] **Step 4: 为 Type::Traced 实现 Display trait**
 
 找到 `impl fmt::Display for Type` 并添加 Traced 分支：
 
@@ -118,12 +118,12 @@ impl fmt::Display for Type {
 }
 ```
 
-- [ ] **Step 5: 运行编译检查**
+- [x] **Step 5: 运行编译检查**
 
 Run: `cargo build --manifest-path deps/ridl-tool/Cargo.toml`
 Expected: 成功编译，无错误
 
-- [ ] **Step 6: Commit AST 扩展**
+- [x] **Step 6: Commit AST 扩展**
 
 ```bash
 git add deps/ridl-tool/src/parser/ast.rs
@@ -144,12 +144,12 @@ Part of GC Root system phase 0"
 **Files:**
 - Modify: `deps/ridl-tool/src/parser/mod.rs`
 
-- [ ] **Step 1: 找到 parse_class 函数**
+- [x] **Step 1: 找到 parse_class 函数**
 
 Run: `rg "fn parse_class" deps/ridl-tool/src/parser/mod.rs -A 5`
 Expected: 找到函数定义位置
 
-- [ ] **Step 2: 在 parse_class 中添加 opaque 块解析**
+- [x] **Step 2: 在 parse_class 中添加 opaque 块解析**
 
 在 `parse_class` 函数的方法解析循环中，添加 opaque 块处理（在方法和属性解析之前）：
 
@@ -185,7 +185,7 @@ fn parse_class(...) -> Result<Class> {
 }
 ```
 
-- [ ] **Step 3: 实现 parse_opaque_block 方法**
+- [x] **Step 3: 实现 parse_opaque_block 方法**
 
 在 parse_class 函数之后添加新方法：
 
@@ -220,7 +220,7 @@ fn parse_opaque_block(&mut self) -> Result<Vec<OpaqueField>, Box<dyn std::error:
 }
 ```
 
-- [ ] **Step 4: 扩展 parse_type 支持 Traced**
+- [x] **Step 4: 扩展 parse_type 支持 Traced**
 
 找到 `parse_type` 方法并添加 Traced 解析（在处理泛型类型的地方）：
 
@@ -244,12 +244,12 @@ fn parse_type(&mut self) -> Result<Type, Box<dyn std::error::Error>> {
 }
 ```
 
-- [ ] **Step 5: 运行编译检查**
+- [x] **Step 5: 运行编译检查**
 
 Run: `cargo build --manifest-path deps/ridl-tool/Cargo.toml`
 Expected: 成功编译
 
-- [ ] **Step 6: Commit parser 改动**
+- [x] **Step 6: Commit parser 改动**
 
 ```bash
 git add deps/ridl-tool/src/parser/mod.rs
@@ -269,7 +269,7 @@ Part of GC Root system phase 0"
 **Files:**
 - Create: `deps/ridl-tool/tests/parser_opaque_test.rs`
 
-- [ ] **Step 1: 创建测试文件框架**
+- [x] **Step 1: 创建测试文件框架**
 
 ```rust
 // deps/ridl-tool/tests/parser_opaque_test.rs
@@ -312,12 +312,12 @@ fn test_parse_opaque_block_single_field() {
 }
 ```
 
-- [ ] **Step 2: 运行测试验证失败**
+- [x] **Step 2: 运行测试验证失败**
 
 Run: `cargo test --manifest-path deps/ridl-tool/Cargo.toml --test parser_opaque_test`
 Expected: 测试运行（可能失败，因为 parser 实现可能有细节问题）
 
-- [ ] **Step 3: 添加多字段测试**
+- [x] **Step 3: 添加多字段测试**
 
 在同一文件中添加：
 
@@ -350,7 +350,7 @@ fn test_parse_opaque_block_multiple_fields() {
 }
 ```
 
-- [ ] **Step 4: 添加无 opaque 块测试**
+- [x] **Step 4: 添加无 opaque 块测试**
 
 ```rust
 // deps/ridl-tool/tests/parser_opaque_test.rs
@@ -373,12 +373,12 @@ fn test_parse_class_without_opaque() {
 }
 ```
 
-- [ ] **Step 5: 运行所有测试**
+- [x] **Step 5: 运行所有测试**
 
 Run: `cargo test --manifest-path deps/ridl-tool/Cargo.toml --test parser_opaque_test`
 Expected: 所有测试通过
 
-- [ ] **Step 6: Commit parser 测试**
+- [x] **Step 6: Commit parser 测试**
 
 ```bash
 git add deps/ridl-tool/tests/parser_opaque_test.rs
@@ -399,12 +399,12 @@ Part of GC Root system phase 0"
 **Files:**
 - Modify: `deps/ridl-tool/src/generator/mod.rs`
 
-- [ ] **Step 1: 找到 class 代码生成位置**
+- [x] **Step 1: 找到 class 代码生成位置**
 
 Run: `rg "fn generate.*class|struct.*generation" deps/ridl-tool/src/generator/mod.rs | head -10`
 Expected: 找到 class 生成相关函数
 
-- [ ] **Step 2: 实现 generate_opaque_struct 函数**
+- [x] **Step 2: 实现 generate_opaque_struct 函数**
 
 在 generator/mod.rs 中添加（在现有生成函数附近）：
 
@@ -471,7 +471,7 @@ fn type_to_rust_tokens(ty: &Type) -> TokenStream {
 }
 ```
 
-- [ ] **Step 3: 集成到现有生成流程**
+- [x] **Step 3: 集成到现有生成流程**
 
 找到生成 class 相关代码的位置并调用 `generate_opaque_struct`：
 
@@ -491,12 +491,12 @@ pub fn generate_class_code(class: &Class) -> TokenStream {
 }
 ```
 
-- [ ] **Step 4: 运行编译检查**
+- [x] **Step 4: 运行编译检查**
 
 Run: `cargo build --manifest-path deps/ridl-tool/Cargo.toml`
 Expected: 成功编译
 
-- [ ] **Step 5: Commit opaque struct 生成**
+- [x] **Step 5: Commit opaque struct 生成**
 
 ```bash
 git add deps/ridl-tool/src/generator/mod.rs
@@ -516,7 +516,7 @@ Part of GC Root system phase 0"
 **Files:**
 - Modify: `deps/ridl-tool/src/generator/mod.rs`
 
-- [ ] **Step 1: 实现 has_traced_fields 检查函数**
+- [x] **Step 1: 实现 has_traced_fields 检查函数**
 
 ```rust
 // deps/ridl-tool/src/generator/mod.rs
@@ -533,7 +533,7 @@ fn is_traced_type(ty: &Type) -> bool {
 }
 ```
 
-- [ ] **Step 2: 实现 generate_gc_mark 函数**
+- [x] **Step 2: 实现 generate_gc_mark 函数**
 
 ```rust
 // deps/ridl-tool/src/generator/mod.rs
@@ -590,7 +590,7 @@ fn is_optional(ty: &Type) -> bool {
 }
 ```
 
-- [ ] **Step 3: 集成 gc_mark 生成**
+- [x] **Step 3: 集成 gc_mark 生成**
 
 在 `generate_class_code` 中添加 gc_mark 生成：
 
@@ -610,12 +610,12 @@ pub fn generate_class_code(class: &Class) -> TokenStream {
 }
 ```
 
-- [ ] **Step 4: 运行编译检查**
+- [x] **Step 4: 运行编译检查**
 
 Run: `cargo build --manifest-path deps/ridl-tool/Cargo.toml`
 Expected: 成功编译
 
-- [ ] **Step 5: Commit gc_mark 生成**
+- [x] **Step 5: Commit gc_mark 生成**
 
 ```bash
 git add deps/ridl-tool/src/generator/mod.rs
@@ -637,7 +637,7 @@ Part of GC Root system phase 0"
 - Create: `deps/ridl-tool/tests/fixtures/gc_mark.ridl`
 - Create: `deps/ridl-tool/tests/codegen_gc_mark_test.rs`
 
-- [ ] **Step 1: 创建测试 fixture**
+- [x] **Step 1: 创建测试 fixture**
 
 ```ridl
 // deps/ridl-tool/tests/fixtures/gc_mark.ridl
@@ -665,7 +665,7 @@ class EmptyOpaqueNode {
 }
 ```
 
-- [ ] **Step 2: 创建 codegen 测试**
+- [x] **Step 2: 创建 codegen 测试**
 
 ```rust
 // deps/ridl-tool/tests/codegen_gc_mark_test.rs
@@ -719,12 +719,12 @@ fn test_no_gc_mark_without_traced_fields() {
 }
 ```
 
-- [ ] **Step 3: 运行集成测试**
+- [x] **Step 3: 运行集成测试**
 
 Run: `cargo test --manifest-path deps/ridl-tool/Cargo.toml --test codegen_gc_mark_test`
 Expected: 测试通过
 
-- [ ] **Step 4: Commit 集成测试**
+- [x] **Step 4: Commit 集成测试**
 
 ```bash
 git add deps/ridl-tool/tests/fixtures/gc_mark.ridl deps/ridl-tool/tests/codegen_gc_mark_test.rs
@@ -745,12 +745,12 @@ Part of GC Root system phase 0"
 **Files:**
 - Modify: `deps/ridl-tool/templates/mquickjs_ridl_register.h.j2`
 
-- [ ] **Step 1: 找到 JSClassDef 模板**
+- [x] **Step 1: 找到 JSClassDef 模板**
 
 Run: `rg "JSClassDef" deps/ridl-tool/templates/`
 Expected: 找到 class 注册模板位置
 
-- [ ] **Step 2: 添加 gc_mark 字段**
+- [x] **Step 2: 添加 gc_mark 字段**
 
 在 JSClassDef 定义中添加 gc_mark 字段（在 finalizer 之后）：
 
@@ -767,7 +767,7 @@ static JSClassDef js_{{ class.name }}_class = {
 };
 ```
 
-- [ ] **Step 3: 生成 C FFI 函数声明**
+- [x] **Step 3: 生成 C FFI 函数声明**
 
 在模板文件中添加 gc_mark FFI 函数（如果 class 有 gc_mark）：
 
@@ -784,7 +784,7 @@ extern void js_{{ class.name }}_gc_mark(
 {% endif %}
 ```
 
-- [ ] **Step 4: 在 generator 中设置 has_gc_mark 标志**
+- [x] **Step 4: 在 generator 中设置 has_gc_mark 标志**
 
 在 `generate_class_code` 或模板上下文准备中：
 
@@ -797,12 +797,12 @@ let template_context = ClassTemplateContext {
 };
 ```
 
-- [ ] **Step 5: 运行 ridl-tool 生成测试**
+- [x] **Step 5: 运行 ridl-tool 生成测试**
 
 Run: `cargo run -p ridl-builder -- prepare`
 Expected: 生成代码成功，包含 gc_mark 注册
 
-- [ ] **Step 6: Commit 模板更新**
+- [x] **Step 6: Commit 模板更新**
 
 ```bash
 git add deps/ridl-tool/templates/mquickjs_ridl_register.h.j2
