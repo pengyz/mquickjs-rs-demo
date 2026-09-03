@@ -567,6 +567,9 @@ struct RustApiTemplate {
     functions: Vec<TemplateFunction>,
     singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
+    enums: Vec<TemplateEnum>,
+    structs: Vec<TemplateStruct>,
+    using_aliases: Vec<TemplateUsingAlias>,
 
     union_types_by_domain: Vec<TemplateUnionDomain>,
 }
@@ -710,6 +713,38 @@ pub(crate) struct TemplateParam {
     // Filled during template construction.
     // For union types this will be a fully qualified path under `crate::api::{domain}::union::*`.
     pub(crate) rust_ty: String,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateEnum {
+    name: String,
+    variants: Vec<TemplateEnumVariant>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateEnumVariant {
+    name: String,
+    value: Option<i32>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateStruct {
+    name: String,
+    fields: Vec<TemplateStructField>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateStructField {
+    name: String,
+    rust_name: String,
+    ty: Type,
+    rust_ty: String,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateUsingAlias {
+    name: String,
+    rust_ty: String,
 }
 
 #[derive(Debug, Clone)]
@@ -954,6 +989,9 @@ pub fn generate_module_files(
     let mut functions = Vec::new();
     let mut interfaces = Vec::new();
     let mut classes = Vec::new();
+    let mut enums = Vec::new();
+    let mut structs = Vec::new();
+    let mut using_aliases = Vec::new();
 
     for item in items {
         match item {
@@ -995,6 +1033,48 @@ pub fn generate_module_files(
                     c.clone(),
                     file_mode,
                 ))
+            }
+            crate::parser::ast::IDLItem::Enum(e) => {
+                enums.push(TemplateEnum {
+                    name: e.name.clone(),
+                    variants: e
+                        .values
+                        .iter()
+                        .map(|v| TemplateEnumVariant {
+                            name: v.name.clone(),
+                            value: v.value,
+                        })
+                        .collect(),
+                });
+            }
+            crate::parser::ast::IDLItem::Struct(s) => {
+                structs.push(TemplateStruct {
+                    name: s.name.clone(),
+                    fields: s
+                        .fields
+                        .iter()
+                        .map(|f| {
+                            let rust_ty =
+                                crate::generator::filters::rust_type_from_idl(&f.field_type)
+                                    .unwrap_or_else(|_| "JSValue".to_string());
+                            TemplateStructField {
+                                name: f.name.clone(),
+                                rust_name: crate::generator::filters::rust_ident(&f.name)
+                                    .unwrap_or_else(|_| f.name.clone()),
+                                ty: f.field_type.clone(),
+                                rust_ty,
+                            }
+                        })
+                        .collect(),
+                });
+            }
+            crate::parser::ast::IDLItem::Using(u) => {
+                let rust_ty = crate::generator::filters::rust_type_from_idl(&u.alias_type)
+                    .unwrap_or_else(|_| "JSValue".to_string());
+                using_aliases.push(TemplateUsingAlias {
+                    name: u.name.clone(),
+                    rust_ty,
+                });
             }
             // 其他类型暂不处理，可根据需要添加
             _ => {}
@@ -1063,6 +1143,9 @@ pub fn generate_module_files(
         functions: functions.clone(),
         singletons: rust_glue_template.singletons.clone(),
         classes: classes.clone(),
+        enums: enums.clone(),
+        structs: structs.clone(),
+        using_aliases: using_aliases.clone(),
         union_types_by_domain: group_union_types_by_domain(union_types.clone()),
     };
 

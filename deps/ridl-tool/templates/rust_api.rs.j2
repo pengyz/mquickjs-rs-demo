@@ -100,8 +100,42 @@ pub mod {{ d.domain }} {
 {%- endfor %}
 {%- endif %}
 
-// TODO(complex-types): future struct/enum/type alias declarations generated from RIDL.
-// Current policy: complex types are mapped to `any(JSValue)` in v1 and are passed through.
+// -----------------------------------------------------------------------------
+// RIDL using aliases
+// -----------------------------------------------------------------------------
+
+{%- for alias in using_aliases %}
+
+type {{ alias.name|to_upper_camel_case }} = {{ alias.rust_ty }};
+{%- endfor %}
+
+// -----------------------------------------------------------------------------
+// RIDL enum declarations
+// -----------------------------------------------------------------------------
+
+{%- for enum in enums %}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum {{ enum.name|to_upper_camel_case }} {
+{%- for variant in enum.variants %}
+    {{ variant.name|to_pascal_case }},
+{%- endfor %}
+}
+{%- endfor %}
+
+// -----------------------------------------------------------------------------
+// RIDL struct declarations
+// -----------------------------------------------------------------------------
+
+{%- for struct in structs %}
+
+#[derive(Debug, Clone)]
+pub struct {{ struct.name|to_upper_camel_case }} {
+{%- for field in struct.fields %}
+    pub {{ field.rust_name }}: {{ field.rust_ty }},
+{%- endfor %}
+}
+{%- endfor %}
 
 // -----------------------------------------------------------------------------
 // RIDL class API (traits + proto FFI declarations)

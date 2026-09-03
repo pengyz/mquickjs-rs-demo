@@ -618,3 +618,244 @@ class CallbackTest {
     // 当前行为：报错 "unsupported return type: Custom("Handler")"
     assert!(result.is_err(), "v1 does not support callback return type yet");
 }
+
+// ========================================================================
+// P1: 更多类型支持测试（TDD - 先写失败测试）
+// ========================================================================
+
+/// P1-1: enum 生成 Rust enum
+#[test]
+fn test_enum_generation_rust_enum() {
+    let ridl_input = r#"
+enum Color {
+    RED,
+    GREEN,
+    BLUE,
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // 应该成功生成
+    assert!(result.is_ok(), "enum generation should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证生成 Rust enum
+    assert!(api_content.contains("pub enum Color"), "Should generate Rust enum");
+    assert!(api_content.contains("Red"), "Should have Red variant (PascalCase)");
+    assert!(api_content.contains("Green"), "Should have Green variant");
+    assert!(api_content.contains("Blue"), "Should have Blue variant");
+}
+
+/// P1-1: enum 带数值
+#[test]
+fn test_enum_with_values() {
+    let ridl_input = r#"
+enum Status {
+    PENDING = 0,
+    ACTIVE = 1,
+    INACTIVE = 2,
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "enum with values should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    assert!(api_content.contains("pub enum Status"), "Should generate Status enum");
+    assert!(api_content.contains("Pending"), "Should have Pending variant");
+    assert!(api_content.contains("Active"), "Should have Active variant");
+    assert!(api_content.contains("Inactive"), "Should have Inactive variant");
+}
+
+/// P1-2: struct 生成 Rust struct
+#[test]
+fn test_struct_generation_rust_struct() {
+    let ridl_input = r#"
+json struct Config {
+    name: string;
+    value: i32;
+    enabled: bool;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "struct generation should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    assert!(api_content.contains("pub struct Config"), "Should generate Rust struct");
+    assert!(api_content.contains("pub name: String"), "Should have name field");
+    assert!(api_content.contains("pub value: i32"), "Should have value field");
+    assert!(api_content.contains("pub enabled: bool"), "Should have enabled field");
+}
+
+/// P1-2: struct 带可选字段
+#[test]
+fn test_struct_with_optional_fields() {
+    let ridl_input = r#"
+struct UserProfile {
+    name: string;
+    email: string?;
+    age: i32?;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "struct with optional fields should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    assert!(api_content.contains("pub struct UserProfile"), "Should generate UserProfile struct");
+    assert!(api_content.contains("pub name: String"), "Should have name field");
+    assert!(api_content.contains("pub email: Option<String>"), "Should have optional email field");
+    assert!(api_content.contains("pub age: Option<i32>"), "Should have optional age field");
+}
+
+/// P1-3: using 别名生成
+#[test]
+fn test_using_alias_generation_rust_alias() {
+    let ridl_input = r#"
+using StringMap = map<string, string>;
+using IntList = array<i32>;
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "using alias generation should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    assert!(api_content.contains("type StringMap"), "Should generate StringMap alias");
+    assert!(api_content.contains("type IntList"), "Should generate IntList alias");
+}
+
+/// P1-4: Custom 类型作为参数（使用 enum）— v1 不支持，记录为已知限制
+#[test]
+fn test_enum_as_parameter() {
+    let ridl_input = r#"
+enum Color {
+    RED,
+    GREEN,
+    BLUE,
+}
+
+class ColorPicker {
+    fn setColor(c: Color) -> void;
+    fn getColor() -> Color;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // v1 不支持 Custom 类型作为参数/返回值（需要 JS↔Rust 转换代码）
+    assert!(result.is_err(), "v1 does not support enum as parameter yet");
+}
+
+/// P1-4: Custom 类型作为参数（使用 struct）— v1 不支持，记录为已知限制
+#[test]
+fn test_struct_as_parameter() {
+    let ridl_input = r#"
+struct Point {
+    x: f64;
+    y: f64;
+}
+
+class Canvas {
+    fn drawPoint(p: Point) -> void;
+    fn getPoint() -> Point;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // v1 不支持 Custom 类型作为参数/返回值
+    assert!(result.is_err(), "v1 does not support struct as parameter yet");
+}

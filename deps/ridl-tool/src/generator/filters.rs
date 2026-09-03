@@ -645,6 +645,13 @@ pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
     Ok(crate::generator::naming::to_upper_camel_case(s))
 }
 
+/// Convert to PascalCase, lowercasing all-caps tokens first.
+/// "RED" → "Red", "MY_VAR" → "MyVar", "already" → "Already"
+pub fn to_pascal_case(s: &str) -> ::askama::Result<String> {
+    let lower = s.to_lowercase();
+    Ok(crate::generator::naming::to_upper_camel_case(&lower))
+}
+
 pub fn methods_total_filter(
     interfaces: &[crate::generator::TemplateInterface],
     classes: &[crate::generator::TemplateClass],
