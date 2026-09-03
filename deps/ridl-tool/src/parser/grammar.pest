@@ -35,10 +35,11 @@ enum_def = { WS? ~ "enum" ~ WS ~ identifier ~ WS ~ "{" ~ WS? ~ enum_value ~ (WS 
 // Using definition for type aliases
 using_def = { WS? ~ "using" ~ WS ~ identifier ~ WS ~ "=" ~ WS ~ type ~ WS ~ ";" }
 
-// Import statement
+// Import statement (TypeScript-style braced imports)
 import_stmt = { WS? ~ "import" ~ WS ~ import_list ~ WS ~ "from" ~ WS ~ string_literal ~ WS ~ ";" }
-import_list = { (identifier ~ ("as" ~ WS ~ identifier)? ~ (WS ~ "," ~ WS ~ identifier ~ ("as" ~ WS ~ identifier)?)*)
+import_list = { "{" ~ WS ~ import_item ~ (WS ~ "," ~ WS ~ import_item)* ~ (WS ~ ",")? ~ WS ~ "}"
               | ("*" ~ WS ~ "as" ~ WS ~ identifier) }
+import_item = { identifier ~ (WS ~ "as" ~ WS ~ identifier)? }
 
 // Struct definitions with serialization format
 struct_def = { 

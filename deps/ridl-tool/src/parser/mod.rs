@@ -2157,11 +2157,11 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
         assert!(result.is_ok());
     }
 
-    // import语句测试
+    // import语句测试（TypeScript 风格花括号语法）
     #[test]
     fn test_import_definition() {
         let input = r#"
-        import NetworkPacket from "Packet.proto";
+        import { NetworkPacket } from "Packet.proto";
         "#;
 
         let result = IDLParser::parse(Rule::import_stmt, input);
@@ -2174,7 +2174,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
         let input = r#"
         // 完整的RIDL文件示例
         using UserId = int;
-        import NetworkPacket from "Packet.proto";
+        import { NetworkPacket } from "Packet.proto";
         
         json struct Person {
             name: string;
@@ -2313,7 +2313,7 @@ fn handleUnionNullable(data: (bool | object | null)) -> void;
 
     #[test]
     fn test_invalid_import_definition() {
-        let input = r#"import NetworkPacket from "#; // 不完整的import定义
+        let input = r#"import { NetworkPacket from "#; // 不完整的import定义（缺少右花括号）
         let result = IDLParser::parse(Rule::import_stmt, input);
         assert!(result.is_err());
     }
