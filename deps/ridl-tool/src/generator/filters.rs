@@ -71,6 +71,10 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
         Type::Any => {
             "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string()
         }
+        // object is treated the same as any at the Rust boundary.
+        Type::Object => {
+            "mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>".to_string()
+        }
 
         // For class refs, treat them as trait objects at Rust boundary.
         Type::ClassRef(name) => format!("Box<dyn crate::api::{}Class>", name),
@@ -335,8 +339,8 @@ pub fn emit_return_convert_typed(
                 result_name = result_name
             ));
         }
-        Type::Any => {
-            // any return is a Handle<Value> at the Rust boundary.
+        Type::Any | Type::Object => {
+            // any/object return is a Handle<Value> at the Rust boundary.
             w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
         Type::Map(_, _) => {
@@ -521,8 +525,8 @@ pub fn emit_return_convert_typed(
                     emit_match_return(&mut w, result_name, outer_arms);
                 }
                 // ClassRef is handled at the top-level return_type match.
-                Type::Any => {
-                    // Optional(any) is represented as Option<ReturnAny> at Rust boundary.
+                Type::Any | Type::Object => {
+                    // Optional(any/object) is represented as Option<ReturnAny> at Rust boundary.
                     // None => null; Some(v) => pin at the native->JS return boundary.
                     w.push_line(format!("match {result_name} {{", result_name = result_name));
                     w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
@@ -1221,7 +1225,7 @@ fn emit_single_param_extract_from_jsvalue(
             emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
             w.push_line(format!("let {name}: f32 = {name} as f32;", name = name));
         }
-        Type::Any => {
+        Type::Any | Type::Object => {
             w.push_line(format!(
                 "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
                 name = name
@@ -1234,8 +1238,8 @@ fn emit_single_param_extract_from_jsvalue(
             }
 
             match cur {
-                Type::Any => {
-                    // Optional(any) param decoding:
+                Type::Any | Type::Object => {
+                    // Optional(any/object) param decoding:
                     // - null/undefined => None
                     // - otherwise => Some(scope.value(v))
                     w.push_line(format!(
@@ -1598,7 +1602,7 @@ fn emit_varargs_collect(
             w.dedent();
             w.push_line("}");
         }
-        Type::Any => {
+        Type::Any | Type::Object => {
             let _ = file_mode;
             w.push_line(format!(
                 "let mut {name}: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = Vec::new();",

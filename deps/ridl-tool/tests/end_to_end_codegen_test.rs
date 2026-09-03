@@ -481,3 +481,140 @@ fn test_empty_ridl_file() {
     let api_content = std::fs::read_to_string(&api_file).unwrap();
     assert!(!api_content.contains("pub trait"), "Empty file should not generate traits");
 }
+
+// ========================================================================
+// P0: 新增类型支持测试（TDD - 先写失败测试）
+// ========================================================================
+
+/// P0-1: object 作为返回值
+#[test]
+fn test_object_return_type() {
+    let ridl_input = r#"
+class ObjectTest {
+    fn getObject() -> object;
+    fn getOptionalObject() -> object?;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // 应该成功生成（不报错）
+    assert!(result.is_ok(), "object return type should be supported: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证方法签名生成
+    assert!(api_content.contains("fn get_object"), "Should have get_object method");
+    assert!(api_content.contains("fn get_optional_object"), "Should have get_optional_object method");
+}
+
+/// P0-2: array<T> 作为属性类型
+#[test]
+fn test_array_property_type() {
+    let ridl_input = r#"
+class ArrayPropTest {
+    property items: array<i32>;
+    property names: array<string>;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // 应该成功生成（不报错）
+    assert!(result.is_ok(), "array property type should be supported: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证属性生成（class 属性生成 fn get_<name> / fn set_<name>）
+    assert!(api_content.contains("fn get_items"), "Should have items getter");
+    assert!(api_content.contains("fn set_items"), "Should have items setter");
+    assert!(api_content.contains("fn get_names"), "Should have names getter");
+    assert!(api_content.contains("fn set_names"), "Should have names setter");
+}
+
+/// P0-2: map<K,V> 作为属性类型
+#[test]
+fn test_map_property_type() {
+    let ridl_input = r#"
+class MapPropTest {
+    property cache: map<string, i32>;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // 应该成功生成（不报错）
+    assert!(result.is_ok(), "map property type should be supported: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证属性生成（class 属性生成 fn get_<name> / fn set_<name>）
+    assert!(api_content.contains("fn get_cache"), "Should have cache getter");
+    assert!(api_content.contains("fn set_cache"), "Should have cache setter");
+}
+
+/// P0-3: callback 作为返回值（v1 映射为 any，不崩溃即可）
+#[test]
+fn test_callback_return_type() {
+    let ridl_input = r#"
+callback Handler(event: object);
+
+class CallbackTest {
+    fn getHandler() -> Handler;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // v1 不支持 callback 作为返回值，但不应该崩溃
+    // 如果未来支持，这里应该改为 assert!(result.is_ok())
+    // 当前行为：报错 "unsupported return type: Custom("Handler")"
+    assert!(result.is_err(), "v1 does not support callback return type yet");
+}
