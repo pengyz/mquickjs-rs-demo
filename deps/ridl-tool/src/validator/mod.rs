@@ -264,6 +264,9 @@ impl SemanticValidator {
             Type::Group(inner_type) => {
                 self.validate_type(inner_type);
             }
+            Type::Traced(inner_type) => {
+                self.validate_type(inner_type);
+            }
             // 基础类型不需要验证
             Type::Bool
             | Type::I32

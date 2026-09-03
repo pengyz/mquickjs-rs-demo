@@ -85,6 +85,7 @@ fn collect_from_type(
     match ty {
         Type::Optional(inner) => collect_from_type(domain, fn_name, label, inner, out),
         Type::Group(inner) => collect_from_type(domain, fn_name, label, inner, out),
+        Type::Traced(inner) => collect_from_type(domain, fn_name, label, inner, out),
         Type::Union(types) => {
             let (member_types, _nullable) = normalize_union(types);
             // Union enum name is derived only from the member set (v1):
@@ -141,6 +142,10 @@ fn map_union_member(ty: &Type) -> Option<TemplateUnionMember> {
             variant: "F64".to_string(),
             rust_ty: "f64".to_string(),
         }),
+        Type::Traced(_) => {
+            // Traced types are not supported in unions (phase 0)
+            None
+        }
         // Keep narrow for now; other complex member types will be added in V1-B2.
         other => {
             let _ = rust_type_from_idl(other);

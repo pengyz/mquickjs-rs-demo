@@ -464,6 +464,7 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
         methods,
         properties,
         js_fields,
+        opaque_fields: Vec::new(),
         module: None,
     })
 }

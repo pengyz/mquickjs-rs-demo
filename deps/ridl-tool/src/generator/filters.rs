@@ -101,6 +101,12 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
             )
         }
 
+        Type::Traced(_) => {
+            return Err(askama::Error::Custom(
+                "Type::Traced is not yet supported in code generation (phase 0)".into(),
+            ))
+        }
+
         // Keep explicit: fail fast for types we haven't implemented yet.
         other => {
             return Err(askama::Error::Custom(
@@ -201,6 +207,11 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
             w.dedent();
             w.push_line("}".to_string());
             w.push_line("obj".to_string());
+        }
+        Type::Traced(_) => {
+            return Err(askama::Error::Custom(
+                "Type::Traced is not yet supported in code generation (phase 0)".into(),
+            ))
         }
         other => {
             return Err(askama::Error::Custom(
@@ -485,12 +496,22 @@ pub fn emit_return_convert_typed(
                     let value_to_js = emit_value_to_js(cur, result_name)?;
                     w.push_line(value_to_js);
                 }
+                Type::Traced(_) => {
+                    return Err(askama::Error::Custom(
+                        "Type::Traced is not yet supported in code generation (phase 0)".into(),
+                    ))
+                }
                 other => {
                     return Err(askama::Error::Custom(
                         format!("v1 glue: unsupported return type: Optional({other:?})").into(),
                     ));
                 }
             }
+        }
+        Type::Traced(_) => {
+            return Err(askama::Error::Custom(
+                "Type::Traced is not yet supported in code generation (phase 0)".into(),
+            ))
         }
         other => {
             return Err(askama::Error::Custom(
@@ -1343,6 +1364,12 @@ fn emit_single_param_extract_from_jsvalue(
             w.push_line(format!("let {name} = {name}_map;", name = name));
         }
 
+        Type::Traced(_) => {
+            return Err(askama::Error::Custom(
+                "Type::Traced is not yet supported in code generation (phase 0)".into(),
+            ))
+        }
+
         _ => {
             w.push_line(format!(
                 "compile_error!(\"v1 glue: unsupported parameter type for {name}\");",
@@ -1501,6 +1528,11 @@ fn emit_varargs_collect(
             ));
             w.dedent();
             w.push_line("}");
+        }
+        Type::Traced(_) => {
+            return Err(askama::Error::Custom(
+                "Type::Traced is not yet supported in code generation (phase 0)".into(),
+            ))
         }
         _ => {
             w.push_line(format!(

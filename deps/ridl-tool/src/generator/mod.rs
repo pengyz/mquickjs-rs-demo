@@ -115,6 +115,7 @@ fn contains_union(ty: &Type) -> bool {
         Type::Union(_) => true,
         Type::Optional(inner) => contains_union(inner),
         Type::Group(inner) => contains_union(inner),
+        Type::Traced(inner) => contains_union(inner),
         _ => false,
     }
 }
@@ -164,6 +165,10 @@ fn union_enum_path_for_ty(
         }
         Type::Group(inner) => {
             // Group(...) is only syntactic grouping.
+            union_enum_path_for_ty(union_types, fn_name, label, inner)
+        }
+        Type::Traced(inner) => {
+            // Recurse into Traced wrapper
             union_enum_path_for_ty(union_types, fn_name, label, inner)
         }
         Type::Union(types) => {

@@ -58,6 +58,8 @@ pub struct Class {
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
     pub js_fields: Vec<JsField>,
+    #[serde(default)]
+    pub opaque_fields: Vec<OpaqueField>,
     pub module: Option<ModuleDeclaration>,
 }
 
@@ -142,6 +144,14 @@ pub struct Field {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct OpaqueField {
+    pub name: String,
+    pub field_type: Type,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct EnumValue {
     pub name: String,
     pub value: Option<i32>,
@@ -208,6 +218,9 @@ pub enum Type {
     Group(Box<Type>),
     Null,
     Any,
+
+    /// Traced<T> - GC-traced field for opaque structs
+    Traced(Box<Type>),
 }
 
 impl fmt::Display for Type {
@@ -241,6 +254,7 @@ impl fmt::Display for Type {
             Type::Group(t) => write!(f, "({})", t),
             Type::Null => write!(f, "null"),
             Type::Any => write!(f, "any"),
+            Type::Traced(inner) => write!(f, "Traced<{}>", inner),
         }
     }
 }

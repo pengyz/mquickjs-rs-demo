@@ -67,7 +67,7 @@ fn rewrite_type_class_refs(ty: &mut Type, class_names: &HashSet<String>) {
         Type::Custom(name) if class_names.contains(name) => {
             *ty = Type::ClassRef(name.clone());
         }
-        Type::Array(inner) | Type::Optional(inner) | Type::Group(inner) => {
+        Type::Array(inner) | Type::Optional(inner) | Type::Group(inner) | Type::Traced(inner) => {
             rewrite_type_class_refs(inner, class_names);
         }
         Type::Map(k, v) => {
