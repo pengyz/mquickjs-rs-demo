@@ -542,9 +542,11 @@ pub fn emit_return_convert_typed(
                     w.push_line(value_to_js);
                 }
                 Type::Traced(_) => {
-                    return Err(askama::Error::Custom(
-                        "Type::Traced is not yet supported in code generation (phase 0)".into(),
-                    ))
+                    // Optional(Traced<T>) as return: treat like Optional(any).
+                    w.push_line(format!("match {result_name} {{", result_name = result_name));
+                    w.push_line("    None => mquickjs_rs::mquickjs_ffi::JS_NULL,".to_string());
+                    w.push_line("    Some(v) => env.pin_return(v),".to_string());
+                    w.push_line("}".to_string());
                 }
                 other => {
                     return Err(askama::Error::Custom(
@@ -554,9 +556,8 @@ pub fn emit_return_convert_typed(
             }
         }
         Type::Traced(_) => {
-            return Err(askama::Error::Custom(
-                "Type::Traced is not yet supported in code generation (phase 0)".into(),
-            ))
+            // Traced<T> as return type: treat like any — return raw JSValue.
+            w.push_line(format!("{result_name}.as_raw()", result_name = result_name));
         }
         other => {
             return Err(askama::Error::Custom(
@@ -650,6 +651,12 @@ pub fn to_upper_camel_case(s: &str) -> ::askama::Result<String> {
 pub fn to_pascal_case(s: &str) -> ::askama::Result<String> {
     let lower = s.to_lowercase();
     Ok(crate::generator::naming::to_upper_camel_case(&lower))
+}
+
+/// Convert to SCREAMING_SNAKE_CASE for Rust constants.
+/// "MAX_SIZE" → "MAX_SIZE", "myVar" → "MY_VAR", "simple" → "SIMPLE"
+pub fn to_screaming_snake_case(s: &str) -> ::askama::Result<String> {
+    Ok(crate::generator::naming::to_snake_case(s).to_uppercase())
 }
 
 pub fn methods_total_filter(
@@ -1232,7 +1239,7 @@ fn emit_single_param_extract_from_jsvalue(
             emit_to_f64_expr(&mut w, "v", name, &format!("\"{}\"", err));
             w.push_line(format!("let {name}: f32 = {name} as f32;", name = name));
         }
-        Type::Any | Type::Object => {
+        Type::Any | Type::Object | Type::Traced(_) => {
             w.push_line(format!(
                 "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
                 name = name
@@ -1460,9 +1467,11 @@ fn emit_single_param_extract_from_jsvalue(
         }
 
         Type::Traced(_) => {
-            return Err(askama::Error::Custom(
-                "Type::Traced is not yet supported in code generation (phase 0)".into(),
-            ))
+            // Traced<T> as parameter: treat like any — Local<Value>.
+            w.push_line(format!(
+                "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
+                name = name
+            ));
         }
 
         _ => {
@@ -1625,9 +1634,20 @@ fn emit_varargs_collect(
             w.push_line("}");
         }
         Type::Traced(_) => {
-            return Err(askama::Error::Custom(
-                "Type::Traced is not yet supported in code generation (phase 0)".into(),
-            ))
+            // Traced<T> varargs: treat like any — Vec<Local<Value>>.
+            let _ = file_mode;
+            w.push_line(format!(
+                "let mut {name}: Vec<mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value>> = Vec::new();",
+                name = name
+            ));
+            emit_varargs_loop_header(&mut w, start_idx0, false);
+            w.push_line(format!(
+                "{name}.push(scope.value({v}));",
+                name = name,
+                v = emit_argv_v_expr("i")
+            ));
+            w.dedent();
+            w.push_line("}");
         }
         _ => {
             w.push_line(format!(

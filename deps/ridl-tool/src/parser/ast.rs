@@ -122,6 +122,7 @@ pub enum PropertyModifier {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub enum JsFieldKind {
     Var,
+    Const,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

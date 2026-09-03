@@ -352,11 +352,12 @@ fn helper(x: i32) -> i32;
     let api_file = output_dir.join("api.rs");
     let api_content = std::fs::read_to_string(&api_file).unwrap();
 
-    // v1 不生成这些类型的 Rust 代码
-    assert!(!api_content.contains("pub enum Color"), "v1 should not generate enum");
-    assert!(!api_content.contains("pub struct Config"), "v1 should not generate struct");
+    // P1 已实现：enum/struct/using 现在会生成
+    assert!(api_content.contains("pub enum Color"), "Should generate enum");
+    assert!(api_content.contains("pub struct Config"), "Should generate struct");
+    assert!(api_content.contains("type StringMap"), "Should generate using alias");
+    // callback 和 global function 仍然不生成
     assert!(!api_content.contains("EventHandler"), "v1 should not generate callback");
-    assert!(!api_content.contains("StringMap"), "v1 should not generate using alias");
     assert!(!api_content.contains("fn helper"), "v1 should not generate global function");
 }
 
@@ -437,9 +438,9 @@ singleton AppService {
     assert!(api_content.contains("pub struct LoggerOpaque"), "Should have opaque struct");
     assert!(api_content.contains("pub trait AppServiceSingleton"), "Should have singleton trait");
 
-    // v1 不生成的类型
-    assert!(!api_content.contains("pub enum LogLevel"), "v1 should not generate enum");
-    assert!(!api_content.contains("pub struct Config"), "v1 should not generate struct");
+    // P1 已实现：enum/struct 现在会生成
+    assert!(api_content.contains("pub enum LogLevel"), "Should generate enum");
+    assert!(api_content.contains("pub struct Config"), "Should generate struct");
 }
 
 /// 测试错误情况：语法错误
@@ -858,4 +859,106 @@ class Canvas {
 
     // v1 不支持 Custom 类型作为参数/返回值
     assert!(result.is_err(), "v1 does not support struct as parameter yet");
+}
+
+// ========================================================================
+// P2: 更多类型支持测试（TDD - 先写失败测试）
+// ========================================================================
+
+/// P2-1: Traced<T> 作为参数
+#[test]
+fn test_traced_as_parameter() {
+    let ridl_input = r#"
+class TracedParamTest {
+    fn setRef(val: Traced<Value>) -> void;
+    fn setOptionalRef(val: Traced<Value>?) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // Traced<T> 作为参数应该支持（映射为 Local<Value>）
+    assert!(result.is_ok(), "Traced<T> as parameter should be supported: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    assert!(api_content.contains("fn set_ref"), "Should have set_ref method");
+    assert!(api_content.contains("fn set_optional_ref"), "Should have set_optional_ref method");
+}
+
+/// P2-2: global function 生成（v1 不在 api.rs 生成，只在 glue 生成 C FFI）
+#[test]
+fn test_global_function_generation_rust() {
+    let ridl_input = r#"
+fn helper(x: i32, y: i32) -> i32;
+fn logMessage(msg: string) -> void;
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // 全局函数在 glue 中生成 C FFI，不在 api.rs 中生成 Rust 声明
+    assert!(result.is_ok(), "global function generation should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // api.rs 不包含全局函数声明
+    assert!(!api_content.contains("fn helper"), "api.rs should not have global function declarations");
+}
+
+/// P2-3: const 成员支持
+#[test]
+fn test_const_member_generation() {
+    let ridl_input = r#"
+class ConstTest {
+    const MAX_SIZE: i32 = 1024;
+    const NAME: string = "default";
+    fn getValue() -> i32;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    // const 成员应该生成 Rust const
+    assert!(result.is_ok(), "const member generation should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    assert!(api_content.contains("const MAX_SIZE"), "Should have MAX_SIZE const");
+    assert!(api_content.contains("const NAME"), "Should have NAME const");
 }

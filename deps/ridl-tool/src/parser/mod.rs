@@ -432,7 +432,9 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
                         properties.push(prop);
                     }
                     Rule::const_member => {
-                        return Err("`const` is not supported in mquickjs RIDL; use `var`".into());
+                        let mut f = parse_var_field(member_pair)?;
+                        f.kind = crate::parser::ast::JsFieldKind::Const;
+                        js_fields.push(f);
                     }
                     Rule::var_member => {
                         let f = parse_var_field(member_pair)?;

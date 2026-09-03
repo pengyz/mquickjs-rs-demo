@@ -684,6 +684,7 @@ struct TemplateJsField {
     field_type: crate::parser::ast::Type,
     init_literal: String,
     is_proto: bool,
+    kind: crate::parser::ast::JsFieldKind,
 }
 
 #[derive(Debug, Clone)]
@@ -908,6 +909,7 @@ impl TemplateClass {
                     is_proto: f
                         .modifiers
                         .contains(&crate::parser::ast::PropertyModifier::Proto),
+                    kind: f.kind,
                 })
                 .collect(),
             opaque_fields: class

@@ -169,6 +169,12 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
     ) -> {{ method.return_rust_ty|safe }};
 {%- endfor %}
 
+{%- for f in class.js_fields %}
+{%- if f.kind == crate::parser::ast::JsFieldKind::Const %}
+    const {{ f.name|to_screaming_snake_case }}: {{ f.field_type|rust_type_from_idl }} = {{ f.init_literal }};
+{%- endif %}
+{%- endfor %}
+
 {%- for prop in class.properties %}
 {%- if !(prop.modifiers|is_proto_prop) %}
 {%- if prop.modifiers|is_readonly_prop %}
