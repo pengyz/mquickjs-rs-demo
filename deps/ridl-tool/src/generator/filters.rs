@@ -101,10 +101,8 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
             )
         }
 
-        Type::Traced(_) => {
-            return Err(askama::Error::Custom(
-                "Type::Traced is not yet supported in code generation (phase 0)".into(),
-            ))
+        Type::Traced(inner) => {
+            format!("mquickjs_rs::Traced<{}>", rust_type_from_idl(inner)?)
         }
 
         // Keep explicit: fail fast for types we haven't implemented yet.
@@ -535,6 +533,10 @@ pub fn any_proto_props(properties: &[crate::parser::ast::Property]) -> ::askama:
     Ok(properties
         .iter()
         .any(|p| p.modifiers.contains(&PropertyModifier::Proto)))
+}
+
+pub fn has_opaque_fields(class: &crate::generator::TemplateClass) -> ::askama::Result<bool> {
+    Ok(!class.opaque_fields.is_empty())
 }
 
 pub fn normalize_ident(s: &str) -> ::askama::Result<String> {

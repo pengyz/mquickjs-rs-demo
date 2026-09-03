@@ -558,7 +558,7 @@ impl RustGlueLikeTemplate for RustGlueTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "rust_api.rs.j2")]
+#[template(path = "rust_api.rs.j2", escape = "none")]
 #[allow(dead_code)]
 struct RustApiTemplate {
     module_name: String,
@@ -672,6 +672,7 @@ pub(super) struct TemplateClass {
     methods: Vec<TemplateMethod>,
     properties: Vec<crate::parser::ast::Property>,
     js_fields: Vec<TemplateJsField>,
+    pub(super) opaque_fields: Vec<TemplateOpaqueField>,
 }
 
 #[derive(Debug, Clone)]
@@ -680,6 +681,12 @@ struct TemplateJsField {
     field_type: crate::parser::ast::Type,
     init_literal: String,
     is_proto: bool,
+}
+
+#[derive(Debug, Clone)]
+pub(super) struct TemplateOpaqueField {
+    pub(super) name: String,
+    pub(super) field_type: crate::parser::ast::Type,
 }
 
 #[derive(Debug, Clone)]
@@ -866,6 +873,14 @@ impl TemplateClass {
                     is_proto: f
                         .modifiers
                         .contains(&crate::parser::ast::PropertyModifier::Proto),
+                })
+                .collect(),
+            opaque_fields: class
+                .opaque_fields
+                .into_iter()
+                .map(|f| TemplateOpaqueField {
+                    name: f.name,
+                    field_type: f.field_type,
                 })
                 .collect(),
         }

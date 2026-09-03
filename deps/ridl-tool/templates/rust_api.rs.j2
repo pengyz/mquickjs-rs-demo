@@ -184,3 +184,21 @@ unsafe extern "C" {
 {%- endif %}
 
 {%- endfor %}
+
+// -----------------------------------------------------------------------------
+// RIDL class opaque structs (GC-traced fields)
+// -----------------------------------------------------------------------------
+
+{%- for class in classes %}
+{%- if class|has_opaque_fields %}
+
+/// Opaque data structure for class {{ class.name }}
+/// Contains GC-traced fields that need root management
+pub struct {{ class.name|to_upper_camel_case }}Opaque {
+{%- for field in class.opaque_fields %}
+    pub {{ field.name|to_snake_case }}: {{ field.field_type|rust_type_from_idl }},
+{%- endfor %}
+}
+{%- endif %}
+{%- endfor %}
+
