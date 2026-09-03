@@ -394,10 +394,15 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
     let mut methods = Vec::new();
     let mut properties = Vec::new();
     let mut js_fields = Vec::new();
+    let mut opaque_fields = Vec::new();
     let mut constructor = None;
 
     for pair in class_pairs {
         match pair.as_rule() {
+            Rule::opaque_block => {
+                // opaque块在class_def语法中与class_member同级（不需要外层分号）
+                opaque_fields.extend(parse_opaque_block(pair)?);
+            }
             Rule::class_member => {
                 // 解析类成员，内部包含具体的成员定义
                 let mut inner_pairs = pair.into_inner();
@@ -464,9 +469,40 @@ fn parse_class(pair: pest::iterators::Pair<Rule>) -> Result<Class, Box<dyn std::
         methods,
         properties,
         js_fields,
-        opaque_fields: Vec::new(),
+        opaque_fields,
         module: None,
     })
+}
+
+fn parse_opaque_block(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Vec<ast::OpaqueField>, Box<dyn std::error::Error>> {
+    let mut fields = Vec::new();
+
+    for inner_pair in pair.into_inner() {
+        match inner_pair.as_rule() {
+            Rule::opaque_field => {
+                let field_pos = Some(pair_pos(&inner_pair));
+                let mut field_pairs = inner_pair.into_inner();
+
+                let name_pair = field_pairs.next().ok_or("Expected field name in opaque block")?;
+                let name = name_pair.as_str().to_string();
+
+                let type_pair = field_pairs.next().ok_or("Expected field type in opaque block")?;
+                let field_type = parse_type(type_pair)?;
+
+                fields.push(ast::OpaqueField {
+                    name,
+                    field_type,
+                    pos: field_pos,
+                });
+            }
+            Rule::WS => {} // 跳过空白
+            _ => {}        // 忽略其他规则（如分隔符）
+        }
+    }
+
+    Ok(fields)
 }
 
 fn parse_var_field(
@@ -950,6 +986,7 @@ fn parse_field(pair: pest::iterators::Pair<Rule>) -> Result<Field, Box<dyn std::
             || p.as_rule() == Rule::group_type
             || p.as_rule() == Rule::nullable_type
             || p.as_rule() == Rule::union_type
+            || p.as_rule() == Rule::traced_type
         {
             type_pair = Some(p);
             break;
@@ -982,6 +1019,17 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
         return parse_union_type(pair);
     }
 
+    // 检查是否是Traced<T>类型（可能作为独立pair直接传入，例如来自parse_nullable_type）
+    if pair.as_rule() == Rule::traced_type {
+        for p in pair.into_inner() {
+            if p.as_rule() != Rule::WS {
+                let inner_type = parse_type(p)?;
+                return Ok(Type::Traced(Box::new(inner_type)));
+            }
+        }
+        return Err("Traced has no inner type".into());
+    }
+
     // 检查是否有子规则，优先处理子规则
     for inner_pair in pair.clone().into_inner() {
         match inner_pair.as_rule() {
@@ -1000,6 +1048,15 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
                     "any" => Ok(Type::Any),
                     _ => Ok(Type::Custom(type_str.to_string())),
                 };
+            }
+            Rule::traced_type => {
+                for p in inner_pair.into_inner() {
+                    if p.as_rule() != Rule::WS && p.as_str() != "Traced" {
+                        let inner_type = parse_type(p)?;
+                        return Ok(Type::Traced(Box::new(inner_type)));
+                    }
+                }
+                return Err("Traced has no inner type".into());
             }
             Rule::array_type => {
                 for p in inner_pair.into_inner() {
@@ -1176,12 +1233,13 @@ fn parse_union_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn s
 fn parse_nullable_type(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<Type, Box<dyn std::error::Error>> {
-    // nullable_type = (basic|array|map|custom|callback|group) ~ '?' ~ (!'?')
+    // nullable_type = (traced|basic|array|map|custom|callback|group) ~ '?' ~ (!'?')
     let mut base: Option<Type> = None;
 
     for inner_pair in pair.into_inner() {
         match inner_pair.as_rule() {
-            Rule::basic_type
+            Rule::traced_type
+            | Rule::basic_type
             | Rule::array_type
             | Rule::map_type
             | Rule::custom_type
@@ -2400,6 +2458,102 @@ interface Test {}"#;
         // 测试有效的单部分版本号
         let input = r#"module test@1"#;
         let result = IDLParser::parse(Rule::module_decl, input);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_parse_opaque_block_basic() {
+        let ridl = r#"
+        class GcNode {
+            opaque {
+                held: Traced<object>
+                count: i32
+            }
+
+            fn setHeld(v: object) -> void;
+            fn getCount() -> i32;
+        }
+        "#;
+
+        match parse_idl(ridl) {
+            Ok(items) => {
+                assert_eq!(items.len(), 1);
+                match &items[0] {
+                    IDLItem::Class(class) => {
+                        assert_eq!(class.name, "GcNode");
+                        assert_eq!(class.opaque_fields.len(), 2);
+
+                        let held = &class.opaque_fields[0];
+                        assert_eq!(held.name, "held");
+                        assert_eq!(held.field_type, Type::Traced(Box::new(Type::Object)));
+
+                        let count = &class.opaque_fields[1];
+                        assert_eq!(count.name, "count");
+                        assert_eq!(count.field_type, Type::I32);
+
+                        assert_eq!(class.methods.len(), 2);
+                    }
+                    _ => panic!("Expected Class"),
+                }
+            }
+            Err(e) => panic!("Parsing opaque block failed: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_parse_opaque_block_nullable_traced() {
+        let ridl = r#"
+        class GcNode2 {
+            opaque {
+                held: Traced<object>?,
+                count: i32;
+            }
+
+            fn setHeld(v: object) -> void;
+        }
+        "#;
+
+        match parse_idl(ridl) {
+            Ok(items) => {
+                if let IDLItem::Class(class) = &items[0] {
+                    let held = &class.opaque_fields[0];
+                    assert_eq!(
+                        held.field_type,
+                        Type::Optional(Box::new(Type::Traced(Box::new(Type::Object))))
+                    );
+                } else {
+                    panic!("Expected Class");
+                }
+            }
+            Err(e) => panic!("Parsing nullable traced opaque field failed: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_parse_class_without_opaque_block_still_works() {
+        let ridl = r#"
+        class Plain {
+            var name: string = "";
+            fn getName() -> string;
+        }
+        "#;
+
+        match parse_idl(ridl) {
+            Ok(items) => {
+                if let IDLItem::Class(class) = &items[0] {
+                    assert_eq!(class.opaque_fields.len(), 0);
+                    assert_eq!(class.js_fields.len(), 1);
+                } else {
+                    panic!("Expected Class");
+                }
+            }
+            Err(e) => panic!("Parsing class without opaque block failed: {}", e),
+        }
+    }
+
+    #[test]
+    fn test_traced_type_standalone() {
+        let result = IDLParser::parse(Rule::r#type, "Traced<object>");
         assert!(result.is_ok());
     }
 }

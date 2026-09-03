@@ -8,7 +8,7 @@ comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 keyword = _{
     "interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "proto" |
     "array" | "map" | "true" | "false" | "fn" | "import" | "as" |
-    "from" | "using" | "module" | "singleton"
+    "from" | "using" | "module" | "singleton" | "opaque" | "Traced"
 }
 // Identifier - must not match keywords
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -27,7 +27,7 @@ module_path = { identifier ~ ("." ~ identifier)* }
 version = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT+)? )? }
 
 interface_def = { WS? ~ "interface" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ method_def ~ WS ~ ";")* ~ WS ~ "}" }
-class_def = { WS? ~ "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ class_member ~ WS ~ ";")* ~ WS ~ "}" }
+class_def = { WS? ~ "class" ~ WS ~ identifier ~ WS ~ "{" ~ (WS ~ (opaque_block | (class_member ~ WS ~ ";")))* ~ WS ~ "}" }
 enum_def = { WS? ~ "enum" ~ WS ~ identifier ~ WS ~ "{" ~ WS? ~ enum_value ~ (WS ~ "," ~ WS ~ enum_value)* ~ (WS ~ ",")? ~ WS? ~ "}" }
 
 // Using definition for type aliases
@@ -56,6 +56,10 @@ singleton_member = { method_def | readonly_prop | readwrite_prop }
 
 // Class members
 class_member = { const_member | var_member | proto_var_member | proto_readonly_prop | proto_readwrite_prop | readonly_prop | readwrite_prop | method_def | class_constructor | class_constructor_compat }
+
+// Opaque block for GC-traced fields
+opaque_block = { "opaque" ~ WS ~ "{" ~ (WS ~ opaque_field ~ WS ~ (";" | ",")?)* ~ WS ~ "}" }
+opaque_field = { identifier ~ WS ~ ":" ~ WS ~ type }
 const_member = { "const" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type ~ WS ~ "=" ~ WS ~ literal }
 var_member = { "var" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type ~ WS ~ "=" ~ WS ~ literal }
 proto_var_member = { "proto" ~ WS ~ "var" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type ~ WS ~ "=" ~ WS ~ literal }
@@ -84,13 +88,14 @@ field_def = { identifier ~ WS ~ ":" ~ WS ~ type }
 // Type definitions - using precedence for handling left recursion
 type = { union_type | nullable_type | primary_type }
 // We need to make sure basic_type comes before custom_type to avoid basic types being parsed as custom types
-primary_type = { array_type | map_type | callback_type | group_type | basic_type | custom_type }
+primary_type = { traced_type | array_type | map_type | callback_type | group_type | basic_type | custom_type }
+traced_type = { "Traced" ~ WS ~ "<" ~ WS ~ type ~ WS ~ ">" }
 basic_type = { "bool" | "i32" | "i64" | "f32" | "f64" | "string" | "void" | "object" | "null" | "any" }
 array_type = { "array" ~ WS ~ "<" ~ WS ~ type ~ WS ~ ">" }
 map_type = { "map" ~ WS ~ "<" ~ WS ~ type ~ WS ~ "," ~ WS ~ type ~ WS ~ ">" }
 union_type = { primary_type ~ (WS ~ "|" ~ WS ~ primary_type)+ }
 // 修改nullable_type，防止嵌套，并使用负前瞻防止重复的?符号
-nullable_type = { (basic_type | array_type | map_type | custom_type | callback_type | group_type) ~ (WS? ~ "?") ~ (!"?") }
+nullable_type = { (traced_type | basic_type | array_type | map_type | custom_type | callback_type | group_type) ~ (WS? ~ "?") ~ (!"?") }
 custom_type = { identifier }
 callback_type = { "callback" ~ WS ~ identifier? ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
 group_type = { "(" ~ WS ~ type ~ WS ~ ")" }
