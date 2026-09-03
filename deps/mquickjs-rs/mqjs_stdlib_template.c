@@ -25,6 +25,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/time.h>
 
 #include "mquickjs.h"
 #include "mquickjs_build.h"
@@ -317,13 +318,22 @@ static const JSClassDef js_regexp_class =
 
 /* other objects */
 
+/* Date support: js_date_constructor and js_date_now are provided by the
+   application (mqjs_stdlib_impl.c) because they need platform-specific
+   time functions. The template only references them in JS_CLASS_DEF. */
+
 static const JSPropDef js_date[] = {
-    // JS_CFUNC_DEF("now", 0, js_date_now),
+    JS_CFUNC_DEF("now", 0, js_date_now),
+    JS_PROP_END,
+};
+
+static const JSPropDef js_date_proto[] = {
+    JS_CFUNC_DEF("valueOf", 0, js_date_valueOf),
     JS_PROP_END,
 };
 
 static const JSClassDef js_date_class =
-    JS_CLASS_DEF("Date", 7, js_date_constructor, JS_CLASS_DATE, js_date, NULL, NULL, NULL, NULL);
+    JS_CLASS_DEF("Date", 7, js_date_constructor, JS_CLASS_DATE, js_date, js_date_proto, NULL, NULL, NULL);
 
 /*
  * NOTE: Host/OS-level stdlib objects (console/performance/timers/...) are
