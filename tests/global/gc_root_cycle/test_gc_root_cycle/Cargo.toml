@@ -4,10 +4,8 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["rlib", "cdylib"]
+crate-type = ["rlib", "staticlib"]
 
 [dependencies]
-mquickjs-rs = { path = "../../../../deps/mquickjs-rs" }
-
-[build-dependencies]
-ridl-builder = { path = "../../../../ridl-builder" }
+mquickjs-rs = { path = "../../../../deps/mquickjs-rs", features = ["ridl-extensions"] }
+libc = "0.2"

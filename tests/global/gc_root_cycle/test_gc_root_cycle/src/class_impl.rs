@@ -1,3 +1,5 @@
+use crate::api::TestGcSingleton;
+
 pub struct DefaultTestGcSingleton;
 
 impl TestGcSingleton for DefaultTestGcSingleton {

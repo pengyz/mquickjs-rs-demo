@@ -1,7 +1,5 @@
 class Node {
-    fn setHeld(v: object) -> void;
     fn clearHeld() -> void;
-    fn makeCycle() -> void;
     fn dropAll() -> void;
     fn finalizerCount() -> i32;
 
