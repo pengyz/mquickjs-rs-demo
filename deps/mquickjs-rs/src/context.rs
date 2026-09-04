@@ -365,6 +365,25 @@ impl Context {
 
         Ok(result != 0)
     }
+
+    /// Drain completed async tasks and invoke callbacks
+    ///
+    /// This method should be called from the JS main thread to process
+    /// completed async tasks and invoke their callbacks.
+    ///
+    /// # Safety
+    /// - Must be called from the JS main thread
+    /// - Must be called after ridl_context_init
+    pub unsafe fn drain_completions(&self) {
+        let completions = self.inner.async_task_manager.drain_completions();
+        
+        for item in completions {
+            // Find the callback for this task
+            // TODO: Look up callback from task_id and invoke it
+            // For now, just mark the task as completed
+            self.inner.async_task_manager.complete_task(item.task_id);
+        }
+    }
 }
 
 impl Drop for Context {

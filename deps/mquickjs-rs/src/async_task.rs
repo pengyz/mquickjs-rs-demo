@@ -11,9 +11,19 @@
 //! - @timeout(ms): auto-cancel after timeout
 
 use std::collections::HashMap;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+
+/// 完成项 - 用于 Worker 线程向 JS 主线程传递结果
+#[derive(Debug)]
+pub struct CompletionItem {
+    /// 任务 ID
+    pub task_id: u64,
+    /// 结果（成功或失败）
+    pub result: Result<String, String>,
+}
 
 /// Task priority based on RIDL decorators
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -145,6 +155,8 @@ pub struct AsyncTaskManager {
     pub(crate) tasks: Mutex<HashMap<u64, AsyncTask>>,
     /// Whether the context is being dropped
     context_dropping: std::sync::atomic::AtomicBool,
+    /// 完成队列 - Worker 线程将结果放入此队列
+    completion_queue: Mutex<VecDeque<CompletionItem>>,
 }
 
 impl AsyncTaskManager {
@@ -154,7 +166,26 @@ impl AsyncTaskManager {
             next_id: AtomicU64::new(1),
             tasks: Mutex::new(HashMap::new()),
             context_dropping: std::sync::atomic::AtomicBool::new(false),
+            completion_queue: Mutex::new(VecDeque::new()),
         }
+    }
+
+    /// 推送完成项到队列（可以在任意线程调用）
+    pub fn push_completion(&self, item: CompletionItem) {
+        let mut queue = self.completion_queue.lock().unwrap();
+        queue.push_back(item);
+    }
+
+    /// 批量弹出所有完成项（只能在 JS 主线程调用）
+    pub fn drain_completions(&self) -> Vec<CompletionItem> {
+        let mut queue = self.completion_queue.lock().unwrap();
+        queue.drain(..).collect()
+    }
+
+    /// 检查完成队列是否为空
+    pub fn has_completions(&self) -> bool {
+        let queue = self.completion_queue.lock().unwrap();
+        !queue.is_empty()
     }
 
     /// Register a new async task

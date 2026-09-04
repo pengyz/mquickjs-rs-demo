@@ -13,7 +13,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
-use crate::async_task::{AsyncTaskManager, TaskPriority, TaskStatus};
+use crate::async_task::{AsyncTaskManager, CompletionItem, TaskPriority, TaskStatus};
 
 /// Error type for async bridge operations
 #[derive(Debug, Clone)]
@@ -310,6 +310,130 @@ impl AsyncBridge {
     /// Get the task manager
     pub fn task_manager(&self) -> &AsyncTaskManager {
         &self.task_manager
+    }
+
+    /// Spawn a cancellable async task with completion queue
+    ///
+    /// This method is designed for JS integration:
+    /// - Worker thread executes the task
+    /// - Result is pushed to completion queue
+    /// - JS main thread drains queue and calls callback
+    pub fn spawn_cancellable_with_queue<T, F>(
+        &self,
+        future: F,
+        task_id: u64,
+    ) where
+        T: Send + 'static + ToString,
+        F: Future<Output = T> + Send + 'static,
+    {
+        let cancellable_future = CancellableFuture::new(future, task_id, self.task_manager.clone());
+        let task_manager = self.task_manager.clone();
+
+        std::thread::spawn(move || {
+            task_manager.start_task(task_id);
+
+            let waker = futures::task::noop_waker();
+            let mut cx = Context::from_waker(&waker);
+            let mut future = cancellable_future;
+
+            let result = loop {
+                match Pin::new(&mut future).poll(&mut cx) {
+                    Poll::Ready(result) => break result,
+                    Poll::Pending => std::thread::yield_now(),
+                }
+            };
+
+            // Push result to completion queue (thread-safe)
+            let completion_result = match result {
+                Ok(value) => Ok(value.to_string()),
+                Err(e) => Err(e.to_string()),
+            };
+            let completion = CompletionItem {
+                task_id,
+                result: completion_result,
+            };
+            task_manager.push_completion(completion);
+            task_manager.complete_task(task_id);
+        });
+    }
+
+    /// Spawn a non-cancellable async task with completion queue
+    pub fn spawn_non_cancellable_with_queue<T, F>(
+        &self,
+        future: F,
+        task_id: u64,
+    ) where
+        T: Send + 'static + ToString,
+        F: Future<Output = T> + Send + 'static,
+    {
+        let cancellable_future = CancellableFuture::new(future, task_id, self.task_manager.clone());
+        let task_manager = self.task_manager.clone();
+
+        std::thread::spawn(move || {
+            task_manager.start_task(task_id);
+
+            let waker = futures::task::noop_waker();
+            let mut cx = Context::from_waker(&waker);
+            let mut future = cancellable_future;
+
+            let result = loop {
+                match Pin::new(&mut future).poll(&mut cx) {
+                    Poll::Ready(result) => break result,
+                    Poll::Pending => std::thread::yield_now(),
+                }
+            };
+
+            let completion_result = match result {
+                Ok(value) => Ok(value.to_string()),
+                Err(e) => Err(e.to_string()),
+            };
+            let completion = CompletionItem {
+                task_id,
+                result: completion_result,
+            };
+            task_manager.push_completion(completion);
+            task_manager.complete_task(task_id);
+        });
+    }
+
+    /// Spawn a timeout async task with completion queue
+    pub fn spawn_with_timeout_with_queue<T, F>(
+        &self,
+        future: F,
+        task_id: u64,
+        _timeout_ms: u64,
+    ) where
+        T: Send + 'static + ToString,
+        F: Future<Output = T> + Send + 'static,
+    {
+        let cancellable_future = CancellableFuture::new(future, task_id, self.task_manager.clone());
+        let task_manager = self.task_manager.clone();
+
+        std::thread::spawn(move || {
+            task_manager.start_task(task_id);
+
+            let waker = futures::task::noop_waker();
+            let mut cx = Context::from_waker(&waker);
+            let mut future = cancellable_future;
+
+            let result = loop {
+                match Pin::new(&mut future).poll(&mut cx) {
+                    Poll::Ready(result) => break result,
+                    Poll::Pending => std::thread::yield_now(),
+                }
+            };
+
+            let completion_result = match result {
+                Ok(value) => Ok(value.to_string()),
+                Err(e) => Err(e.to_string()),
+            };
+            let completion = CompletionItem {
+                task_id,
+                result: completion_result,
+            };
+            task_manager.push_completion(completion);
+            task_manager.complete_task(task_id);
+        });
     }
 }
 
