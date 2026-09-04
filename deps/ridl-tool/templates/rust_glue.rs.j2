@@ -477,26 +477,42 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {%- endfor %}
 
     {%- if method|has_async_decorator %}
-    // Async method with decorator: spawn async task
+    // Async method: extract callback, create Root, spawn async task
+    // The last parameter is the callback
+    {%- for p in method.params %}
+    {%- if loop.last %}
+    let cb_jsvalue = {{ p.rust_name }}_raw;
+    let cb_root = mquickjs_rs::Root::new(&scope, scope.value(cb_jsvalue));
+    {%- endif %}
+    {%- endfor %}
+
+    // Get AsyncTaskManager from context
+    let task_manager = h.async_task_manager();
+
+    // Spawn async task based on decorator
     {%- if method|has_non_cancellable %}
     // @nonCancellable: task must complete even if context drops
-    // TODO: Generate AsyncBridge::spawn_non_cancellable() call
+    task_manager.spawn_non_cancellable(cb_root, async move {
+        // TODO: Call user's async implementation
+        // For now, return undefined
+        mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
+    });
     {%- else %}{% if method|has_timeout %}
     // @timeout({{ method|get_timeout_value }}): auto-cancel after timeout
-    // TODO: Generate AsyncBridge::spawn_with_timeout() call
+    task_manager.spawn_with_timeout(cb_root, std::time::Duration::from_millis({{ method|get_timeout_value }}), async move {
+        // TODO: Call user's async implementation
+        mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
+    });
     {%- else %}
     // Default cancellable: task cancelled on context drop
-    // TODO: Generate AsyncBridge::spawn_cancellable() call
+    task_manager.spawn_cancellable(cb_root, async move {
+        // TODO: Call user's async implementation
+        mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
+    });
     {%- endif %}{% endif %}
-    // For now, call synchronous implementation
-    let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };
-    let result = inst.{{ method.name|to_snake_case|rust_ident }}(
-        {%- if method.needs_scope %}
-        &mut env{%- if method.params|length > 0 %}, {% endif %}
-        {%- endif %}
-        {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
-    );
-    {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
+
+    // Return immediately (async task runs in background)
+    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     {%- else %}
     // Synchronous method
     let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };
