@@ -194,6 +194,32 @@ impl<T: Send + 'static> AsyncStream<T> {
     pub fn clear(&mut self) {
         self.subscribers.clear();
     }
+
+    /// 处理事件队列中的所有事件
+    ///
+    /// # Safety
+    /// - 只能在 JS 主线程调用
+    /// - 事件队列必须是有效的
+    pub unsafe fn drain_events(
+        &self,
+        scope: &Scope<'_>,
+        queue: &mut EventQueue<T>,
+    ) where
+        T: ToJsValue,
+    {
+        let events = queue.drain();
+        for event in events {
+            // 找到对应的 stream
+            // 注意：这里假设所有事件都属于当前 stream
+            // 实际实现中需要根据 stream_id 路由到正确的 stream
+            let js_value = event.value.to_js_value(scope);
+            for entry in &self.subscribers {
+                // 复制 js_value，因为 call_callback 会消耗它
+                let js_value_copy = scope.value(js_value.as_raw());
+                self.call_callback(scope, &entry.callback, js_value_copy);
+            }
+        }
+    }
 }
 
 impl<T: Send + 'static> Drop for AsyncStream<T> {
@@ -210,6 +236,150 @@ pub trait ToJsValue {
     /// # Safety
     /// - 必须在 JS 主线程调用
     unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value>;
+}
+
+/// 事件完成项 - 用于 Worker 线程向 JS 主线程传递事件
+///
+/// # Safety
+/// - T 必须是 Send + 'static
+/// - 可以安全地跨线程发送
+#[derive(Debug, Clone)]
+pub struct EventCompletion<T: Send + 'static> {
+    /// 事件流 ID
+    pub stream_id: u64,
+    /// 事件值
+    pub value: T,
+}
+
+// Safety: EventCompletion 可以安全地跨线程发送
+// 因为 T 是 Send + 'static
+unsafe impl<T: Send + 'static> Send for EventCompletion<T> {}
+
+/// 事件队列 - 用于 Worker 线程向 JS 主线程传递事件
+///
+/// # Safety
+/// - 可以在任意线程调用 push()
+/// - 只能在 JS 主线程调用 pop() 和 drain()
+pub struct EventQueue<T: Send + 'static> {
+    queue: Vec<EventCompletion<T>>,
+}
+
+// Safety: EventQueue 可以安全地跨线程发送
+// 因为它只包含 Vec，不持有 JS 状态
+unsafe impl<T: Send + 'static> Send for EventQueue<T> {}
+
+impl<T: Send + 'static> EventQueue<T> {
+    /// 创建新的事件队列
+    pub fn new() -> Self {
+        Self {
+            queue: Vec::new(),
+        }
+    }
+
+    /// 推送事件到队列
+    ///
+    /// # Safety
+    /// - 可以在任意线程调用
+    pub fn push(&mut self, event: EventCompletion<T>) {
+        self.queue.push(event);
+    }
+
+    /// 从队列弹出事件
+    ///
+    /// # Safety
+    /// - 只能在 JS 主线程调用
+    pub fn pop(&mut self) -> Option<EventCompletion<T>> {
+        if self.queue.is_empty() {
+            None
+        } else {
+            Some(self.queue.remove(0))
+        }
+    }
+
+    /// 检查队列是否为空
+    pub fn is_empty(&self) -> bool {
+        self.queue.is_empty()
+    }
+
+    /// 获取队列长度
+    pub fn len(&self) -> usize {
+        self.queue.len()
+    }
+
+    /// 清空队列
+    pub fn clear(&mut self) {
+        self.queue.clear();
+    }
+
+    /// 批量弹出所有事件
+    ///
+    /// # Safety
+    /// - 只能在 JS 主线程调用
+    pub fn drain(&mut self) -> Vec<EventCompletion<T>> {
+        let events = self.queue.drain(..).collect();
+        events
+    }
+}
+
+/// 线程安全的事件队列包装器
+///
+/// 用于在多个线程之间共享事件队列
+///
+/// # Safety
+/// - 可以在任意线程调用 push()
+/// - 只能在 JS 主线程调用 drain()
+pub struct ThreadSafeEventQueue<T: Send + 'static> {
+    inner: std::sync::Mutex<EventQueue<T>>,
+}
+
+// Safety: ThreadSafeEventQueue 可以安全地跨线程发送和共享
+// 因为它使用 Mutex 保护内部状态
+unsafe impl<T: Send + 'static> Send for ThreadSafeEventQueue<T> {}
+unsafe impl<T: Send + 'static> Sync for ThreadSafeEventQueue<T> {}
+
+impl<T: Send + 'static> ThreadSafeEventQueue<T> {
+    /// 创建新的线程安全事件队列
+    pub fn new() -> Self {
+        Self {
+            inner: std::sync::Mutex::new(EventQueue::new()),
+        }
+    }
+
+    /// 推送事件到队列（线程安全）
+    ///
+    /// # Safety
+    /// - 可以在任意线程调用
+    pub fn push(&self, event: EventCompletion<T>) {
+        let mut queue = self.inner.lock().unwrap();
+        queue.push(event);
+    }
+
+    /// 批量弹出所有事件（只能在 JS 主线程调用）
+    ///
+    /// # Safety
+    /// - 只能在 JS 主线程调用
+    pub fn drain(&self) -> Vec<EventCompletion<T>> {
+        let mut queue = self.inner.lock().unwrap();
+        queue.drain()
+    }
+
+    /// 检查队列是否为空
+    pub fn is_empty(&self) -> bool {
+        let queue = self.inner.lock().unwrap();
+        queue.is_empty()
+    }
+
+    /// 获取队列长度
+    pub fn len(&self) -> usize {
+        let queue = self.inner.lock().unwrap();
+        queue.len()
+    }
+
+    /// 清空队列
+    pub fn clear(&self) {
+        let mut queue = self.inner.lock().unwrap();
+        queue.clear();
+    }
 }
 
 // 为基本类型实现 ToJsValue
