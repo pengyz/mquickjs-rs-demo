@@ -486,8 +486,9 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {%- endif %}
     {%- endfor %}
 
-    // Capture opaque pointer for async task
+    // Capture opaque pointer and context for async task
     let opaque_ptr = holder_ptr as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
+    let ctx_ptr = ctx;
 
     // Get AsyncTaskManager from context
     let task_manager = h.async_task_manager();
@@ -504,7 +505,9 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
             {%- endif %}
             {%- endfor %}
         );
-        // TODO: Convert result to JSValue and call callback
+        // Convert result to JSValue and call callback
+        {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
+        // TODO: Call callback with result
         mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     });
     {%- else %}{% if method|has_timeout %}
@@ -518,7 +521,9 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
             {%- endif %}
             {%- endfor %}
         );
-        // TODO: Convert result to JSValue and call callback
+        // Convert result to JSValue and call callback
+        {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
+        // TODO: Call callback with result
         mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     });
     {%- else %}
@@ -532,7 +537,9 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
             {%- endif %}
             {%- endfor %}
         );
-        // TODO: Convert result to JSValue and call callback
+        // Convert result to JSValue and call callback
+        {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
+        // TODO: Call callback with result
         mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     });
     {%- endif %}{% endif %}
