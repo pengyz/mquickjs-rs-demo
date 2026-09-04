@@ -4,6 +4,28 @@
 //! - 简单错误消息传递
 //! - Rust→JS 错误转换
 //! - JS→Rust 错误转换
+//!
+//! # 示例
+//!
+//! ```rust,no_run
+//! use mquickjs_rs::async_error::AsyncError;
+//! use mquickjs_rs::context::Context;
+//!
+//! let mut ctx = Context::new(1024 * 1024).unwrap();
+//! let token = ctx.token();
+//! let scope = token.enter_scope();
+//!
+//! // 创建 Rust 错误
+//! let error = AsyncError::Message("something went wrong".to_string());
+//!
+//! // 转换为 JS Error 对象
+//! let js_error = error.to_js(&scope);
+//!
+//! // 从 JS Error 创建
+//! let js_error = ctx.eval_jsvalue("new Error('test')").unwrap();
+//! let error = AsyncError::from_js(&scope, scope.value(js_error));
+//! assert_eq!(error.message(), "test");
+//! ```
 
 use crate::handles::local::{Local, Value};
 use crate::handles::scope::Scope;

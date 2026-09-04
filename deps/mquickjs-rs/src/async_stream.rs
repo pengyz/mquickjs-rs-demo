@@ -5,6 +5,36 @@
 //! - Subscription 管理单个 subscriber 的生命周期
 //! - emit() 只能在 JS 主线程调用
 //! - unsubscribe() 可以在任意线程调用
+//!
+//! # 示例
+//!
+//! ```rust,no_run
+//! use mquickjs_rs::async_stream::AsyncStream;
+//! use mquickjs_rs::context::Context;
+//! use mquickjs_rs::Root;
+//!
+//! let mut ctx = Context::new(1024 * 1024).unwrap();
+//! let token = ctx.token();
+//! let scope = token.enter_scope();
+//!
+//! // 创建事件流
+//! let mut stream = AsyncStream::<i32>::new();
+//!
+//! // 创建 callback
+//! let callback = ctx.eval_jsvalue("(function(v) { return v; })").unwrap();
+//! let callback_local = scope.value(callback);
+//! let function_local = callback_local.try_into_function(&scope).unwrap();
+//! let cb_root = Root::new(&scope, function_local);
+//!
+//! // 订阅事件
+//! let sub = unsafe { stream.subscribe(cb_root) };
+//!
+//! // 发射事件
+//! unsafe { stream.emit(&scope, &42); }
+//!
+//! // 取消订阅
+//! sub.unsubscribe(&mut stream);
+//! ```
 
 use crate::async_error::AsyncError;
 use crate::handles::local::{Function, Local, Value};
@@ -264,7 +294,7 @@ pub trait ToJsValue {
     ///
     /// # Safety
     /// - 必须在 JS 主线程调用
-    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value>;
+    unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value>;
 }
 
 /// 事件完成项 - 用于 Worker 线程向 JS 主线程传递事件
@@ -413,37 +443,43 @@ impl<T: Send + 'static> ThreadSafeEventQueue<T> {
 
 // 为基本类型实现 ToJsValue
 impl ToJsValue for i32 {
-    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
-        // TODO: 实现 i32 到 JSValue 的转换
-        todo!()
+    unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
+        let ctx = scope.ctx();
+        let raw = crate::mquickjs_ffi::JS_NewInt32(ctx, *self);
+        scope.value(raw)
     }
 }
 
 impl ToJsValue for f64 {
-    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
-        // TODO: 实现 f64 到 JSValue 的转换
-        todo!()
+    unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
+        let ctx = scope.ctx();
+        let raw = crate::mquickjs_ffi::JS_NewFloat64(ctx, *self);
+        scope.value(raw)
     }
 }
 
 impl ToJsValue for bool {
-    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
-        // TODO: 实现 bool 到 JSValue 的转换
-        todo!()
+    unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
+        let raw = crate::mquickjs_ffi::js_mkbool(*self);
+        scope.value(raw)
     }
 }
 
 impl ToJsValue for String {
-    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
-        // TODO: 实现 String 到 JSValue 的转换
-        todo!()
+    unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
+        let ctx = scope.ctx();
+        let c_str = std::ffi::CString::new(self.as_str()).unwrap();
+        let raw = crate::mquickjs_ffi::JS_NewString(ctx, c_str.as_ptr());
+        scope.value(raw)
     }
 }
 
 impl ToJsValue for &str {
-    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
-        // TODO: 实现 &str 到 JSValue 的转换
-        todo!()
+    unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
+        let ctx = scope.ctx();
+        let c_str = std::ffi::CString::new(*self).unwrap();
+        let raw = crate::mquickjs_ffi::JS_NewString(ctx, c_str.as_ptr());
+        scope.value(raw)
     }
 }
 

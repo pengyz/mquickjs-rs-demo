@@ -233,6 +233,72 @@ impl MyNodeClass for MyNode {
 >
 > 影响：GC sweep 后 native opaque（Box）泄漏到 context teardown。对于短生命周期 context（创建→执行→销毁），这是可接受的。
 
+## AsyncStream — 异步事件流
+
+AsyncStream 提供了类型安全的异步事件流机制，用于管理异步回调的生命周期。
+
+### 基本用法
+
+```rust
+use mquickjs_rs::async_stream::AsyncStream;
+use mquickjs_rs::Root;
+
+// 创建事件流
+let mut stream = AsyncStream::<i32>::new();
+
+// 订阅事件
+let callback = ctx.eval_jsvalue("(function(v) { console.log(v); })").unwrap();
+let cb_root = Root::new(&scope, scope.value(callback).try_into_function(&scope).unwrap());
+let sub = unsafe { stream.subscribe(cb_root) };
+
+// 发射事件
+unsafe { stream.emit(&scope, &42); }
+
+// 取消订阅（自动清理）
+sub.unsubscribe(&mut stream);
+```
+
+### 错误处理
+
+```rust
+use mquickjs_rs::async_error::AsyncError;
+
+// 发射错误事件
+let error = AsyncError::Message("something went wrong".to_string());
+unsafe { stream.emit_error(&scope, &error); }
+```
+
+### 线程安全
+
+```rust
+use mquickjs_rs::async_stream::{ThreadSafeEventQueue, EventCompletion};
+use std::sync::Arc;
+
+// 创建线程安全队列
+let queue = Arc::new(ThreadSafeEventQueue::<String>::new());
+
+// 在 Worker 线程中推送事件
+let queue_clone = queue.clone();
+std::thread::spawn(move || {
+    queue_clone.push(EventCompletion {
+        stream_id: 1,
+        value: "data from worker".to_string(),
+    });
+});
+
+// 在 JS 主线程中处理事件
+let events = queue.drain();
+for event in events {
+    // 处理事件
+}
+```
+
+### 生命周期管理
+
+- **Subscription Drop**：自动从 AsyncStream 中移除 subscriber
+- **AsyncStream Drop**：清理所有 subscriber
+- **Weak 引用**：避免循环引用导致内存泄漏
+
 ## 测试
 
 ```bash

@@ -160,3 +160,46 @@ fn test_subscription_static() {
     fn assert_static<T: 'static>() {}
     assert_static::<Subscription>();
 }
+
+#[test]
+fn test_async_stream_emit_calls_callback() {
+    let mut ctx = Context::new(1024 * 1024).expect("create ctx");
+    let token = ctx.token();
+    let scope = token.enter_scope();
+
+    let mut stream = AsyncStream::<i32>::new();
+
+    // 创建一个会记录调用的 callback
+    let callback = ctx.eval_jsvalue(
+        r#"
+        (function(v) {
+            globalThis.__async_stream_test_result = v;
+            return v;
+        })
+        "#,
+    ).unwrap();
+    let callback_local = scope.value(callback);
+    let function_local = callback_local.try_into_function(&scope).unwrap();
+    let cb_root = Root::new(&scope, function_local);
+
+    // 订阅事件
+    let sub = unsafe { stream.subscribe(cb_root) };
+
+    // 发射事件
+    unsafe {
+        stream.emit(&scope, &42);
+    }
+
+    // 验证 callback 被调用
+    let result = ctx.eval_jsvalue("globalThis.__async_stream_test_result").unwrap();
+    
+    // 检查结果是否为 42
+    let mut num: i32 = 0;
+    unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_ToInt32(scope.ctx(), &mut num as *mut i32, result);
+    }
+    assert_eq!(num, 42);
+
+    // 清理
+    sub.unsubscribe(&mut stream);
+}
