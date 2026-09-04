@@ -89,6 +89,20 @@ impl<T> Root<T> {
     pub fn ctx_id(&self) -> crate::handles::scope::ContextId {
         self.ctx_id
     }
+
+    /// 将 Root 转换为 Local
+    ///
+    /// # Safety
+    /// - 必须在同一个 Context 中调用
+    /// - 调用者必须确保值在使用期间有效
+    pub fn to_local<'ctx>(&self, scope: &crate::handles::scope::Scope<'ctx>) -> crate::handles::local::Local<'ctx, T> {
+        assert_eq!(
+            scope.context_id(),
+            self.ctx_id,
+            "cross-context Root::to_local",
+        );
+        crate::handles::local::Local::from_raw_for_same_ctx(self.raw).with_ctx_id(self.ctx_id)
+    }
 }
 
 impl<'ctx, T> Root<T> {

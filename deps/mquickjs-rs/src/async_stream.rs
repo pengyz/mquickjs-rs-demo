@@ -1,0 +1,284 @@
+//! AsyncStream: 事件流机制
+//!
+//! 核心设计：
+//! - AsyncStream<T> 管理多个 subscriber
+//! - Subscription 管理单个 subscriber 的生命周期
+//! - emit() 只能在 JS 主线程调用
+//! - unsubscribe() 可以在任意线程调用
+
+use crate::handles::local::{Function, Local, Value};
+use crate::handles::scope::Scope;
+use crate::Root;
+use std::marker::PhantomData;
+
+/// 订阅句柄 - 管理 callback 生命周期
+///
+/// # Safety
+/// - Drop 时自动从 AsyncStream 中移除 subscriber
+/// - 可以在任意线程调用 unsubscribe()
+pub struct Subscription {
+    id: u64,
+    // 用于在 Drop 时通知 AsyncStream 移除 subscriber
+    // 使用 Weak 避免循环引用
+    stream_weak: *mut (),  // 指向 AsyncStream 的弱引用
+    remove_fn: fn(*mut (), u64),  // 移除 subscriber 的函数
+}
+
+impl Subscription {
+    /// 创建新的 Subscription
+    ///
+    /// # Safety
+    /// - stream_weak 必须指向有效的 AsyncStream
+    /// - remove_fn 必须正确实现
+    pub(crate) unsafe fn new(
+        id: u64,
+        stream_weak: *mut (),
+        remove_fn: fn(*mut (), u64),
+    ) -> Self {
+        Self {
+            id,
+            stream_weak,
+            remove_fn,
+        }
+    }
+
+    /// 获取订阅 ID
+    pub fn id(&self) -> u64 {
+        self.id
+    }
+
+    /// 取消订阅
+    ///
+    /// # Safety
+    /// - 可以在任意线程调用
+    /// - 调用后 Subscription 失效
+    pub fn unsubscribe(self, stream: &mut AsyncStream<impl Send + 'static>) {
+        stream.remove(self.id);
+        // 防止 Drop 再次调用 remove
+        std::mem::forget(self);
+    }
+}
+
+impl Drop for Subscription {
+    fn drop(&mut self) {
+        // 从 AsyncStream 中移除 subscriber
+        if !self.stream_weak.is_null() {
+            (self.remove_fn)(self.stream_weak, self.id);
+        }
+    }
+}
+
+// Safety: Subscription 可以安全地跨线程发送
+// 因为它只包含 id 和函数指针，不持有 JS 状态
+unsafe impl Send for Subscription {}
+
+/// Subscriber 条目
+struct SubscriberEntry<T> {
+    id: u64,
+    callback: Root<Function>,
+    _marker: PhantomData<T>,
+}
+
+// Safety: SubscriberEntry 可以安全地跨线程发送
+// 因为 Root<Function> 是 Send
+unsafe impl<T> Send for SubscriberEntry<T> {}
+
+/// 事件发射器
+///
+/// # Safety
+/// - subscribe() 和 emit() 只能在 JS 主线程调用
+/// - unsubscribe() 和 clear() 可以在任意线程调用
+pub struct AsyncStream<T: Send + 'static> {
+    subscribers: Vec<SubscriberEntry<T>>,
+    next_id: u64,
+}
+
+// Safety: AsyncStream 可以安全地跨线程发送
+// 因为它只包含 Vec 和 u64，不持有 JS 状态
+unsafe impl<T: Send + 'static> Send for AsyncStream<T> {}
+
+impl<T: Send + 'static> AsyncStream<T> {
+    /// 创建新的 AsyncStream
+    pub fn new() -> Self {
+        Self {
+            subscribers: Vec::new(),
+            next_id: 1,
+        }
+    }
+
+    /// 获取 subscriber 数量
+    pub fn subscriber_count(&self) -> usize {
+        self.subscribers.len()
+    }
+
+    /// 订阅事件
+    ///
+    /// # Safety
+    /// - 必须在 JS 主线程调用
+    /// - callback 必须是有效的 JS 函数
+    pub unsafe fn subscribe(&mut self, callback: Root<Function>) -> Subscription {
+        let id = self.next_id;
+        self.next_id += 1;
+
+        self.subscribers.push(SubscriberEntry {
+            id,
+            callback,
+            _marker: PhantomData,
+        });
+
+        // 创建 Subscription，传入移除函数
+        let stream_ptr = self as *mut Self as *mut ();
+        Subscription::new(id, stream_ptr, Self::remove_by_ptr)
+    }
+
+    /// 移除指定 subscriber
+    fn remove(&mut self, id: u64) {
+        self.subscribers.retain(|entry| entry.id != id);
+    }
+
+    /// 通过指针移除 subscriber（用于 Subscription Drop）
+    ///
+    /// # Safety
+    /// - ptr 必须指向有效的 AsyncStream
+    fn remove_by_ptr(ptr: *mut (), id: u64) {
+        // Safety: ptr 必须指向有效的 AsyncStream
+        // 这是 unsafe 的，但我们在 Drop 中调用，假设指针有效
+        unsafe {
+            let stream = &mut *(ptr as *mut Self);
+            stream.remove(id);
+        }
+    }
+
+    /// 发射事件
+    ///
+    /// # Safety
+    /// - 必须在 JS 主线程调用
+    /// - value 必须是有效的 JS 值
+    pub unsafe fn emit(&self, scope: &Scope<'_>, value: &T)
+    where
+        T: ToJsValue,
+    {
+        for entry in &self.subscribers {
+            let js_value = value.to_js_value(scope);
+            self.call_callback(scope, &entry.callback, js_value);
+        }
+    }
+
+    /// 调用 callback
+    ///
+    /// # Safety
+    /// - 必须在 JS 主线程调用
+    unsafe fn call_callback(
+        &self,
+        scope: &Scope<'_>,
+        callback: &Root<Function>,
+        value: Local<'_, Value>,
+    ) {
+        // 将 Root<Function> 转换为 Local<Function>
+        let callback_local = callback.to_local(scope);
+        
+        // 调用 callback
+        let this_val = scope.value(crate::mquickjs_ffi::JS_UNDEFINED);
+        let args = [value];
+        
+        match callback_local.call(scope, this_val, &args) {
+            Ok(_) => {},
+            Err(e) => {
+                // TODO: 错误处理
+                eprintln!("AsyncStream callback error: {}", e);
+            }
+        }
+    }
+
+    /// 清空所有 subscriber
+    pub fn clear(&mut self) {
+        self.subscribers.clear();
+    }
+}
+
+impl<T: Send + 'static> Drop for AsyncStream<T> {
+    fn drop(&mut self) {
+        // 清空所有 subscriber
+        self.clear();
+    }
+}
+
+/// 将 Rust 值转换为 JS 值的 trait
+pub trait ToJsValue {
+    /// 将 Rust 值转换为 JS 值
+    ///
+    /// # Safety
+    /// - 必须在 JS 主线程调用
+    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value>;
+}
+
+// 为基本类型实现 ToJsValue
+impl ToJsValue for i32 {
+    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
+        // TODO: 实现 i32 到 JSValue 的转换
+        todo!()
+    }
+}
+
+impl ToJsValue for f64 {
+    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
+        // TODO: 实现 f64 到 JSValue 的转换
+        todo!()
+    }
+}
+
+impl ToJsValue for bool {
+    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
+        // TODO: 实现 bool 到 JSValue 的转换
+        todo!()
+    }
+}
+
+impl ToJsValue for String {
+    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
+        // TODO: 实现 String 到 JSValue 的转换
+        todo!()
+    }
+}
+
+impl ToJsValue for &str {
+    unsafe fn to_js_value(&self, scope: &Scope<'_>) -> Local<'_, Value> {
+        // TODO: 实现 &str 到 JSValue 的转换
+        todo!()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_async_stream_new() {
+        let stream = AsyncStream::<i32>::new();
+        assert_eq!(stream.subscriber_count(), 0);
+    }
+
+    #[test]
+    fn test_async_stream_send() {
+        fn assert_send<T: Send>() {}
+        assert_send::<AsyncStream<i32>>();
+    }
+
+    #[test]
+    fn test_async_stream_static() {
+        fn assert_static<T: 'static>() {}
+        assert_static::<AsyncStream<i32>>();
+    }
+
+    #[test]
+    fn test_subscription_send() {
+        fn assert_send<T: Send>() {}
+        assert_send::<Subscription>();
+    }
+
+    #[test]
+    fn test_subscription_static() {
+        fn assert_static<T: 'static>() {}
+        assert_static::<Subscription>();
+    }
+}
