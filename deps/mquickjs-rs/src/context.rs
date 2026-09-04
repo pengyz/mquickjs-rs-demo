@@ -17,7 +17,7 @@ pub struct ContextInner {
     pub(crate) alive: std::sync::atomic::AtomicBool,
     
     /// Async task manager for RIDL async cancellation semantics
-    pub(crate) async_task_manager: crate::async_task::AsyncTaskManager,
+    pub async_task_manager: crate::async_task::AsyncTaskManager,
 }
 
 impl ContextInner {
