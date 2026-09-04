@@ -266,6 +266,7 @@ impl {{ class.name|to_upper_camel_case }}Opaque {
     /// `mquickjs_rs::roots::RootsRegistry::gc_mark` for the convention).
     ///
     /// Marks all Traced<T> fields as reachable during GC.
+    #[allow(dead_code)]
     pub(crate) unsafe fn gc_mark(&self, mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
 {%- for field in class.opaque_fields %}
 {%- if field.field_type|contains_traced %}

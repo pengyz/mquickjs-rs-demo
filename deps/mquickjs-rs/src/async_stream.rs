@@ -112,7 +112,7 @@ struct SubscriberEntry<T> {
 unsafe impl<T> Send for SubscriberEntry<T> {}
 
 /// AsyncStream 内部状态
-struct AsyncStreamInner {
+pub(crate) struct AsyncStreamInner {
     subscribers: Vec<SubscriberEntry<i32>>,  // 使用 i32 作为占位符
     next_id: u64,
 }

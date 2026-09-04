@@ -1,6 +1,6 @@
 use crate::api::AsyncTestSingletonSingleton;
 use mquickjs_rs::async_bridge::{AsyncBridge, AsyncCallback};
-use mquickjs_rs::async_task::{AsyncTaskManager, TaskPriority};
+use mquickjs_rs::async_task::AsyncTaskManager;
 use std::sync::Arc;
 
 pub struct DefaultAsyncTestSingletonSingleton {

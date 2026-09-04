@@ -349,7 +349,7 @@ impl AsyncValue {
 
                     if mquickjs_ffi::JS_IsFunction(ctx, parse_fn) != 0 {
                         let c_json = std::ffi::CString::new(json_str.as_str()).unwrap();
-                        let js_json_str = mquickjs_ffi::JS_NewString(ctx, c_json.as_ptr());
+                        let _js_json_str = mquickjs_ffi::JS_NewString(ctx, c_json.as_ptr());
                         // 调用 JSON.parse
                         let result = mquickjs_ffi::JS_Call(ctx, 0); // 简化调用
                         result
