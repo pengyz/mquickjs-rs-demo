@@ -1,0 +1,25 @@
+mode strict;
+
+singleton ConstantTestSingleton {
+    // readonly 属性（模拟常量）
+    readonly property MAX_SIZE: i32;
+    readonly property PI: f64;
+    readonly property NAME: string;
+    readonly property ENABLED: bool;
+    
+    // read-write 属性（模拟变量）
+    property counter: i32;
+    property status: string;
+}
+
+class ConstantTestClass {
+    // readonly 属性（模拟常量）
+    readonly property MAX_SIZE: i32;
+    readonly property PI: f64;
+    readonly property NAME: string;
+    readonly property ENABLED: bool;
+    
+    // read-write 属性（模拟变量）
+    property counter: i32;
+    property status: string;
+}
