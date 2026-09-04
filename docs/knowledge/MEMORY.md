@@ -22,6 +22,7 @@
 - [RIDL PEG 语法设计原则](pattern_ridl_grammar_design.md) — 关键字优先、左递归规避、类型优先级
 - [RIDL 解析器测试策略](pattern_ridl_parser_testing.md) — 三层测试架构：语法单元→集成→端到端
 - [RIDL 代码生成器测试策略](pattern_ridl_codegen_testing.md) — 类型映射、模板渲染、gc_mark 生成、端到端编译
+- [RIDL 全局函数架构](pattern_ridl_global_function_architecture.md) — glue 生成 C FFI，用户在 impls 提供实现，api.rs 不生成
 
 ## Debugging
 <!-- 调试方法、关键命令、排查路径 -->
