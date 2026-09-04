@@ -486,6 +486,9 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {%- endif %}
     {%- endfor %}
 
+    // Capture opaque pointer for async task
+    let opaque_ptr = holder_ptr as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
+
     // Get AsyncTaskManager from context
     let task_manager = h.async_task_manager();
 
@@ -493,20 +496,43 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {%- if method|has_non_cancellable %}
     // @nonCancellable: task must complete even if context drops
     task_manager.spawn_non_cancellable(cb_root, async move {
-        // TODO: Call user's async implementation
-        // For now, return undefined
+        let inst = unsafe { &mut *opaque_ptr };
+        let result = inst.{{ method.name|to_snake_case|rust_ident }}(
+            {%- for p in method.params %}
+            {%- if !loop.last %}
+            {{ p.rust_name }},
+            {%- endif %}
+            {%- endfor %}
+        );
+        // TODO: Convert result to JSValue and call callback
         mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     });
     {%- else %}{% if method|has_timeout %}
     // @timeout({{ method|get_timeout_value }}): auto-cancel after timeout
     task_manager.spawn_with_timeout(cb_root, std::time::Duration::from_millis({{ method|get_timeout_value }}), async move {
-        // TODO: Call user's async implementation
+        let inst = unsafe { &mut *opaque_ptr };
+        let result = inst.{{ method.name|to_snake_case|rust_ident }}(
+            {%- for p in method.params %}
+            {%- if !loop.last %}
+            {{ p.rust_name }},
+            {%- endif %}
+            {%- endfor %}
+        );
+        // TODO: Convert result to JSValue and call callback
         mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     });
     {%- else %}
     // Default cancellable: task cancelled on context drop
     task_manager.spawn_cancellable(cb_root, async move {
-        // TODO: Call user's async implementation
+        let inst = unsafe { &mut *opaque_ptr };
+        let result = inst.{{ method.name|to_snake_case|rust_ident }}(
+            {%- for p in method.params %}
+            {%- if !loop.last %}
+            {{ p.rust_name }},
+            {%- endif %}
+            {%- endfor %}
+        );
+        // TODO: Convert result to JSValue and call callback
         mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     });
     {%- endif %}{% endif %}
