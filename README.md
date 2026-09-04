@@ -299,28 +299,73 @@ for event in events {
 - **AsyncStream Drop**：清理所有 subscriber
 - **Weak 引用**：避免循环引用导致内存泄漏
 
+## 异步任务 — RIDL 异步方法
+
+RIDL 支持异步方法，通过 `@nonCancellable` 和 `@timeout` 装饰器控制取消语义。
+
+### IDL 语法
+
+```typescript
+singleton MyService {
+    // 可取消任务（默认）
+    fn cancellableTask() -> string;
+    
+    // 不可取消任务
+    @nonCancellable
+    fn nonCancellableTask() -> string;
+    
+    // 超时任务
+    @timeout(5000)
+    fn timeoutTask() -> string;
+}
+```
+
+### 工作流程
+
+```
+1. JS 调用 MyService.timeoutTask()
+2. Glue 提取参数，创建 AsyncBridge
+3. AsyncBridge.spawn_with_timeout_with_queue(task_id)
+4. Worker 线程执行任务
+5. 任务完成，push_completion(result)
+6. JS 主线程 drain_completions()
+7. 调用 callback(null, result)
+```
+
+### Rust 实现
+
+```rust
+impl MyServiceSingleton for DefaultMyService {
+    fn timeout_task(&mut self) -> String {
+        // 执行耗时操作
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        "result".to_string()
+    }
+}
+```
+
 ## 测试
 
 ```bash
 # 运行所有测试
-cargo test -p ridl-tool          # RIDL 工具链测试（310+ 个）
-cargo test -p mquickjs-demo      # 应用测试
-cargo run -- tests               # JS 集成测试（19 个）
+cargo test -p ridl-tool          # RIDL 工具链测试（97 个）
+cargo test -p mquickjs-rs        # Rust 绑定测试（131 个）
+cargo run -- tests               # JS 集成测试（26 个）
 
 # 运行特定测试
 cargo test -p ridl-tool --test comprehensive_syntax_test  # 语法覆盖测试
 cargo test -p ridl-tool --test end_to_end_codegen_test    # 端到端代码生成测试
+cargo test -p mquickjs-rs --test async_callback           # 异步回调测试
 ```
 
 ### 测试覆盖
 
 | 组件 | 测试数 | 覆盖率 |
 |---|---|---|
-| RIDL 解析器 | 266 | 100% 语法规则 |
-| 代码生成器 | 44+ | 核心功能 |
-| GC 系统 | 8 | 核心场景 |
-| JS 集成 | 19 | 全部通过 |
-| **总计** | **310+** | — |
+| RIDL 解析器 | 97 | 100% 语法规则 |
+| mquickjs-rs 绑定 | 131 | 核心功能 |
+| JS 集成 | 26 | 全部通过 |
+| **总计** | **254+** | — |
 
 ## 知识库
 
