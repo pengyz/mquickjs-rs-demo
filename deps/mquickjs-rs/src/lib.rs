@@ -80,6 +80,7 @@ pub mod ridl_ext_access;
 
 pub mod async_task;
 pub mod async_bridge;
+pub mod async_value;
 
 pub fn register_extensions() {
     // Kept for API compatibility.
