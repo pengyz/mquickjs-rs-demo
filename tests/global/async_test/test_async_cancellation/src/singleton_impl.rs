@@ -16,37 +16,37 @@ impl DefaultAsyncTestSingletonSingleton {
 }
 
 impl AsyncTestSingletonSingleton for DefaultAsyncTestSingletonSingleton {
-    fn non_cancellable_task(&mut self, callback: AsyncCallback<String>) {
+    fn non_cancellable_task(&mut self, cb: AsyncCallback<String>) {
         self.bridge.spawn_non_cancellable(
             async {
                 // Simulate some async work
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 "non-cancellable result".to_string()
             },
-            callback,
+            cb,
         );
     }
 
-    fn timeout_task(&mut self, callback: AsyncCallback<String>) {
+    fn timeout_task(&mut self, cb: AsyncCallback<String>) {
         self.bridge.spawn_with_timeout(
             async {
                 // Simulate some async work
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 "timeout result".to_string()
             },
-            callback,
+            cb,
             1000, // 1 second timeout
         );
     }
 
-    fn cancellable_task(&mut self, callback: AsyncCallback<String>) {
+    fn cancellable_task(&mut self, cb: AsyncCallback<String>) {
         self.bridge.spawn_cancellable(
             async {
                 // Simulate some async work
                 std::thread::sleep(std::time::Duration::from_millis(100));
                 "cancellable result".to_string()
             },
-            callback,
+            cb,
         );
     }
 }

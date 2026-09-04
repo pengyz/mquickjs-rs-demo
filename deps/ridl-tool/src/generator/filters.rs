@@ -113,6 +113,21 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
             format!("mquickjs_rs::Traced<{}>", rust_type_from_idl(inner)?)
         }
 
+        // Callback types: convert to AsyncCallback<T>
+        Type::Callback => {
+            "mquickjs_rs::async_bridge::AsyncCallback<()>".to_string()
+        }
+        Type::CallbackWithParams(params) => {
+            // For now, use the first parameter type as the callback result type
+            // TODO: support multiple parameters
+            if let Some(first_param) = params.first() {
+                let result_ty = rust_type_from_idl(&first_param.param_type)?;
+                format!("mquickjs_rs::async_bridge::AsyncCallback<{}>", result_ty)
+            } else {
+                "mquickjs_rs::async_bridge::AsyncCallback<()>".to_string()
+            }
+        }
+
         // Keep explicit: fail fast for types we haven't implemented yet.
         other => {
             return Err(askama::Error::Custom(
@@ -1270,6 +1285,19 @@ fn emit_single_param_extract_from_jsvalue(
             w.push_line(format!(
                 "let {name}: mquickjs_rs::handles::local::Local<'_, mquickjs_rs::handles::local::Value> = scope.value(v);",
                 name = name
+            ));
+        }
+
+        Type::Callback | Type::CallbackWithParams(_) => {
+            // Callback parameter: expect a JS function
+            // Create an AsyncCallback closure that calls the JS function
+            let err = format!("invalid callback argument: {name}");
+            w.push_line(format!(
+                "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsFunction(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, \"{err}\"); }}"
+            ));
+            // Create AsyncCallback closure
+            w.push_line(format!(
+                "let {name}: mquickjs_rs::async_bridge::AsyncCallback<String> = Box::new(move |result| {{ /* TODO: call JS function with result */ }});"
             ));
         }
         Type::Optional(inner) => {
