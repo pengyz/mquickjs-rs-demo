@@ -962,3 +962,124 @@ class ConstTest {
     assert!(api_content.contains("const MAX_SIZE"), "Should have MAX_SIZE const");
     assert!(api_content.contains("const NAME"), "Should have NAME const");
 }
+
+// ========================================================================
+// 异步装饰器端到端测试
+// ========================================================================
+
+/// 装饰器端到端：@nonCancellable 生成正确注释
+#[test]
+fn test_decorator_non_cancellable_e2e() {
+    let ridl_input = r#"
+callback AsyncCallback(error: string?, data: string?);
+
+class AsyncService {
+    @nonCancellable
+    fn saveData(data: string, cb: AsyncCallback) -> void;
+    
+    fn fetchData(url: string, cb: AsyncCallback) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "decorator e2e should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证装饰器注释生成
+    assert!(api_content.contains("nonCancellable"), "Should have nonCancellable comment");
+    assert!(api_content.contains("fn save_data"), "Should have save_data method");
+    assert!(api_content.contains("fn fetch_data"), "Should have fetch_data method");
+}
+
+/// 装饰器端到端：@timeout 生成正确注释
+#[test]
+fn test_decorator_timeout_e2e() {
+    let ridl_input = r#"
+callback AsyncCallback(error: string?, data: string?);
+
+class CacheService {
+    @timeout(5000)
+    fn updateCache(key: string, cb: AsyncCallback) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "timeout decorator e2e should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证超时装饰器注释生成
+    assert!(api_content.contains("timeout(5000)"), "Should have timeout comment");
+    assert!(api_content.contains("fn update_cache"), "Should have update_cache method");
+}
+
+/// 装饰器端到端：混合装饰器
+#[test]
+fn test_decorator_mixed_e2e() {
+    let ridl_input = r#"
+callback AsyncCallback(error: string?, data: string?);
+
+class MixedService {
+    fn fetch(url: string, cb: AsyncCallback) -> void;
+    
+    @nonCancellable
+    fn save(data: string, cb: AsyncCallback) -> void;
+    
+    @timeout(3000)
+    fn cache(key: string, cb: AsyncCallback) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "mixed decorator e2e should succeed: {:?}", result.err());
+
+    let api_file = output_dir.join("api.rs");
+    let api_content = std::fs::read_to_string(&api_file).unwrap();
+
+    // 验证所有方法生成
+    assert!(api_content.contains("fn fetch"), "Should have fetch method");
+    assert!(api_content.contains("fn save"), "Should have save method");
+    assert!(api_content.contains("fn cache"), "Should have cache method");
+    // 验证装饰器注释
+    assert!(api_content.contains("nonCancellable"), "Should have nonCancellable comment");
+    assert!(api_content.contains("timeout(3000)"), "Should have timeout comment");
+}

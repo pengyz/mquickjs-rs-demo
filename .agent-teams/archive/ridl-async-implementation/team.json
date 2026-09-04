@@ -12,7 +12,7 @@
       "provider": "xiaomi",
       "model": "xiaomi/mimo-v2.5-pro",
       "joinedAt": 1788492616836,
-      "status": "idle"
+      "status": "removed"
     },
     {
       "id": "6a812f17-613a-495c-8241-70ddc8e0f828",
@@ -21,7 +21,7 @@
       "provider": "xiaomi",
       "model": "xiaomi/mimo-v2.5-pro",
       "joinedAt": 1788492616846,
-      "status": "working"
+      "status": "removed"
     }
   ],
   "tasks": [
