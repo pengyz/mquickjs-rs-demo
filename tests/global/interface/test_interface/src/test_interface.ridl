@@ -1,0 +1,7 @@
+mode strict;
+
+singleton ShapeService {
+    fn createCircle(radius: i32) -> i32;
+    fn createRectangle(width: i32, height: i32) -> i32;
+    fn describeShape(kind: string) -> string;
+}

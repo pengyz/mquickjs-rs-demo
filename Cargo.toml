@@ -24,6 +24,7 @@ members = [
     "tests/global/async_test/test_async_cancellation",
     "tests/global/properties/test_properties",
     "tests/global/constants/test_constants",
+    "tests/global/interface/test_interface",
 
     "tests/module/basic/test_module_basic",
     "tests/module/exports/test_module_single_class",
@@ -101,6 +102,9 @@ path = "tests/global/properties/test_properties"
 
 [dependencies.test_constants]
 path = "tests/global/constants/test_constants"
+
+[dependencies.test_interface]
+path = "tests/global/interface/test_interface"
 
 [dependencies.ridl_test_m_basic]
 path = "tests/module/basic/test_module_basic"

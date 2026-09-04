@@ -27,7 +27,7 @@ mod __ridl_agg_symbols {
 {%- for i in module.interfaces %}
 {%- for m in i.methods %}
     unsafe extern "C" {
-        pub fn js_{{ i.name|lower }}_{{ m.name|lower }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
+        pub fn js_{{ i.name|lower }}_{{ m.name|to_snake_case }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
     }
 {%- endfor %}
 {%- endfor %}

@@ -333,7 +333,7 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 {%- endfor %}
 {%- for interface in module.interfaces -%}
 {%- for method in interface.methods %}
-    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ interface.name|lower }}_{{ method.name|lower }}), \
+    JS_CFUNC_DEF("{{ method.name }}", {{ method.params|length }}, js_{{ interface.name|lower }}_{{ method.name|to_snake_case }}), \
 {%- endfor -%}
 {%- endfor %}
 /* singletons are registered as global object properties (e.g. globalThis.console) */ \

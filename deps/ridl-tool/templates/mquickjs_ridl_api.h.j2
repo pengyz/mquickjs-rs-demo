@@ -32,7 +32,7 @@ JSValue js_{{ function.name|lower }}(JSContext *ctx, JSValue *this_val, int argc
 {%- for module in modules %}
 {%- for interface in module.interfaces -%}
 {%- for method in interface.methods -%}
-JSValue js_{{ interface.name|lower }}_{{ method.name }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_{{ interface.name|lower }}_{{ method.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 {%- endfor -%}
 {%- endfor %}
 {%- endfor %}
