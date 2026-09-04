@@ -144,7 +144,7 @@ pub fn emit_value_to_js(ty: &Type, value_expr: &str) -> ::askama::Result<String>
     match ty {
         Type::Bool => {
             w.push_line(format!(
-                "mquickjs_rs::mquickjs_ffi::js_mkbool(({value}) != 0)",
+                "mquickjs_rs::mquickjs_ffi::js_mkbool({value})",
                 value = value_expr
             ));
         }
@@ -728,10 +728,9 @@ pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askam
     // Convert v0 into `v0` (Rust typed) in-place.
     match &prop.property_type {
         Type::Bool => {
-            w.push_line(
-                "let v0: bool = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToBool(ctx, v0) } != 0;"
-                    .to_string(),
-            );
+            w.push_line("let v0_tag: u32 = v0 as u32;".to_string());
+            w.push_line("if (v0_tag & ((1 << mquickjs_rs::mquickjs_ffi::JS_TAG_SPECIAL_BITS) - 1)) != 3 { return js_throw_type_error(ctx, \"expected boolean\"); }".to_string());
+            w.push_line("let v0: bool = v0_tag != 3;".to_string());
         }
         Type::I32 => {
             emit_check_is_number_expr(&mut w, "v0", "\"arg1: expected number\"");
@@ -760,7 +759,9 @@ pub fn emit_setter_value_extract(prop: &crate::parser::ast::Property) -> ::askam
             );
             w.push_line("let cptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v0, &mut buf as *mut _) };".to_string());
             w.push_line("if cptr.is_null() { return js_throw_type_error(ctx, \"arg1: failed to convert to string\"); }".to_string());
-            w.push_line("let v0: *const core::ffi::c_char = cptr;".to_string());
+            // Convert C string to Rust String
+            w.push_line("let s = unsafe { core::ffi::CStr::from_ptr(cptr) };".to_string());
+            w.push_line("let v0: String = s.to_string_lossy().into_owned();".to_string());
         }
         _ => {
             w.push_line(

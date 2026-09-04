@@ -291,6 +291,8 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
         JS_CGETSET_DEF("{{ prop.name }}", js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}, NULL), \
+{%- else %}
+        JS_CGETSET_DEF("{{ prop.name }}", js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}, js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_set_{{ prop.name|to_snake_case }}), \
 {%- endif %}
 {%- endfor %}
         JS_PROP_END, \

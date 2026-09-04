@@ -1,0 +1,31 @@
+mode strict;
+
+singleton PropertyTestSingleton {
+    // readonly 属性 - 所有基本类型
+    readonly property boolProp: bool;
+    readonly property i32Prop: i32;
+    readonly property i64Prop: i64;
+    readonly property f32Prop: f32;
+    readonly property f64Prop: f64;
+    readonly property stringProp: string;
+    
+    // read-write 属性
+    property mutableBool: bool;
+    property mutableI32: i32;
+    property mutableString: string;
+}
+
+class PropertyTestClass {
+    // readonly 属性 - 所有基本类型
+    readonly property boolProp: bool;
+    readonly property i32Prop: i32;
+    readonly property i64Prop: i64;
+    readonly property f32Prop: f32;
+    readonly property f64Prop: f64;
+    readonly property stringProp: string;
+    
+    // read-write 属性
+    property mutableBool: bool;
+    property mutableI32: i32;
+    property mutableString: string;
+}

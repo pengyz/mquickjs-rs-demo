@@ -38,6 +38,18 @@ mod __ridl_agg_symbols {
         pub fn js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_{{ m.name|to_snake_case }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
     }
 {%- endfor %}
+{%- for p in c.properties %}
+{%- if !(p.modifiers|is_proto_prop) %}
+    unsafe extern "C" {
+        pub fn js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_get_{{ p.name|to_snake_case }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
+    }
+{%- if !(p.modifiers|is_readonly_prop) %}
+    unsafe extern "C" {
+        pub fn js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_set_{{ p.name|to_snake_case }}(ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext, this_val: mquickjs_rs::mquickjs_ffi::JSValue, argc: i32, argv: *mut mquickjs_rs::mquickjs_ffi::JSValue) -> mquickjs_rs::mquickjs_ffi::JSValue;
+    }
+{%- endif %}
+{%- endif %}
+{%- endfor %}
 {%- endfor %}
 {%- endfor %}
 
@@ -59,6 +71,16 @@ mod __ridl_agg_symbols {
 {%- if mt > 0 %}
         + {{ mt }}
 {%- endif %}
+{%- for c in module.classes %}
+{%- for p in c.properties %}
+{%- if !(p.modifiers|is_proto_prop) %}
+        + 1  // getter for {{ p.name }}
+{%- if !(p.modifiers|is_readonly_prop) %}
+        + 1  // setter for {{ p.name }}
+{%- endif %}
+{%- endif %}
+{%- endfor %}
+{%- endfor %}
 {%- endfor %}
     ] = [
 {%- for module in modules %}
@@ -75,8 +97,11 @@ mod __ridl_agg_symbols {
         js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_{{ m.name|to_snake_case }},
 {%- endfor %}
 {%- for p in c.properties %}
-{%- if !(p.modifiers|is_proto_prop) && (p.modifiers|is_readonly_prop) %}
+{%- if !(p.modifiers|is_proto_prop) %}
         js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_get_{{ p.name|to_snake_case }},
+{%- if !(p.modifiers|is_readonly_prop) %}
+        js_{{ c.module_name|normalize_ident|lower }}_class_{{ c.name|lower }}_set_{{ p.name|to_snake_case }},
+{%- endif %}
 {%- endif %}
 {%- endfor %}
 {%- endfor %}

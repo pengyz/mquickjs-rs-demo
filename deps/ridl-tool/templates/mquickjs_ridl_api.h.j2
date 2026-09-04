@@ -118,6 +118,19 @@ JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|low
     int argc,
     JSValue *argv
 );
+{%- else %}
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_get_{{ prop.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
+JSValue js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_set_{{ prop.name|to_snake_case }}(
+    JSContext *ctx,
+    JSValue *this_val,
+    int argc,
+    JSValue *argv
+);
 {%- endif %}
 {%- endfor %}
 
@@ -148,6 +161,9 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 {%- for prop in s.properties %}
 {%- if prop.modifiers|is_readonly_prop %}
 JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+{%- else %}
+JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_get_{{ prop.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
+JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name|normalize_ident|to_snake_case }}_set_{{ prop.name|to_snake_case }}(JSContext *ctx, JSValue *this_val, int argc, JSValue *argv);
 {%- endif %}
 {%- endfor %}
 {%- endfor %}
