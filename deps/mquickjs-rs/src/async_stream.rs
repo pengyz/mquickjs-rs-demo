@@ -10,6 +10,7 @@ use crate::handles::local::{Function, Local, Value};
 use crate::handles::scope::Scope;
 use crate::Root;
 use std::marker::PhantomData;
+use std::sync::{Arc, Mutex, Weak};
 
 /// 订阅句柄 - 管理 callback 生命周期
 ///
@@ -18,10 +19,8 @@ use std::marker::PhantomData;
 /// - 可以在任意线程调用 unsubscribe()
 pub struct Subscription {
     id: u64,
-    // 用于在 Drop 时通知 AsyncStream 移除 subscriber
     // 使用 Weak 避免循环引用
-    stream_weak: *mut (),  // 指向 AsyncStream 的弱引用
-    remove_fn: fn(*mut (), u64),  // 移除 subscriber 的函数
+    stream_weak: Weak<Mutex<AsyncStreamInner>>,
 }
 
 impl Subscription {
@@ -29,16 +28,13 @@ impl Subscription {
     ///
     /// # Safety
     /// - stream_weak 必须指向有效的 AsyncStream
-    /// - remove_fn 必须正确实现
-    pub(crate) unsafe fn new(
+    pub(crate) fn new(
         id: u64,
-        stream_weak: *mut (),
-        remove_fn: fn(*mut (), u64),
+        stream_weak: Weak<Mutex<AsyncStreamInner>>,
     ) -> Self {
         Self {
             id,
             stream_weak,
-            remove_fn,
         }
     }
 
@@ -62,14 +58,15 @@ impl Subscription {
 impl Drop for Subscription {
     fn drop(&mut self) {
         // 从 AsyncStream 中移除 subscriber
-        if !self.stream_weak.is_null() {
-            (self.remove_fn)(self.stream_weak, self.id);
+        if let Some(stream) = self.stream_weak.upgrade() {
+            let mut inner = stream.lock().unwrap();
+            inner.subscribers.retain(|entry| entry.id != self.id);
         }
     }
 }
 
 // Safety: Subscription 可以安全地跨线程发送
-// 因为它只包含 id 和函数指针，不持有 JS 状态
+// 因为它只包含 id 和 Weak，不持有 JS 状态
 unsafe impl Send for Subscription {}
 
 /// Subscriber 条目
@@ -83,32 +80,42 @@ struct SubscriberEntry<T> {
 // 因为 Root<Function> 是 Send
 unsafe impl<T> Send for SubscriberEntry<T> {}
 
+/// AsyncStream 内部状态
+struct AsyncStreamInner {
+    subscribers: Vec<SubscriberEntry<i32>>,  // 使用 i32 作为占位符
+    next_id: u64,
+}
+
 /// 事件发射器
 ///
 /// # Safety
 /// - subscribe() 和 emit() 只能在 JS 主线程调用
 /// - unsubscribe() 和 clear() 可以在任意线程调用
 pub struct AsyncStream<T: Send + 'static> {
-    subscribers: Vec<SubscriberEntry<T>>,
-    next_id: u64,
+    inner: Arc<Mutex<AsyncStreamInner>>,
+    _marker: PhantomData<T>,
 }
 
 // Safety: AsyncStream 可以安全地跨线程发送
-// 因为它只包含 Vec 和 u64，不持有 JS 状态
+// 因为它只包含 Arc<Mutex<...>>，不持有 JS 状态
 unsafe impl<T: Send + 'static> Send for AsyncStream<T> {}
 
 impl<T: Send + 'static> AsyncStream<T> {
     /// 创建新的 AsyncStream
     pub fn new() -> Self {
         Self {
-            subscribers: Vec::new(),
-            next_id: 1,
+            inner: Arc::new(Mutex::new(AsyncStreamInner {
+                subscribers: Vec::new(),
+                next_id: 1,
+            })),
+            _marker: PhantomData,
         }
     }
 
     /// 获取 subscriber 数量
     pub fn subscriber_count(&self) -> usize {
-        self.subscribers.len()
+        let inner = self.inner.lock().unwrap();
+        inner.subscribers.len()
     }
 
     /// 订阅事件
@@ -117,36 +124,25 @@ impl<T: Send + 'static> AsyncStream<T> {
     /// - 必须在 JS 主线程调用
     /// - callback 必须是有效的 JS 函数
     pub unsafe fn subscribe(&mut self, callback: Root<Function>) -> Subscription {
-        let id = self.next_id;
-        self.next_id += 1;
+        let mut inner = self.inner.lock().unwrap();
+        let id = inner.next_id;
+        inner.next_id += 1;
 
-        self.subscribers.push(SubscriberEntry {
+        inner.subscribers.push(SubscriberEntry {
             id,
             callback,
             _marker: PhantomData,
         });
 
-        // 创建 Subscription，传入移除函数
-        let stream_ptr = self as *mut Self as *mut ();
-        Subscription::new(id, stream_ptr, Self::remove_by_ptr)
+        // 创建 Subscription，传入 Weak 引用
+        let stream_weak = Arc::downgrade(&self.inner);
+        Subscription::new(id, stream_weak)
     }
 
     /// 移除指定 subscriber
     fn remove(&mut self, id: u64) {
-        self.subscribers.retain(|entry| entry.id != id);
-    }
-
-    /// 通过指针移除 subscriber（用于 Subscription Drop）
-    ///
-    /// # Safety
-    /// - ptr 必须指向有效的 AsyncStream
-    fn remove_by_ptr(ptr: *mut (), id: u64) {
-        // Safety: ptr 必须指向有效的 AsyncStream
-        // 这是 unsafe 的，但我们在 Drop 中调用，假设指针有效
-        unsafe {
-            let stream = &mut *(ptr as *mut Self);
-            stream.remove(id);
-        }
+        let mut inner = self.inner.lock().unwrap();
+        inner.subscribers.retain(|entry| entry.id != id);
     }
 
     /// 发射事件
@@ -158,7 +154,8 @@ impl<T: Send + 'static> AsyncStream<T> {
     where
         T: ToJsValue,
     {
-        for entry in &self.subscribers {
+        let inner = self.inner.lock().unwrap();
+        for entry in &inner.subscribers {
             let js_value = value.to_js_value(scope);
             self.call_callback(scope, &entry.callback, js_value);
         }
@@ -192,7 +189,8 @@ impl<T: Send + 'static> AsyncStream<T> {
 
     /// 清空所有 subscriber
     pub fn clear(&mut self) {
-        self.subscribers.clear();
+        let mut inner = self.inner.lock().unwrap();
+        inner.subscribers.clear();
     }
 
     /// 处理事件队列中的所有事件
@@ -208,12 +206,13 @@ impl<T: Send + 'static> AsyncStream<T> {
         T: ToJsValue,
     {
         let events = queue.drain();
+        let inner = self.inner.lock().unwrap();
         for event in events {
             // 找到对应的 stream
             // 注意：这里假设所有事件都属于当前 stream
             // 实际实现中需要根据 stream_id 路由到正确的 stream
             let js_value = event.value.to_js_value(scope);
-            for entry in &self.subscribers {
+            for entry in &inner.subscribers {
                 // 复制 js_value，因为 call_callback 会消耗它
                 let js_value_copy = scope.value(js_value.as_raw());
                 self.call_callback(scope, &entry.callback, js_value_copy);
