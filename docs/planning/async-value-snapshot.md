@@ -9,27 +9,30 @@
 - Rust 对象在 callback 结束后由框架转换到 JS 层
 - `any`/`object` 参数必须在提交时"冻结"成 Rust 拥有的数据
 
+## 相关设计文档
+- [AsyncStream 设计文档](async-stream-design.md) - 事件流机制设计
+
 ## 实现步骤
 
 ### Phase 1: AsyncValue 类型定义
-- [ ] 在 mquickjs-rs/src/async_value.rs 定义 AsyncValue 枚举
-- [ ] 实现 Send + 'static 约束
-- [ ] 定义辅助方法 (is_null, as_string, etc.)
+- [x] 在 mquickjs-rs/src/async_value.rs 定义 AsyncValue 枚举
+- [x] 实现 Send + 'static 约束
+- [x] 定义辅助方法 (is_null, as_string, etc.)
 
 ### Phase 2: JS→Rust 转换 (from_js)
-- [ ] 实现 from_js(scope, value) -> AsyncValue
-- [ ] 处理原语类型: null, undefined, bool, int, float, string
-- [ ] 处理复合类型: array (递归), object (递归)
-- [ ] 处理特殊类型: Date/RegExp → Json
-- [ ] 处理不可序列化类型: function/Symbol → Unsupported
+- [x] 实现 from_js(scope, value) -> AsyncValue
+- [x] 处理原语类型: null, undefined, bool, int, float, string
+- [x] 处理复合类型: array (递归), object (JSON.stringify)
+- [x] 处理特殊类型: Date/RegExp → Json
+- [x] 处理不可序列化类型: function/Symbol → Unsupported
 - [ ] 实现类型校验: 检测到 Unsupported 时抛 TypeError
 
 ### Phase 3: Rust→JS 转换 (to_js)
-- [ ] 实现 to_js(ctx, async_value) -> JSValue
-- [ ] 处理原语类型: 直接创建 JSValue
-- [ ] 处理复合类型: 递归创建 Array/Object
-- [ ] 处理 Json 类型: JSON.parse 还原
-- [ ] 处理 Null/Undefined: 返回对应 JSValue
+- [x] 实现 to_js(ctx, async_value) -> JSValue
+- [x] 处理原语类型: 直接创建 JSValue
+- [x] 处理复合类型: 递归创建 Array/Object
+- [x] 处理 Json 类型: JSON.parse 还原
+- [x] 处理 Null/Undefined: 返回对应 JSValue
 
 ### Phase 4: AsyncTaskManager 集成
 - [ ] 修改 submit_cancellable 签名: 接收 AsyncValue 参数
@@ -43,7 +46,7 @@
 - [ ] 更新 callback 调用代码生成
 
 ### Phase 6: 测试
-- [ ] 单元测试: AsyncValue 类型转换
+- [x] 单元测试: AsyncValue 类型转换 (13 tests, all passing)
 - [ ] 集成测试: 完整异步流程
 - [ ] 边界测试: 不可序列化类型报错
 
