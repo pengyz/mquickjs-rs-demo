@@ -34,6 +34,7 @@
 - [Root<T> 优于 Global<T>](decision_root_over_global.md) — 跨 await 持有 JSValue 推荐用 Root<T>，Global<T> 保留兼容
 - [Context-level gc_mark 注册](decision_context_level_gc_mark_registration.md) — 一次注册遍历所有 roots，优于每个 Root 单独注册
 - [RootsRegistry 用 Vec<Option>](decision_roots_registry_vec_option.md) — Mutex<Vec<Option<JSValue>>> 简单有效，性能足够
+- [RIDL 异步取消语义](decision_ridl_async_cancellation.md) — 默认 nonCancellable，必须显式标记 @cancellable，取消是关键决策不允许偷懒
 
 ## References
 <!-- 外部资源指针、关键文件位置 -->
