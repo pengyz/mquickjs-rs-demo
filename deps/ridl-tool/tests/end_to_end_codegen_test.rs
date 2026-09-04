@@ -1083,3 +1083,110 @@ class MixedService {
     assert!(api_content.contains("nonCancellable"), "Should have nonCancellable comment");
     assert!(api_content.contains("timeout(3000)"), "Should have timeout comment");
 }
+
+// ========================================================================
+// 异步代码生成测试（TDD - 先写失败测试）
+// ========================================================================
+
+/// 异步方法生成：@nonCancellable 方法生成装饰器注释
+#[test]
+fn test_async_method_non_cancellable_codegen() {
+    let ridl_input = r#"
+callback AsyncCallback(error: string?, data: string?);
+
+class AsyncService {
+    @nonCancellable
+    fn saveData(data: string, cb: AsyncCallback) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "async method codegen should succeed: {:?}", result.err());
+
+    let glue_file = output_dir.join("glue.rs");
+    let glue_content = std::fs::read_to_string(&glue_file).unwrap();
+
+    // 验证生成装饰器注释（当前阶段：注释，未来：实际代码）
+    assert!(glue_content.contains("nonCancellable"), "Should have nonCancellable comment");
+    assert!(glue_content.contains("spawn_non_cancellable"), "Should mention spawn_non_cancellable");
+}
+
+/// 异步方法生成：@timeout 方法生成装饰器注释
+#[test]
+fn test_async_method_timeout_codegen() {
+    let ridl_input = r#"
+callback AsyncCallback(error: string?, data: string?);
+
+class CacheService {
+    @timeout(5000)
+    fn updateCache(key: string, cb: AsyncCallback) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "timeout method codegen should succeed: {:?}", result.err());
+
+    let glue_file = output_dir.join("glue.rs");
+    let glue_content = std::fs::read_to_string(&glue_file).unwrap();
+
+    // 验证生成装饰器注释
+    assert!(glue_content.contains("timeout(5000)"), "Should have timeout comment");
+    assert!(glue_content.contains("spawn_with_timeout"), "Should mention spawn_with_timeout");
+}
+
+/// 异步方法生成：默认可取消方法生成装饰器注释
+#[test]
+fn test_async_method_default_cancellable_codegen() {
+    let ridl_input = r#"
+callback AsyncCallback(error: string?, data: string?);
+
+class HttpService {
+    fn fetch(url: string, cb: AsyncCallback) -> void;
+}
+"#;
+
+    let tempdir = tempfile::tempdir().unwrap();
+    let output_dir = tempdir.path().join("output");
+    std::fs::create_dir(&output_dir).unwrap();
+
+    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
+    let result = ridl_tool::generator::generate_module_files(
+        &parsed.items,
+        parsed.module,
+        parsed.mode,
+        &output_dir,
+        "test_module",
+    );
+
+    assert!(result.is_ok(), "cancellable method codegen should succeed: {:?}", result.err());
+
+    let glue_file = output_dir.join("glue.rs");
+    let glue_content = std::fs::read_to_string(&glue_file).unwrap();
+
+    // 默认可取消方法不生成装饰器注释（同步方法）
+    assert!(!glue_content.contains("spawn_cancellable"), "Default method should not have async comments");
+}

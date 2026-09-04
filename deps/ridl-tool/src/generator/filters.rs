@@ -589,6 +589,33 @@ pub fn has_opaque_fields(class: &crate::generator::TemplateClass) -> ::askama::R
 
 /// Check if a class has any opaque fields containing Traced<T> types.
 /// Used by templates to conditionally generate gc_mark implementations.
+/// Check if a method has async decorators (@nonCancellable, @timeout)
+pub fn has_async_decorator(method: &crate::generator::TemplateMethod) -> ::askama::Result<bool> {
+    Ok(method.decorators.iter().any(|d| d.name == "nonCancellable" || d.name == "timeout"))
+}
+
+/// Check if a method has @nonCancellable decorator
+pub fn has_non_cancellable(method: &crate::generator::TemplateMethod) -> ::askama::Result<bool> {
+    Ok(method.decorators.iter().any(|d| d.name == "nonCancellable"))
+}
+
+/// Check if a method has @timeout decorator
+pub fn has_timeout(method: &crate::generator::TemplateMethod) -> ::askama::Result<bool> {
+    Ok(method.decorators.iter().any(|d| d.name == "timeout"))
+}
+
+/// Get timeout value from @timeout decorator
+pub fn get_timeout_value(method: &crate::generator::TemplateMethod) -> ::askama::Result<i64> {
+    for d in &method.decorators {
+        if d.name == "timeout" {
+            if let Some(crate::generator::TemplateDecoratorArg::Integer(ms)) = d.args.first() {
+                return Ok(*ms);
+            }
+        }
+    }
+    Ok(0)
+}
+
 pub fn has_traced_fields(class: &crate::generator::TemplateClass) -> ::askama::Result<bool> {
     Ok(class.opaque_fields.iter().any(|f| contains_traced_type(&f.field_type)))
 }
