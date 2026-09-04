@@ -230,11 +230,10 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     );
 
     // Capture singleton pointer for async task (wrap in Send-safe type)
-    // SAFETY: The singleton pointer is valid for the lifetime of the context.
-    // The async task will only access the pointer on the JS thread.
     let singleton_ptr = holder_ptr as usize; // Convert to usize for Send
 
     // Spawn async task with completion queue
+    // The async task calls the user's implementation and returns the result
     {%- if method|has_non_cancellable %}
     bridge.spawn_non_cancellable_with_queue(async move {
         let ptr = singleton_ptr as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
