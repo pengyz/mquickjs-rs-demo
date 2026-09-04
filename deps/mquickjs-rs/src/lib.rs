@@ -82,6 +82,7 @@ pub mod async_task;
 pub mod async_bridge;
 pub mod async_value;
 pub mod async_stream;
+pub mod async_error;
 
 pub fn register_extensions() {
     // Kept for API compatibility.

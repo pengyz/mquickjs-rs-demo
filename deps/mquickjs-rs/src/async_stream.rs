@@ -6,6 +6,7 @@
 //! - emit() 只能在 JS 主线程调用
 //! - unsubscribe() 可以在任意线程调用
 
+use crate::async_error::AsyncError;
 use crate::handles::local::{Function, Local, Value};
 use crate::handles::scope::Scope;
 use crate::Root;
@@ -216,6 +217,35 @@ impl<T: Send + 'static> AsyncStream<T> {
                 // 复制 js_value，因为 call_callback 会消耗它
                 let js_value_copy = scope.value(js_value.as_raw());
                 self.call_callback(scope, &entry.callback, js_value_copy);
+            }
+        }
+    }
+
+    /// 发射错误事件
+    ///
+    /// # Safety
+    /// - 必须在 JS 主线程调用
+    pub unsafe fn emit_error(&self, scope: &Scope<'_>, error: &AsyncError) {
+        let inner = self.inner.lock().unwrap();
+
+        for entry in &inner.subscribers {
+            // 为每个 callback 创建新的 JS 错误对象
+            let js_error = error.to_js(scope);
+            
+            // 调用 callback(error, null)
+            let callback_local = entry.callback.to_local(scope);
+            let this_val = scope.value(crate::mquickjs_ffi::JS_UNDEFINED);
+            let args = [
+                js_error,
+                scope.value(crate::mquickjs_ffi::JS_NULL),
+            ];
+
+            match callback_local.call(scope, this_val, &args) {
+                Ok(_) => {},
+                Err(e) => {
+                    // callback 本身抛异常，记录但继续
+                    eprintln!("AsyncStream error callback failed: {}", e);
+                }
             }
         }
     }
