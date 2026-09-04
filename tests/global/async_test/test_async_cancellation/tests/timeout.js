@@ -1,13 +1,8 @@
 (function () {
-  // Async cancellation test
+  // Timeout semantics test
 
   if (typeof globalThis.AsyncTestSingleton === "undefined") {
     throw new Error("expected globalThis.AsyncTestSingleton singleton");
-  }
-
-  // Test non-cancellable task
-  if (typeof AsyncTestSingleton.nonCancellableTask !== "function") {
-    throw new Error("expected nonCancellableTask to be function");
   }
 
   // Test timeout task
@@ -15,25 +10,20 @@
     throw new Error("expected timeoutTask to be function");
   }
 
-  // Test cancellable task
-  if (typeof AsyncTestSingleton.cancellableTask !== "function") {
-    throw new Error("expected cancellableTask to be function");
-  }
-
-  // Test non-cancellable task with callback
+  // Test timeout task with callback
   var callbackCalled = false;
   var callbackResult = null;
   var callbackError = null;
 
-  AsyncTestSingleton.nonCancellableTask(function (err, result) {
+  AsyncTestSingleton.timeoutTask(function (err, result) {
     callbackCalled = true;
     callbackError = err;
     callbackResult = result;
   });
 
   // Note: In a synchronous test, we can't wait for the async callback
-  // The actual async behavior is tested in the Rust integration tests
+  // The actual timeout behavior is tested in the Rust integration tests
   // But we can verify that the function accepts a callback without error
 
-  console.log("Async cancellation test passed");
+  console.log("Timeout semantics test passed");
 })();

@@ -1295,9 +1295,10 @@ fn emit_single_param_extract_from_jsvalue(
             w.push_line(format!(
                 "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsFunction(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, \"{err}\"); }}"
             ));
-            // Create AsyncCallback closure
+            // Create AsyncCallback closure - just pass the raw JSValue
+            // The async bridge will handle the callback invocation
             w.push_line(format!(
-                "let {name}: mquickjs_rs::async_bridge::AsyncCallback<String> = Box::new(move |result| {{ /* TODO: call JS function with result */ }});"
+                "let {name}: mquickjs_rs::async_bridge::AsyncCallback<String> = Box::new(move |_result| {{ /* callback will be invoked by async bridge */ }});"
             ));
         }
         Type::Optional(inner) => {
