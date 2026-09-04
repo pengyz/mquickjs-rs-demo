@@ -11,18 +11,23 @@ sources: [deps/mquickjs/mquickjs.c JS_Call/JS_PushArg, async_bridge.rs 线程问
 mquickjs 的 JSContext 状态（调用栈 `ctx->sp`、堆、GC、调用递归计数）**无锁保护**，
 只能在创建它的线程上操作。worker 线程触碰 JSValue/JS_Call/GC = 数据竞争 UB。
 
-## 异步的正确模型（libuv 式）
+## 异步的正确模型（分层）
 
+### Layer 1：线程内异步（默认，零线程风险）
 ```
-JS 主线程                          Worker 线程池
-──────────                         ─────────────
-提取 cb → Root（主线程）
-提交纯 Rust 闭包 ────────────────→ 执行阻塞工作（禁止 JS 访问）
-return JS_UNDEFINED                    ↓ 完成
-drain_completed_jobs(ctx) ←────── 结果入完成队列（Mutex）
-  → JS_PushArg + JS_Call（主线程）
-  → 释放 Root
+submit(job) → job 队列 → drain_completed_jobs(ctx) → JS_Call(callback)
 ```
+work 在 JS 线程执行（必须非阻塞/快速）。适用：延迟回调、
+非阻塞 I/O 集成、状态机分步。不依赖线程，适配 RTOS/单核 MCU。
+
+### Layer 2：线程池 offload（显式 @offload）
+```
+submit(work) → threadpool → 完成队列(Mutex) → drain → JS_Call
+```
+work 在 worker 线程执行。适用：CPU 密集、仅阻塞 API 的操作。
+
+**两层共用**：完成队列 + drain API + Root 生命周期 + 装饰器语义。
+callback 永远只在 JS 主线程的安全点（drain）被调用。
 
 ### 线程安全规则
 
@@ -46,4 +51,5 @@ drain_completed_jobs(ctx) ←────── 结果入完成队列（Mutex）
 ### 反面教材（2026-09-04 发现）
 
 async_bridge.rs v1：worker 线程直接 `callback(result)`（线程不安全）+
-`noop_waker` 忙轮询 Future（真 I/O 死循环）→ 已废弃，需按 libuv 模型重做。
+`noop_waker` 忙轮询 Future（真 I/O 死循环）→ 已废弃。
+重做为分层模型：默认线程内 job，`@offload` 显式选择线程池。
