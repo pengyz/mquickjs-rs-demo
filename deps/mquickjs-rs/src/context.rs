@@ -15,6 +15,9 @@ pub struct ContextInner {
     pub(crate) roots: crate::roots::RootsRegistry,
 
     pub(crate) alive: std::sync::atomic::AtomicBool,
+    
+    /// Async task manager for RIDL async cancellation semantics
+    pub(crate) async_task_manager: crate::async_task::AsyncTaskManager,
 }
 
 impl ContextInner {
@@ -24,6 +27,7 @@ impl ContextInner {
             ridl_ext_drop: std::cell::UnsafeCell::new(None),
             roots: crate::roots::RootsRegistry::new(),
             alive: std::sync::atomic::AtomicBool::new(true),
+            async_task_manager: crate::async_task::AsyncTaskManager::new(),
         }
     }
 
@@ -136,6 +140,11 @@ impl Context {
             ctx: self.ctx,
             inner: self.inner.clone(),
         }
+    }
+    
+    /// Get a reference to the async task manager
+    pub fn async_task_manager(&self) -> &crate::async_task::AsyncTaskManager {
+        &self.inner.async_task_manager
     }
 
     pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn std::error::Error>> {
@@ -360,6 +369,27 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
+        // Mark context as dropping and cancel all cancellable async tasks
+        self.inner.async_task_manager.mark_context_dropping();
+        let cancelled_tasks = self.inner.async_task_manager.cancel_all_cancellable();
+        
+        if !cancelled_tasks.is_empty() {
+            // Log cancelled tasks for debugging
+            eprintln!(
+                "Context drop: cancelled {} cancellable async tasks",
+                cancelled_tasks.len()
+            );
+        }
+        
+        // Check for non-cancellable tasks that are still running
+        let non_cancellable_count = self.inner.async_task_manager.non_cancellable_task_count();
+        if non_cancellable_count > 0 {
+            eprintln!(
+                "Context drop: {} non-cancellable async tasks are still running",
+                non_cancellable_count
+            );
+        }
+        
         self.inner
             .alive
             .store(false, std::sync::atomic::Ordering::Release);

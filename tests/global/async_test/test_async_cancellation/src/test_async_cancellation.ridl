@@ -1,0 +1,11 @@
+mode strict;
+
+singleton AsyncTestSingleton {
+    @nonCancellable
+    fn nonCancellableTask(callback: callback(result: string)) -> void;
+    
+    @timeout(1000)
+    fn timeoutTask(callback: callback(result: string)) -> void;
+    
+    fn cancellableTask(callback: callback(result: string)) -> void;
+}

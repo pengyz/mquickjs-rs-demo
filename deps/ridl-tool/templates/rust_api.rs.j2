@@ -14,6 +14,9 @@
 // Any JS-context borrowing must stay at method level (via `Env<'_>`).
 pub trait {{ itf.name|to_upper_camel_case }}Interface {
     {%- for method in itf.methods %}
+    {%- if method.decorators|length > 0 %}
+    // Decorators: {% for d in method.decorators %}@{{ d.name }}{% if d.args|length > 0 %}({% for a in d.args %}{{ a }}{% if !loop.last %}, {% endif %}{% endfor %}){% endif %}{% if !loop.last %}, {% endif %}{% endfor %}
+    {%- endif %}
     fn {{ method.name|to_snake_case|rust_ident }}<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
@@ -47,6 +50,9 @@ pub trait {{ itf.name|to_upper_camel_case }}Interface {
 // Any JS-context borrowing must stay at method level (via `Env<'_>`).
 pub trait {{ s.name|to_upper_camel_case }}Singleton {
     {%- for method in s.methods %}
+    {%- if method.decorators|length > 0 %}
+    // Decorators: {% for d in method.decorators %}@{{ d.name }}{% if d.args|length > 0 %}({% for a in d.args %}{{ a }}{% if !loop.last %}, {% endif %}{% endfor %}){% endif %}{% if !loop.last %}, {% endif %}{% endfor %}
+    {%- endif %}
     fn {{ method.name|to_snake_case|rust_ident }}<'ctx>(
         &mut self,
         {%- if method.needs_scope %}
@@ -149,6 +155,9 @@ pub struct {{ struct.name|to_upper_camel_case }} {
 // Any JS-context borrowing must stay at method level (via `Env<'_>`).
 pub trait {{ class.name|to_upper_camel_case }}Class {
 {%- for method in class.methods %}
+    {%- if method.decorators|length > 0 %}
+    // Decorators: {% for d in method.decorators %}@{{ d.name }}{% if d.args|length > 0 %}({% for a in d.args %}{{ a }}{% if !loop.last %}, {% endif %}{% endfor %}){% endif %}{% if !loop.last %}, {% endif %}{% endfor %}
+    {%- endif %}
     fn {{ method.name|to_snake_case|rust_ident }}<'ctx>(
         &mut self,
         {%- if method.needs_scope %}

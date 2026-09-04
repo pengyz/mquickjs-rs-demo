@@ -78,6 +78,9 @@ pub mod ridl_runtime;
 #[cfg(feature = "ridl-extensions")]
 pub mod ridl_ext_access;
 
+pub mod async_task;
+pub mod async_bridge;
+
 pub fn register_extensions() {
     // Kept for API compatibility.
     // In mquickjs, C-side registration is compile-time only. The application is responsible for

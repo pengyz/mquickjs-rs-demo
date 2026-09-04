@@ -103,6 +103,19 @@ pub struct Method {
     pub params: Vec<Param>,
     pub return_type: Type,
     pub is_async: bool,
+    pub decorators: Vec<Decorator>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct Decorator {
+    pub name: String,
+    pub args: Vec<DecoratorArg>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub enum DecoratorArg {
+    Integer(i64),
+    String(String),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

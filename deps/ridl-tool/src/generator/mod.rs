@@ -1,4 +1,4 @@
-use crate::parser::ast::{Class, Function, IDLItem, Interface, Method, Param, Type, IDL};
+use crate::parser::ast::{Class, DecoratorArg, Function, IDLItem, Interface, Method, Param, Type, IDL};
 
 use union_types::collect_union_types;
 
@@ -701,6 +701,28 @@ struct TemplateMethod {
     return_rust_ty: String,
     has_variadic: bool,
     needs_scope: bool,
+    decorators: Vec<TemplateDecorator>,
+}
+
+#[derive(Debug, Clone)]
+struct TemplateDecorator {
+    name: String,
+    args: Vec<TemplateDecoratorArg>,
+}
+
+#[derive(Debug, Clone)]
+enum TemplateDecoratorArg {
+    Integer(i64),
+    String(String),
+}
+
+impl std::fmt::Display for TemplateDecoratorArg {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TemplateDecoratorArg::Integer(i) => write!(f, "{}", i),
+            TemplateDecoratorArg::String(s) => write!(f, "{}", s),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -814,6 +836,23 @@ impl TemplateMethod {
             return_rust_ty = "Option<mquickjs_rs::handles::return_safe::ReturnAny>".to_string();
         }
 
+        // Convert decorators
+        let decorators: Vec<TemplateDecorator> = method
+            .decorators
+            .into_iter()
+            .map(|d| TemplateDecorator {
+                name: d.name,
+                args: d
+                    .args
+                    .into_iter()
+                    .map(|a| match a {
+                        DecoratorArg::Integer(i) => TemplateDecoratorArg::Integer(i),
+                        DecoratorArg::String(s) => TemplateDecoratorArg::String(s),
+                    })
+                    .collect(),
+            })
+            .collect();
+
         Self {
             name: method.name,
             params,
@@ -821,6 +860,7 @@ impl TemplateMethod {
             return_rust_ty,
             has_variadic,
             needs_scope,
+            decorators,
         }
     }
 }

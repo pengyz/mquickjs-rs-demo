@@ -10,7 +10,8 @@ comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 keyword = _{
     ("interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "proto" |
     "array" | "map" | "true" | "false" | "fn" | "import" | "as" |
-    "from" | "using" | "module" | "singleton" | "opaque" | "Traced") ~ !(ASCII_ALPHANUMERIC | "_")
+    "from" | "using" | "module" | "singleton" | "opaque" | "Traced" |
+    "nonCancellable" | "timeout" | "cancellable") ~ !(ASCII_ALPHANUMERIC | "_")
 }
 // Identifier - must not match keywords
 identifier = @{ !keyword ~ (ASCII_ALPHA | "_") ~ (ASCII_ALPHANUMERIC | "_")* }
@@ -73,7 +74,13 @@ readwrite_prop = { "property" ~ WS ~ identifier ~ WS ~ ":" ~ WS ~ type }
 // New property type without special keyword
 normal_prop = { identifier ~ WS ~ ":" ~ WS ~ type }
 // Method definition: support fn name(params) -> type format, return type is optional
-method_def = { "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ (WS ~ ("->") ~ WS ~ type)? }
+method_def = { decorator* ~ "fn" ~ WS ~ identifier ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" ~ (WS ~ ("->") ~ WS ~ type)? }
+
+// Decorator support
+decorator = { "@" ~ decorator_name ~ (WS ~ "(" ~ WS ~ decorator_args? ~ WS ~ ")")? ~ WS }
+decorator_name = { "nonCancellable" | "timeout" | "cancellable" }
+decorator_args = { decorator_arg ~ (WS ~ "," ~ WS ~ decorator_arg)* }
+decorator_arg = { integer_literal | string_literal }
 
 // Class constructor
 // - Preferred: `constructor(...)` inside class body.

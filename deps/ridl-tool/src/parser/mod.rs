@@ -13,8 +13,8 @@ mod normalize;
 pub mod require_spec;
 
 use ast::{
-    Class, Enum, EnumValue, Field, Function, IDLItem, Interface, Method, ModuleDeclaration, Param,
-    Property, PropertyModifier, SerializationFormat, StructDef, Type,
+    Class, Decorator, DecoratorArg, Enum, EnumValue, Field, Function, IDLItem, Interface, Method,
+    ModuleDeclaration, Param, Property, PropertyModifier, SerializationFormat, StructDef, Type,
 };
 use class_ref_rewrite::rewrite_item_class_refs;
 use normalize::normalize_idl_items;
@@ -715,9 +715,13 @@ fn parse_method(pair: pest::iterators::Pair<Rule>) -> Result<Method, Box<dyn std
     let mut name = String::new();
     let mut params = Vec::new();
     let mut return_type = Type::Void;
+    let mut decorators = Vec::new();
 
     for p in inner_pairs {
         match p.as_rule() {
+            Rule::decorator => {
+                decorators.push(parse_decorator(p)?);
+            }
             Rule::identifier => {
                 // identifier可能是方法名或参数名，我们需要更仔细地处理
                 if name.is_empty() {
@@ -749,7 +753,61 @@ fn parse_method(pair: pest::iterators::Pair<Rule>) -> Result<Method, Box<dyn std
         params,
         return_type,
         is_async: false,
+        decorators,
     })
+}
+
+fn parse_decorator(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Decorator, Box<dyn std::error::Error>> {
+    let mut inner_pairs = pair.into_inner();
+    
+    // Get decorator name
+    let name_pair = inner_pairs.next().ok_or("Decorator has no name")?;
+    let name = name_pair.as_str().to_string();
+    
+    // Parse optional arguments
+    let mut args = Vec::new();
+    for p in inner_pairs {
+        match p.as_rule() {
+            Rule::decorator_args => {
+                args = parse_decorator_args(p)?;
+            }
+            Rule::WS => {} // Skip whitespace
+            _ => {} // Ignore other rules
+        }
+    }
+    
+    Ok(Decorator { name, args })
+}
+
+fn parse_decorator_args(
+    pair: pest::iterators::Pair<Rule>,
+) -> Result<Vec<DecoratorArg>, Box<dyn std::error::Error>> {
+    let mut args = Vec::new();
+    
+    for p in pair.into_inner() {
+        match p.as_rule() {
+            Rule::decorator_arg => {
+                let inner = p.into_inner().next().ok_or("Decorator arg is empty")?;
+                match inner.as_rule() {
+                    Rule::integer_literal => {
+                        let value: i64 = inner.as_str().parse().map_err(|_| "Invalid integer")?;
+                        args.push(DecoratorArg::Integer(value));
+                    }
+                    Rule::string_literal => {
+                        let s = inner.as_str().trim_matches('"').to_string();
+                        args.push(DecoratorArg::String(s));
+                    }
+                    _ => return Err("Unexpected decorator arg type".into()),
+                }
+            }
+            Rule::WS => {} // Skip whitespace
+            _ => {} // Ignore other rules
+        }
+    }
+    
+    Ok(args)
 }
 
 fn parse_global_function(
@@ -2768,5 +2826,170 @@ interface Test {}"#;
         "#;
         let result = IDLParser::parse(Rule::class_def, input);
         assert!(result.is_ok(), "复杂 class 定义解析失败: {:?}", result.err());
+    }
+
+    // ========================================================================
+    // Decorator tests
+    // ========================================================================
+
+    #[test]
+    fn test_decorator_noncancellable() {
+        let input = r#"
+            interface Test {
+                @nonCancellable
+                fn doSomething() -> void;
+            }
+        "#;
+        let items = parse_idl(input).expect("nonCancellable decorator 解析失败");
+        
+        if let IDLItem::Interface(interface) = &items[0] {
+            assert_eq!(interface.methods.len(), 1);
+            let method = &interface.methods[0];
+            assert_eq!(method.decorators.len(), 1);
+            assert_eq!(method.decorators[0].name, "nonCancellable");
+            assert!(method.decorators[0].args.is_empty());
+        } else {
+            panic!("Expected Interface");
+        }
+    }
+
+    #[test]
+    fn test_decorator_timeout() {
+        let input = r#"
+            interface Test {
+                @timeout(5000)
+                fn doSomething() -> void;
+            }
+        "#;
+        let items = parse_idl(input).expect("timeout decorator 解析失败");
+        
+        if let IDLItem::Interface(interface) = &items[0] {
+            assert_eq!(interface.methods.len(), 1);
+            let method = &interface.methods[0];
+            assert_eq!(method.decorators.len(), 1);
+            assert_eq!(method.decorators[0].name, "timeout");
+            assert_eq!(method.decorators[0].args.len(), 1);
+            if let DecoratorArg::Integer(ms) = &method.decorators[0].args[0] {
+                assert_eq!(*ms, 5000);
+            } else {
+                panic!("Expected integer argument for timeout decorator");
+            }
+        } else {
+            panic!("Expected Interface");
+        }
+    }
+
+    #[test]
+    fn test_multiple_decorators() {
+        let input = r#"
+            interface Test {
+                @nonCancellable
+                @timeout(3000)
+                fn doSomething() -> void;
+            }
+        "#;
+        let items = parse_idl(input).expect("Multiple decorators 解析失败");
+        
+        if let IDLItem::Interface(interface) = &items[0] {
+            assert_eq!(interface.methods.len(), 1);
+            let method = &interface.methods[0];
+            assert_eq!(method.decorators.len(), 2);
+            assert_eq!(method.decorators[0].name, "nonCancellable");
+            assert_eq!(method.decorators[1].name, "timeout");
+        } else {
+            panic!("Expected Interface");
+        }
+    }
+
+    #[test]
+    fn test_decorator_on_class_method() {
+        let input = r#"
+            class TestClass {
+                @nonCancellable
+                fn doSomething() -> void;
+                
+                @timeout(2000)
+                fn doOther() -> void;
+            }
+        "#;
+        let items = parse_idl(input).expect("Decorator on class method 解析失败");
+        
+        if let IDLItem::Class(class) = &items[0] {
+            assert_eq!(class.methods.len(), 2);
+            
+            let method1 = &class.methods[0];
+            assert_eq!(method1.decorators.len(), 1);
+            assert_eq!(method1.decorators[0].name, "nonCancellable");
+            
+            let method2 = &class.methods[1];
+            assert_eq!(method2.decorators.len(), 1);
+            assert_eq!(method2.decorators[0].name, "timeout");
+        } else {
+            panic!("Expected Class");
+        }
+    }
+
+    #[test]
+    fn test_decorator_on_singleton_method() {
+        let input = r#"
+            singleton TestSingleton {
+                @nonCancellable
+                fn doSomething() -> void;
+            }
+        "#;
+        let items = parse_idl(input).expect("Decorator on singleton method 解析失败");
+        
+        if let IDLItem::Singleton(singleton) = &items[0] {
+            assert_eq!(singleton.methods.len(), 1);
+            let method = &singleton.methods[0];
+            assert_eq!(method.decorators.len(), 1);
+            assert_eq!(method.decorators[0].name, "nonCancellable");
+        } else {
+            panic!("Expected Singleton");
+        }
+    }
+
+    #[test]
+    fn test_decorator_without_method() {
+        let input = r#"
+            interface Test {
+                @nonCancellable
+            }
+        "#;
+        let result = parse_idl(input);
+        assert!(result.is_err(), "Decorator without method should fail");
+    }
+
+    #[test]
+    fn test_invalid_decorator_name() {
+        let input = r#"
+            interface Test {
+                @invalidDecorator
+                fn doSomething() -> void;
+            }
+        "#;
+        let result = parse_idl(input);
+        assert!(result.is_err(), "Invalid decorator name should fail");
+    }
+
+    #[test]
+    fn test_decorator_cancellable() {
+        let input = r#"
+            interface Test {
+                @cancellable
+                fn doSomething() -> void;
+            }
+        "#;
+        let items = parse_idl(input).expect("cancellable decorator 解析失败");
+        
+        if let IDLItem::Interface(interface) = &items[0] {
+            assert_eq!(interface.methods.len(), 1);
+            let method = &interface.methods[0];
+            assert_eq!(method.decorators.len(), 1);
+            assert_eq!(method.decorators[0].name, "cancellable");
+            assert!(method.decorators[0].args.is_empty());
+        } else {
+            panic!("Expected Interface");
+        }
     }
 }
