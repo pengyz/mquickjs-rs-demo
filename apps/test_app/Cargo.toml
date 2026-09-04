@@ -1,0 +1,15 @@
+[package]
+name = "test_app"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mquickjs-rs = { path = "../../deps/mquickjs-rs" }
+mquickjs-sys = { path = "../../deps/mquickjs-sys" }
+
+[build-dependencies]
+mquickjs-ridl-glue = { path = "../../deps/mquickjs-ridl-glue" }
+
+[features]
+default = ["ridl-extensions"]
+ridl-extensions = ["mquickjs-rs/ridl-extensions"]

@@ -1,0 +1,6 @@
+module test_app.service@1.0.0;
+
+singleton MyService {
+    fn hello(name: string) -> string;
+    readonly property version: string;
+}

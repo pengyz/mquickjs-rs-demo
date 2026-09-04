@@ -1,0 +1,5 @@
+[template]
+cargo_generate_version = ">=0.18.0"
+
+[placeholders]
+project-name = { type = "string", prompt = "项目名称", regex = "^[a-zA-Z][a-zA-Z0-9_-]*$" }

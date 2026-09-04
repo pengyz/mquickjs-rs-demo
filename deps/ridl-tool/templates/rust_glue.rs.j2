@@ -263,7 +263,11 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
     let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
+    {%- if prop.property_type == Type::Bool %}
     let result = if singleton.{{ prop.name|to_snake_case|rust_ident }}() { 1 } else { 0 };
+    {%- else %}
+    let result = singleton.{{ prop.name|to_snake_case|rust_ident }}();
+    {%- endif %}
     {{ prop.property_type|emit_value_to_js("result")|safe }}
 }
 {%- endif %}

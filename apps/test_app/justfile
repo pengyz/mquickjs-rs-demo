@@ -1,0 +1,21 @@
+# test-app 构建命令
+# 用法: just <command>
+
+# 默认命令
+default: build
+
+# 构建项目
+build:
+    cd ../.. && cargo run -p ridl-builder -- prepare
+    cd ../.. && cargo build -p test_app
+
+# 运行测试
+test:
+    cd ../.. && cargo run -- tests/apps/test-app
+
+# 清理
+clean:
+    cd ../.. && cargo clean
+
+# 重新构建
+rebuild: clean build
