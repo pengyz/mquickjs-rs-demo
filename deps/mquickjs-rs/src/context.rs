@@ -376,11 +376,42 @@ impl Context {
     /// - Must be called after ridl_context_init
     pub unsafe fn drain_completions(&self) {
         let completions = self.inner.async_task_manager.drain_completions();
-        
+
         for item in completions {
-            // Find the callback for this task
-            // TODO: Look up callback from task_id and invoke it
-            // For now, just mark the task as completed
+            // Look up callback for this task
+            let callback_raw = self.inner.async_task_manager.take_callback(item.task_id);
+
+            if let Some(cb_raw) = callback_raw {
+                // Call the JS callback with (error, result) arguments
+                match item.result {
+                    Ok(value) => {
+                        // Success: call callback(null, value)
+                        let c_value = std::ffi::CString::new(value.as_str()).unwrap_or_default();
+                        let js_value = mquickjs_ffi::JS_NewString(self.ctx, c_value.as_ptr());
+                        let js_null = mquickjs_ffi::JS_NULL;
+
+                        mquickjs_ffi::JS_PushArg(self.ctx, js_null);
+                        mquickjs_ffi::JS_PushArg(self.ctx, js_value);
+                        mquickjs_ffi::JS_PushArg(self.ctx, cb_raw);
+                        mquickjs_ffi::JS_PushArg(self.ctx, mquickjs_ffi::JS_UNDEFINED);
+                        mquickjs_ffi::JS_Call(self.ctx, 2);
+                    }
+                    Err(error_msg) => {
+                        // Error: call callback(error, null)
+                        let c_error = std::ffi::CString::new(error_msg.as_str()).unwrap_or_default();
+                        let js_error = mquickjs_ffi::JS_NewString(self.ctx, c_error.as_ptr());
+                        let js_null = mquickjs_ffi::JS_NULL;
+
+                        mquickjs_ffi::JS_PushArg(self.ctx, js_error);
+                        mquickjs_ffi::JS_PushArg(self.ctx, js_null);
+                        mquickjs_ffi::JS_PushArg(self.ctx, cb_raw);
+                        mquickjs_ffi::JS_PushArg(self.ctx, mquickjs_ffi::JS_UNDEFINED);
+                        mquickjs_ffi::JS_Call(self.ctx, 2);
+                    }
+                }
+            }
+
+            // Mark task as completed
             self.inner.async_task_manager.complete_task(item.task_id);
         }
     }

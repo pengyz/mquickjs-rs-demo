@@ -551,26 +551,38 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {%- endfor %}
 
     {%- if method|has_async_decorator %}
-    // Async method: extract callback, create Root, spawn async task
+    // Async method: extract callback, register it, spawn async task
     // The last parameter is the callback
     {%- for p in method.params %}
     {%- if loop.last %}
     let cb_jsvalue = {{ p.rust_name }}_raw;
-    let cb_root = mquickjs_rs::Root::new(&scope, scope.value(cb_jsvalue));
     {%- endif %}
     {%- endfor %}
 
-    // Capture opaque pointer and context for async task
-    let opaque_ptr = holder_ptr as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
-    let ctx_ptr = ctx;
-
-    // Get AsyncTaskManager from context
+    // Register callback in task manager for later invocation
     let task_manager = h.async_task_manager();
+    let bridge = mquickjs_rs::async_bridge::AsyncBridge::new(
+        std::sync::Arc::new(unsafe { std::ptr::read(task_manager as *const _) })
+    );
+    let task_id = bridge.task_manager().register_task(
+        {%- if method|has_non_cancellable %}
+        mquickjs_rs::async_task::TaskPriority::NonCancellable
+        {%- else %}{% if method|has_timeout %}
+        mquickjs_rs::async_task::TaskPriority::Timeout({{ method|get_timeout_value }})
+        {%- else %}
+        mquickjs_rs::async_task::TaskPriority::Cancellable
+        {%- endif %}{% endif %}
+    );
 
-    // Spawn async task based on decorator
+    // Register callback for this task
+    task_manager.register_callback(task_id, cb_jsvalue);
+
+    // Capture opaque pointer for async task
+    let opaque_ptr = holder_ptr as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
+
+    // Spawn async task with completion queue
     {%- if method|has_non_cancellable %}
-    // @nonCancellable: task must complete even if context drops
-    task_manager.spawn_non_cancellable(cb_root, async move {
+    bridge.spawn_non_cancellable_with_queue(async move {
         let inst = unsafe { &mut *opaque_ptr };
         let result = inst.{{ method.name|to_snake_case|rust_ident }}(
             {%- for p in method.params %}
@@ -579,14 +591,10 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
             {%- endif %}
             {%- endfor %}
         );
-        // Convert result to JSValue and call callback
-        {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
-        // TODO: Call callback with result
-        mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
-    });
+        result.to_string()
+    }, task_id);
     {%- else %}{% if method|has_timeout %}
-    // @timeout({{ method|get_timeout_value }}): auto-cancel after timeout
-    task_manager.spawn_with_timeout(cb_root, std::time::Duration::from_millis({{ method|get_timeout_value }}), async move {
+    bridge.spawn_with_timeout_with_queue(async move {
         let inst = unsafe { &mut *opaque_ptr };
         let result = inst.{{ method.name|to_snake_case|rust_ident }}(
             {%- for p in method.params %}
@@ -595,14 +603,10 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
             {%- endif %}
             {%- endfor %}
         );
-        // Convert result to JSValue and call callback
-        {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
-        // TODO: Call callback with result
-        mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
-    });
+        result.to_string()
+    }, task_id, {{ method|get_timeout_value }});
     {%- else %}
-    // Default cancellable: task cancelled on context drop
-    task_manager.spawn_cancellable(cb_root, async move {
+    bridge.spawn_cancellable_with_queue(async move {
         let inst = unsafe { &mut *opaque_ptr };
         let result = inst.{{ method.name|to_snake_case|rust_ident }}(
             {%- for p in method.params %}
@@ -611,11 +615,8 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
             {%- endif %}
             {%- endfor %}
         );
-        // Convert result to JSValue and call callback
-        {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
-        // TODO: Call callback with result
-        mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
-    });
+        result.to_string()
+    }, task_id);
     {%- endif %}{% endif %}
 
     // Return immediately (async task runs in background)

@@ -25,6 +25,14 @@ pub struct CompletionItem {
     pub result: Result<String, String>,
 }
 
+/// 回调注册表项
+pub struct CallbackEntry {
+    /// 任务 ID
+    pub task_id: u64,
+    /// JS 函数引用（原始 JSValue）
+    pub callback_raw: crate::mquickjs_ffi::JSValue,
+}
+
 /// Task priority based on RIDL decorators
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum TaskPriority {
@@ -157,6 +165,8 @@ pub struct AsyncTaskManager {
     context_dropping: std::sync::atomic::AtomicBool,
     /// 完成队列 - Worker 线程将结果放入此队列
     completion_queue: Mutex<VecDeque<CompletionItem>>,
+    /// 回调注册表 - 存储 JS 函数引用
+    callback_registry: Mutex<HashMap<u64, crate::mquickjs_ffi::JSValue>>,
 }
 
 impl AsyncTaskManager {
@@ -167,7 +177,20 @@ impl AsyncTaskManager {
             tasks: Mutex::new(HashMap::new()),
             context_dropping: std::sync::atomic::AtomicBool::new(false),
             completion_queue: Mutex::new(VecDeque::new()),
+            callback_registry: Mutex::new(HashMap::new()),
         }
+    }
+
+    /// 注册回调（在 JS 主线程调用）
+    pub fn register_callback(&self, task_id: u64, callback_raw: crate::mquickjs_ffi::JSValue) {
+        let mut registry = self.callback_registry.lock().unwrap();
+        registry.insert(task_id, callback_raw);
+    }
+
+    /// 获取并移除回调（在 JS 主线程调用）
+    pub fn take_callback(&self, task_id: u64) -> Option<crate::mquickjs_ffi::JSValue> {
+        let mut registry = self.callback_registry.lock().unwrap();
+        registry.remove(&task_id)
     }
 
     /// 推送完成项到队列（可以在任意线程调用）
