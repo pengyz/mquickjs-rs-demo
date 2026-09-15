@@ -62,11 +62,53 @@ impl Drop for ContextInner {
     }
 }
 
+/// 除 context 头部与 class 表之外，留给引擎堆/栈的最小字节数。
+///
+/// 这是**可用性下限**（保证 context 建起来后还有空间做基本求值），
+/// 不是引擎的精确阈值 —— 引擎自身只断言总大小 >= 1024。
+const MIN_HEAP_BYTES: usize = 8 * 1024;
+
 pub struct Context {
     pub ctx: *mut mquickjs_ffi::JSContext,
     #[allow(dead_code)]
     pub(crate) inner: Arc<ContextInner>,
-    _memory: Vec<u8>,
+    _memory: AlignedHeap,
+}
+
+/// 交给 mquickjs 的 context 内存块。
+///
+/// # 为什么不能直接用 `Vec<u8>`
+///
+/// 引擎在 `JS_NewContext2` 中要求内存起始地址满足
+/// `assert(((uintptr_t)mem_start & (mem_align - 1)) == 0)`
+/// —— 64 位下 `mem_align = 8`（见 `mquickjs.c`）。
+///
+/// 而 `Vec<u8>` **不保证**任何超过 1 字节的对齐：实践中系统分配器对
+/// 大块内存会过度对齐（glibc x86-64 为 16），所以一直是"碰巧可用"。
+/// 一旦分配器行为变化，debug 构建会 assert 失败、release 构建（assert 被
+/// 编译掉）则会静默错位。
+///
+/// 这里用 `Vec<u64>` 承载，显式保证 8 字节对齐，把该契约变成类型层面的保证。
+struct AlignedHeap {
+    words: Vec<u64>,
+}
+
+impl AlignedHeap {
+    /// 分配至少 `bytes` 字节、8 字节对齐的零初始化内存。
+    fn new(bytes: usize) -> Self {
+        let words = bytes.div_ceil(8);
+        Self {
+            words: vec![0u64; words],
+        }
+    }
+
+    fn as_mut_ptr(&mut self) -> *mut u8 {
+        self.words.as_mut_ptr() as *mut u8
+    }
+
+    fn len(&self) -> usize {
+        self.words.len() * 8
+    }
 }
 
 /// Borrow-like handle reconstructed from JSContext user_data.
@@ -157,11 +199,38 @@ impl Context {
     }
 
     pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn std::error::Error>> {
-        let mut memory = vec![0u8; memory_capacity];
-
         extern "C" {
             static js_stdlib: mquickjs_ffi::JSSTDLibraryDef;
         }
+
+        // 前置校验缓冲区大小。
+        //
+        // 引擎的 JSContext 以柔性数组成员 class_proto[] 结尾，heap_base 紧随
+        // 2 * class_count 个 JSValue 之后。若缓冲区不足，heap_base 会越过
+        // stack_top —— 引擎**不会**返回错误，而是直接内存损坏（实测为
+        // SIGSEGV）。引擎内部只有 `assert(mem_size >= 1024)`，既未考虑
+        // class_count，该断言在 release 下也会被编译掉。
+        //
+        // 因此这里按 stdlib 的实际 class_count 计算真实下限。
+        let min_required = unsafe {
+            let class_count = js_stdlib.class_count as usize;
+            let header = mquickjs_ffi::JS_ContextHeaderSize();
+            let class_tables = 2 * class_count * std::mem::size_of::<mquickjs_ffi::JSValue>();
+            header + class_tables + MIN_HEAP_BYTES
+        };
+
+        if memory_capacity < min_required {
+            return Err(format!(
+                "memory_capacity too small: {memory_capacity} bytes, \
+                 need at least {min_required} bytes \
+                 (context header + class tables for {} classes + {} bytes heap)",
+                unsafe { js_stdlib.class_count },
+                MIN_HEAP_BYTES,
+            )
+            .into());
+        }
+
+        let mut memory = AlignedHeap::new(memory_capacity);
 
         let ctx = unsafe {
             mquickjs_ffi::JS_NewContext(

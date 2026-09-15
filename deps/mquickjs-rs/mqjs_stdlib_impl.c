@@ -1,4 +1,5 @@
 #include "mquickjs.h"
+#include <stddef.h>
 #include <sys/time.h>
 
 // Forward declarations for Date support (defined below, referenced by generated header)
