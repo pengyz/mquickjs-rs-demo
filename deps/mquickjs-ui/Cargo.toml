@@ -1,8 +1,0 @@
-[package]
-name = "mquickjs-ui"
-version = "0.1.0"
-edition = "2024"
-
-[dependencies]
-mquickjs-rs = { path = "../mquickjs-rs" }
-# slint = "1.5"  # 暂时注释掉，先实现基础框架

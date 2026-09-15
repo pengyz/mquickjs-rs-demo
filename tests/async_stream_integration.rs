@@ -23,6 +23,10 @@ use std::time::Duration;
 #[cfg(feature = "ridl-extensions")]
 #[test]
 fn test_async_stream_basic_usage() {
+    // 强制链接全部 RIDL 注册符号。
+    // 根 crate 链接的 C stdlib 的 js_c_function_table 会引用各 RIDL 模块的
+    // 注册符号；若不调用本宏，这些符号不会被拉入，测试二进制将链接失败。
+    mquickjs_rs::ridl_bootstrap!();
     let mut ctx = Context::new(1024 * 1024).expect("create ctx");
     let token = ctx.token();
     let scope = token.enter_scope();
@@ -54,6 +58,10 @@ fn test_async_stream_basic_usage() {
 #[cfg(feature = "ridl-extensions")]
 #[test]
 fn test_async_stream_error_handling() {
+    // 强制链接全部 RIDL 注册符号。
+    // 根 crate 链接的 C stdlib 的 js_c_function_table 会引用各 RIDL 模块的
+    // 注册符号；若不调用本宏，这些符号不会被拉入，测试二进制将链接失败。
+    mquickjs_rs::ridl_bootstrap!();
     let mut ctx = Context::new(1024 * 1024).expect("create ctx");
     let token = ctx.token();
     let scope = token.enter_scope();
@@ -120,6 +128,10 @@ fn test_thread_safe_event_queue() {
 #[cfg(feature = "ridl-extensions")]
 #[test]
 fn test_async_stream_lifecycle() {
+    // 强制链接全部 RIDL 注册符号。
+    // 根 crate 链接的 C stdlib 的 js_c_function_table 会引用各 RIDL 模块的
+    // 注册符号；若不调用本宏，这些符号不会被拉入，测试二进制将链接失败。
+    mquickjs_rs::ridl_bootstrap!();
     let mut ctx = Context::new(1024 * 1024).expect("create ctx");
     let token = ctx.token();
     let scope = token.enter_scope();
@@ -155,6 +167,10 @@ fn test_async_stream_lifecycle() {
 #[cfg(feature = "ridl-extensions")]
 #[test]
 fn test_async_stream_multiple_subscribers() {
+    // 强制链接全部 RIDL 注册符号。
+    // 根 crate 链接的 C stdlib 的 js_c_function_table 会引用各 RIDL 模块的
+    // 注册符号；若不调用本宏，这些符号不会被拉入，测试二进制将链接失败。
+    mquickjs_rs::ridl_bootstrap!();
     let mut ctx = Context::new(1024 * 1024).expect("create ctx");
     let token = ctx.token();
     let scope = token.enter_scope();
@@ -192,6 +208,10 @@ fn test_async_stream_multiple_subscribers() {
 #[cfg(feature = "ridl-extensions")]
 #[test]
 fn test_async_stream_with_thread_safe_queue() {
+    // 强制链接全部 RIDL 注册符号。
+    // 根 crate 链接的 C stdlib 的 js_c_function_table 会引用各 RIDL 模块的
+    // 注册符号；若不调用本宏，这些符号不会被拉入，测试二进制将链接失败。
+    mquickjs_rs::ridl_bootstrap!();
     let mut ctx = Context::new(1024 * 1024).expect("create ctx");
     let token = ctx.token();
     let scope = token.enter_scope();

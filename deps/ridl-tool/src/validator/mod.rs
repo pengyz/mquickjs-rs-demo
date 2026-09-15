@@ -81,10 +81,46 @@ impl SemanticValidator {
         // 语义约束：JS-only 字段与 native property 互斥等
         self.validate_js_fields(idl);
 
+        // 语义约束：异步装饰器只在 singleton 上受支持
+        self.validate_async_decorator_scope(idl);
+
         if self.errors.is_empty() {
             Ok(())
         } else {
             Err(std::mem::replace(&mut self.errors, Vec::new()))
+        }
+    }
+
+    /// 异步装饰器（`@nonCancellable` / `@timeout`）**仅**在 singleton 方法上受支持。
+    ///
+    /// 原因：异步生成的 glue 走「worker 线程执行 → 完成队列 → JS 线程 drain」链路，
+    /// 当前只为 singleton 实现了完整路径（`rust_glue.rs.j2` 的 singleton 分支）。
+    /// class 方法与 singleton 的持有方式不同（opaque 指针跨线程并非 `Send`），
+    /// 尚未实现——此前模板会静默生成含未定义行为的代码，因此在这里前置拒绝。
+    ///
+    /// 若将来要实现 class 异步，应先实现正确链路（共享 `Arc<AsyncTaskManager>`、
+    /// 不做指针按位转换），再放开本约束。
+    fn validate_async_decorator_scope(&mut self, idl: &IDL) {
+        for class in &idl.classes {
+            for method in &class.methods {
+                for d in &method.decorators {
+                    if d.name == "nonCancellable" || d.name == "timeout" {
+                        // Decorator/Method 在 AST 中未携带位置信息，
+                        // 位置信息补全见本文件其他校验的同类 TODO。
+                        self.errors.push(RIDLError::new(
+                            format!(
+                                "Invalid decorator '@{}' on class method '{}.{}': \
+                                 async decorators are only supported on singleton methods",
+                                d.name, class.name, method.name
+                            ),
+                            0,
+                            0,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
+                    }
+                }
+            }
         }
     }
 

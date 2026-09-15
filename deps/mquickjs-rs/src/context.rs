@@ -16,8 +16,12 @@ pub struct ContextInner {
 
     pub(crate) alive: std::sync::atomic::AtomicBool,
     
-    /// Async task manager for RIDL async cancellation semantics
-    pub async_task_manager: crate::async_task::AsyncTaskManager,
+    /// Async task manager for RIDL async cancellation semantics.
+    ///
+    /// 以 `Arc` 共享：异步任务在 worker 线程持有它，JS 线程通过 `drain_completions`
+    /// 访问同一个实例。**必须共享同一份**——按位拷贝 `AsyncTaskManager`
+    /// （内含 `Mutex`）既是 UB，也会产生两把独立的锁而破坏互斥。
+    pub async_task_manager: Arc<crate::async_task::AsyncTaskManager>,
 }
 
 impl ContextInner {
@@ -27,7 +31,7 @@ impl ContextInner {
             ridl_ext_drop: std::cell::UnsafeCell::new(None),
             roots: crate::roots::RootsRegistry::new(),
             alive: std::sync::atomic::AtomicBool::new(true),
-            async_task_manager: crate::async_task::AsyncTaskManager::new(),
+            async_task_manager: Arc::new(crate::async_task::AsyncTaskManager::new()),
         }
     }
 
@@ -143,8 +147,13 @@ impl Context {
     }
     
     /// Get a reference to the async task manager
-    pub fn async_task_manager(&self) -> &crate::async_task::AsyncTaskManager {
-        &self.inner.async_task_manager
+    /// 返回 context 级 `AsyncTaskManager` 的共享句柄。
+    ///
+    /// 返回 `Arc` 克隆（而非引用）是刻意的：async 任务需要把它移动到 worker
+    /// 线程，只有共享同一份实例，worker 推入的完成项才能被 JS 线程的
+    /// `drain_completions` 观察到。
+    pub fn async_task_manager(&self) -> Arc<crate::async_task::AsyncTaskManager> {
+        self.inner.async_task_manager.clone()
     }
 
     pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn std::error::Error>> {
@@ -187,24 +196,13 @@ impl Context {
             mquickjs_ffi::JS_SetContextUserData(ctx, arc_ptr, Some(user_data_finalizer));
         }
 
-        // Context-level roots (e.g. Rust async tasks) are reported via JS_SetContextGCMark.
-        // Safety: we only call mark_value from this callback.
-        unsafe extern "C" fn ctx_gc_mark(
-            ctx: *mut mquickjs_ffi::JSContext,
-            opaque: *mut c_void,
-            mf: *const mquickjs_ffi::JSMarkFunc,
-        ) {
-            if ctx.is_null() || opaque.is_null() || mf.is_null() {
-                return;
-            }
-
-            let inner = &*(opaque as *const ContextInner);
-            inner.roots.gc_mark(mf);
-        }
-
-        unsafe {
-            mquickjs_ffi::JS_SetContextGCMark(ctx, arc_ptr, Some(ctx_gc_mark));
-        }
+        // NOTE: 这里**不再**注册 JS_SetContextGCMark。
+        //
+        // 自建 root registry 通过 JS_SetContextGCMark 只能参与 mark 阶段，
+        // 其持有的 JSValue 不参与 gc_compact_heap 的重定位 → 压缩后悬垂。
+        // 现改用引擎的 JSGCRef（见 crate::roots），它在 mark
+        // (mquickjs.c:12319-12323) 与重定位 (mquickjs.c:12592-12596) 两个阶段
+        // 都被扫描，是 mquickjs 下唯一压缩安全的跨 GC 持有机制。
 
         Ok(Context {
             ctx,

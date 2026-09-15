@@ -1088,15 +1088,16 @@ class MixedService {
 // 异步代码生成测试（TDD - 先写失败测试）
 // ========================================================================
 
-/// 异步方法生成：@nonCancellable 方法生成装饰器注释
+/// 异步方法生成：@nonCancellable 生成不可取消任务代码
+///
+/// 注意：异步装饰器**仅**支持 singleton（class 上会被校验拒绝，
+/// 见 tests/async_decorator_scope_test.rs）。
 #[test]
 fn test_async_method_non_cancellable_codegen() {
     let ridl_input = r#"
-callback AsyncCallback(error: string?, data: string?);
-
-class AsyncService {
+singleton AsyncService {
     @nonCancellable
-    fn saveData(data: string, cb: AsyncCallback) -> void;
+    fn saveData(data: string) -> string;
 }
 "#;
 
@@ -1118,20 +1119,27 @@ class AsyncService {
     let glue_file = output_dir.join("glue.rs");
     let glue_content = std::fs::read_to_string(&glue_file).unwrap();
 
-    // 验证生成装饰器注释（当前阶段：注释，未来：实际代码）
-    assert!(glue_content.contains("nonCancellable"), "Should have nonCancellable comment");
-    assert!(glue_content.contains("spawn_non_cancellable"), "Should mention spawn_non_cancellable");
+    assert!(
+        glue_content.contains("TaskPriority::NonCancellable"),
+        "应生成 NonCancellable 优先级"
+    );
+    assert!(
+        glue_content.contains("spawn_non_cancellable_with_queue"),
+        "应走带完成队列的 spawn 路径"
+    );
+    assert!(
+        glue_content.contains("async_task_manager.clone()"),
+        "应共享 context 级 AsyncTaskManager（不得按位拷贝）"
+    );
 }
 
-/// 异步方法生成：@timeout 方法生成装饰器注释
+/// 异步方法生成：@timeout 生成超时任务代码
 #[test]
 fn test_async_method_timeout_codegen() {
     let ridl_input = r#"
-callback AsyncCallback(error: string?, data: string?);
-
-class CacheService {
+singleton CacheService {
     @timeout(5000)
-    fn updateCache(key: string, cb: AsyncCallback) -> void;
+    fn updateCache(key: string) -> string;
 }
 "#;
 
@@ -1153,9 +1161,14 @@ class CacheService {
     let glue_file = output_dir.join("glue.rs");
     let glue_content = std::fs::read_to_string(&glue_file).unwrap();
 
-    // 验证生成装饰器注释
-    assert!(glue_content.contains("timeout(5000)"), "Should have timeout comment");
-    assert!(glue_content.contains("spawn_with_timeout"), "Should mention spawn_with_timeout");
+    assert!(
+        glue_content.contains("TaskPriority::Timeout(5000)"),
+        "应生成 Timeout(5000) 优先级"
+    );
+    assert!(
+        glue_content.contains("spawn_with_timeout_with_queue"),
+        "应走带完成队列的超时 spawn 路径"
+    );
 }
 
 /// 异步方法生成：默认可取消方法生成装饰器注释

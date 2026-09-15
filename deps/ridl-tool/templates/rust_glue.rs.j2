@@ -211,14 +211,16 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     }
 
     let holder_ptr = slot.ptr() as *mut Box<dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton>;
-    let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
 
     {%- if method|has_async_decorator %}
     // Async method: register task, spawn async execution
-    let task_manager = &h.inner.async_task_manager;
-    let bridge = mquickjs_rs::async_bridge::AsyncBridge::new(
-        std::sync::Arc::new(unsafe { std::ptr::read(task_manager as *const _) })
-    );
+    //
+    // 使用 context 级 AsyncTaskManager 的共享 Arc —— worker 线程推入的完成项
+    // 必须与 JS 线程 drain_completions 看到的是同一个实例。
+    // （不得按位拷贝 AsyncTaskManager：其内含 Mutex，拷贝既是 UB，
+    //  也会产生两把独立的锁而破坏互斥。）
+    let task_manager = h.inner.async_task_manager.clone();
+    let bridge = mquickjs_rs::async_bridge::AsyncBridge::new(task_manager.clone());
     let task_id = bridge.task_manager().register_task(
         {%- if method|has_non_cancellable %}
         mquickjs_rs::async_task::TaskPriority::NonCancellable
@@ -258,6 +260,7 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
     mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
     {%- else %}
     // Synchronous method
+    let singleton: &mut dyn crate::api::{{ s.name|to_upper_camel_case }}Singleton = unsafe { &mut **holder_ptr };
     let result = singleton.{{ method.name|to_snake_case|rust_ident }}(
         {%- if method.needs_scope %}
         &mut env{%- if method.params|length > 0 %}, {% endif %}
@@ -596,78 +599,15 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     {{ p|emit_param_extract(loop.index0, loop.index, class.module_name_normalized)|safe }}
     {%- endfor %}
 
-    {%- if method|has_async_decorator %}
-    // Async method: extract callback, register it, spawn async task
-    // The last parameter is the callback
-    {%- for p in method.params %}
-    {%- if loop.last %}
-    let cb_jsvalue = {{ p.rust_name }}_raw;
-    {%- endif %}
-    {%- endfor %}
-
-    // Register callback in task manager for later invocation
-    let task_manager = h.async_task_manager();
-    let bridge = mquickjs_rs::async_bridge::AsyncBridge::new(
-        std::sync::Arc::new(unsafe { std::ptr::read(task_manager as *const _) })
-    );
-    let task_id = bridge.task_manager().register_task(
-        {%- if method|has_non_cancellable %}
-        mquickjs_rs::async_task::TaskPriority::NonCancellable
-        {%- else %}{% if method|has_timeout %}
-        mquickjs_rs::async_task::TaskPriority::Timeout({{ method|get_timeout_value }})
-        {%- else %}
-        mquickjs_rs::async_task::TaskPriority::Cancellable
-        {%- endif %}{% endif %}
-    );
-
-    // Register callback for this task
-    task_manager.register_callback(task_id, cb_jsvalue);
-
-    // Capture opaque pointer for async task
-    let opaque_ptr = holder_ptr as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
-
-    // Spawn async task with completion queue
-    {%- if method|has_non_cancellable %}
-    bridge.spawn_non_cancellable_with_queue(async move {
-        let inst = unsafe { &mut *opaque_ptr };
-        let result = inst.{{ method.name|to_snake_case|rust_ident }}(
-            {%- for p in method.params %}
-            {%- if !loop.last %}
-            {{ p.rust_name }},
-            {%- endif %}
-            {%- endfor %}
-        );
-        result.to_string()
-    }, task_id);
-    {%- else %}{% if method|has_timeout %}
-    bridge.spawn_with_timeout_with_queue(async move {
-        let inst = unsafe { &mut *opaque_ptr };
-        let result = inst.{{ method.name|to_snake_case|rust_ident }}(
-            {%- for p in method.params %}
-            {%- if !loop.last %}
-            {{ p.rust_name }},
-            {%- endif %}
-            {%- endfor %}
-        );
-        result.to_string()
-    }, task_id, {{ method|get_timeout_value }});
-    {%- else %}
-    bridge.spawn_cancellable_with_queue(async move {
-        let inst = unsafe { &mut *opaque_ptr };
-        let result = inst.{{ method.name|to_snake_case|rust_ident }}(
-            {%- for p in method.params %}
-            {%- if !loop.last %}
-            {{ p.rust_name }},
-            {%- endif %}
-            {%- endfor %}
-        );
-        result.to_string()
-    }, task_id);
-    {%- endif %}{% endif %}
-
-    // Return immediately (async task runs in background)
-    mquickjs_rs::mquickjs_ffi::JS_UNDEFINED
-    {%- else %}
+    // NOTE: 此处**没有**异步分支。
+    //
+    // 异步方法仅支持 singleton；class 方法上的 @nonCancellable / @timeout
+    // 会在 RIDL 校验阶段被拒绝（validator::validate_async_decorator_scope），
+    // 因此这里只生成同步路径。
+    //
+    // （此前这里曾生成异步 glue，但它是从未被编译过的死代码：既按位拷贝了
+    //   内含 Mutex 的 AsyncTaskManager（UB），又把非 Send 的 opaque 指针
+    //   跨线程传入 worker。）
     // Synchronous method
     let inst: &mut dyn crate::api::{{ class.name|to_upper_camel_case }}Class = unsafe { &mut **holder_ptr };
     let result = inst.{{ method.name|to_snake_case|rust_ident }}(
@@ -677,7 +617,6 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
         {%- for p in method.params %}{{ p|emit_call_arg }}{%- if !loop.last %}, {% endif %}{%- endfor %}
     );
     {{ method.return_rust_ty|emit_return_convert_typed(method.return_type, "result")|safe }}
-    {%- endif %}
 }
 {%- endfor %}
 

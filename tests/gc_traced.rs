@@ -70,14 +70,16 @@ fn traced_node_finalized_at_teardown() {
     );
 }
 
-/// Allocation pressure: GcTracedNodes don't leak JS memory.
+/// Allocation pressure: GcTracedNodes 的分配压力测试。
 ///
-/// NOTE: mquickjs's GC sweep frees JS objects but does NOT call finalizers.
-/// The opaque Box<dyn Trait> is leaked until context teardown. This test
-/// uses 10000 iterations to stay within safe memory limits (~500KB leaked).
-/// Higher iterations (32000+) cause native heap overflow.
+/// 更正（2026-09）：此前本注释写着「mquickjs 的 GC sweep 不调用 finalizer，
+/// opaque Box 泄漏到 context teardown；32000+ 次迭代导致 native 堆溢出」。
+/// 经逐行核对引擎源码，**该结论错误**：
+/// sweep 循环中确实会调用 class finalizer（`mquickjs.c:12416-12419`）。
 ///
-/// This is a known platform limitation: finalizers only run at JS_FreeContext.
+/// 真正的风险不是 finalizer 缺失，而是 `Traced<T>` / `Root<T>` 存放的裸
+/// `JSValue` 在堆压缩后**不参与重定位**而悬垂（见 tests/gc_compaction.rs）。
+/// 详见 docs/knowledge/gotcha_mquickjs_gc_compaction_and_finalizer.md。
 #[cfg(feature = "ridl-extensions")]
 #[test]
 fn traced_node_allocation_pressure() {
