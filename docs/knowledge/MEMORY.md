@@ -9,6 +9,7 @@
 - [GC Root + Traced 统一 tracing 设计](architecture_gc_root_traced_unified_tracing.md) — Root<T>/Traced<T> 统一基于引擎 JSGCRef；用户不感知 mark，也不再有 class gc_mark
 - [base vs ridl 两套 QuickJS 输出](architecture_mquickjs_base_vs_ridl_outputs.md) — 归档拆分（core / stdlib_base / stdlib_ridl）；**变体由叶子二进制选择**
 - [base/ridl 变体选择必须由叶子决定](architecture_base_vs_ridl_variant_selection.md) — js_stdlib 是唯一连接点；记录三项修复与四个构建踩坑
+- [核心 no_std 移植成本评估](assessment_core_nostd_port_cost.md) — PoC 实证可编译到 thumbv7em；14 文件 138 行改动；剩余阻塞项清单
 
 ## Gotchas
 <!-- 平台坑、反直觉行为（QuickJS/Rust FFI/构建系统） -->
