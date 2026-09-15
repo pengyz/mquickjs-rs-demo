@@ -27,11 +27,14 @@
 //! assert_eq!(error.message(), "test");
 //! ```
 
+#[cfg(feature = "no-std")]
+use alloc::{format, string::String, string::ToString};
 use crate::handles::local::{Local, Value};
 use crate::handles::scope::Scope;
 use crate::mquickjs_ffi;
-use std::ffi::{CStr, CString};
-use std::fmt;
+use core::ffi::{CStr};
+use alloc::ffi::{CString};
+use core::fmt;
 
 /// 异步错误类型
 ///
@@ -127,7 +130,7 @@ impl fmt::Display for AsyncError {
     }
 }
 
-impl std::error::Error for AsyncError {}
+impl core::error::Error for AsyncError {}
 
 impl From<String> for AsyncError {
     fn from(msg: String) -> Self {

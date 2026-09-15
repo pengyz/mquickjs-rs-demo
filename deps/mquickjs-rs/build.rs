@@ -88,7 +88,17 @@ fn main() {
 
     println!("cargo:rerun-if-changed={}", header_path.display());
 
-    let bindings = bindgen::Builder::default()
+    // 交叉编译时把目标三元组交给 clang/bindgen。
+    //
+    // 必要性：bindgen 会为目标生成**布局断言**
+    // （`["Size of JSGCRef"][size_of::<JSGCRef>() - 16]` 之类）。
+    // 若按宿主生成而构建到 32 位目标，这些断言会以
+    // `E0080: attempt to compute 8usize - 16usize` 失败。
+    let target = env::var("TARGET").expect("TARGET is set by cargo");
+    let host = env::var("HOST").expect("HOST is set by cargo");
+    let no_std = env::var_os("CARGO_FEATURE_NO_STD").is_some();
+
+    let mut builder = bindgen::Builder::default()
         .header(header_path.to_string_lossy())
         .clang_arg("-I")
         .clang_arg(include_dir.to_string_lossy())
@@ -98,9 +108,33 @@ fn main() {
         .clang_arg("mquickjs_ridl_api.h")
         .parse_callbacks(Box::new(bindgen::CargoCallbacks::new()))
         .allowlist_recursively(true)
-        .rust_edition(bindgen::RustEdition::Edition2024)
-        .generate()
-        .expect("Unable to generate bindings");
+        .rust_edition(bindgen::RustEdition::Edition2024);
+
+    if target != host {
+        // `-ffreestanding` 是**必需的**，不是可选优化。
+        //
+        // 裸机目标下若缺少它，clang 找不到（也不使用）目标的标准头，
+        // `inttypes.h` 的 `INTPTR_MAX` 判定会退化为 32 位，于是
+        // `mquickjs.h` 的 `#if INTPTR_MAX >= INT64_MAX` 不成立 →
+        // **`JS_PTR64` 未定义** → `JSValue` 变成 `uint32_t`。
+        //
+        // 后果是 bindgen 按错误的字长计算全部结构布局，生成的断言
+        // 与真实布局不符（例如 `size_of::<JSBytecodeHeader>() - 16` 在
+        // aarch64 上会以 `E0080: index out of bounds` 失败）。
+        //
+        // 已实测：同一头文件，带 `-ffreestanding` 时 `JSValue` 为 8 字节，
+        // 不带时为 4 字节。
+        builder = builder
+            .clang_arg(format!("--target={target}"))
+            .clang_arg("-ffreestanding");
+    }
+
+    // no_std 模式下让 bindgen 生成 `core::` 路径而非 `std::`。
+    if no_std {
+        builder = builder.use_core();
+    }
+
+    let bindings = builder.generate().expect("Unable to generate bindings");
 
     bindings
         .write_to_file(out_path.join("bindings.rs"))

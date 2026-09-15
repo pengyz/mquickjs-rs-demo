@@ -1,5 +1,7 @@
-use std::cell::Cell;
-use std::marker::PhantomData;
+#[cfg(feature = "no-std")]
+use alloc::{boxed::Box};
+use core::cell::Cell;
+use core::marker::PhantomData;
 
 use crate::handles::handle::Handle;
 use crate::handles::local::Local;
@@ -23,7 +25,7 @@ impl<'ctx> HandleScope<'ctx> {
         Self {
             scope,
             ctx_id: scope.context_id(),
-            head: Cell::new(std::ptr::null_mut()),
+            head: Cell::new(core::ptr::null_mut()),
             _m: PhantomData,
         }
     }
@@ -55,7 +57,7 @@ impl<'ctx> HandleScope<'ctx> {
     pub(crate) fn push_gc_ref(&self, raw: mquickjs_ffi::JSValue) {
         let gc_ref = Box::into_raw(Box::new(mquickjs_ffi::JSGCRef {
             val: mquickjs_ffi::JS_UNDEFINED,
-            prev: std::ptr::null_mut(),
+            prev: core::ptr::null_mut(),
         }));
 
         unsafe {
@@ -100,7 +102,7 @@ impl<'inner, 'ctx> EscapableHandleScope<'inner, 'ctx> {
         Self {
             scope,
             ctx_id,
-            head: Cell::new(std::ptr::null_mut()),
+            head: Cell::new(core::ptr::null_mut()),
             _m: PhantomData,
         }
     }
@@ -131,7 +133,7 @@ impl<'inner, 'ctx> EscapableHandleScope<'inner, 'ctx> {
     fn push_gc_ref(&self, raw: mquickjs_ffi::JSValue) {
         let gc_ref = Box::into_raw(Box::new(mquickjs_ffi::JSGCRef {
             val: mquickjs_ffi::JS_UNDEFINED,
-            prev: std::ptr::null_mut(),
+            prev: core::ptr::null_mut(),
         }));
 
         unsafe {

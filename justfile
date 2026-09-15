@@ -24,6 +24,22 @@ test: test-ridl test-mquickjs test-demo test-js
 test-workspace:
     cargo test --workspace
 
+# 裸机可行性检查（实验性）
+#
+# 为 64 位裸机目标构建 C 引擎 + 以 no_std 构建 Rust 核心。
+# 用 64 位目标是因为 mquickjs 的 JS_PTR64 硬编码为 64 位字长
+# （见 docs/knowledge/assessment_core_nostd_port_cost.md）。
+#
+# 需要：rustup target add aarch64-unknown-none
+nostd-check:
+    cargo run -q -p mquickjs-build -- build \
+        --mquickjs-dir deps/mquickjs \
+        --target aarch64-unknown-none \
+        --out target/mquickjs-build/framework/aarch64-unknown-none/debug/base
+    cargo build -p mquickjs-rs \
+        --target aarch64-unknown-none \
+        --no-default-features --features no-std
+
 # 运行 RIDL 工具链测试
 test-ridl:
     cargo test -p ridl-tool
@@ -106,6 +122,7 @@ help:
     @echo "  build         构建项目"
     @echo "  test          运行所有测试（逐包）"
     @echo "  test-workspace 运行整个 workspace 的测试"
+    @echo "  nostd-check   裸机可行性检查（实验性）"
     @echo "  test-ridl     运行 RIDL 工具链测试"
     @echo "  test-mquickjs 运行 mquickjs-rs 绑定测试"
     @echo "  test-demo     运行 demo 应用测试"

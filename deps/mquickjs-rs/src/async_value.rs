@@ -6,6 +6,8 @@
 //! - Rust 对象在 callback 结束后由框架转换到 JS 层
 //! - `any`/`object` 参数必须在提交时"冻结"成 Rust 拥有的数据
 
+#[cfg(feature = "no-std")]
+use alloc::{string::String, string::ToString, vec, vec::Vec};
 use crate::handles::local::{Local, Value};
 use crate::handles::scope::Scope;
 use crate::mquickjs_ffi;
@@ -208,7 +210,7 @@ impl AsyncValue {
             if mquickjs_ffi::JS_IsArray(ctx, raw) != 0 {
                 let mut array = Vec::new();
                 // 获取数组长度
-                let len_key = std::ffi::CString::new("length").unwrap();
+                let len_key = alloc::ffi::CString::new("length").unwrap();
                 let len_val = mquickjs_ffi::JS_GetPropertyStr(ctx, raw, len_key.as_ptr());
                 let mut len: i32 = 0;
                 if mquickjs_ffi::JS_ToInt32(ctx, &mut len as *mut i32, len_val) == 0 {
@@ -228,7 +230,7 @@ impl AsyncValue {
                 let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
                 let c_str = mquickjs_ffi::JS_ToCString(ctx, raw, &mut cstr_buf);
                 if !c_str.is_null() {
-                    let rust_str = std::ffi::CStr::from_ptr(c_str)
+                    let rust_str = core::ffi::CStr::from_ptr(c_str)
                         .to_string_lossy()
                         .into_owned();
                     return AsyncValue::String(rust_str);
@@ -251,8 +253,8 @@ impl AsyncValue {
             // 只对真正的对象（非数组）使用 JSON.stringify
             if class_id >= 0 && class_id != 1 {  // 不是数组
                 // 尝试 JSON.stringify
-                let json_str_key = std::ffi::CString::new("JSON").unwrap();
-                let stringify_key = std::ffi::CString::new("stringify").unwrap();
+                let json_str_key = alloc::ffi::CString::new("JSON").unwrap();
+                let stringify_key = alloc::ffi::CString::new("stringify").unwrap();
                 let global = mquickjs_ffi::JS_GetGlobalObject(ctx);
                 let json_obj = mquickjs_ffi::JS_GetPropertyStr(ctx, global, json_str_key.as_ptr());
                 let stringify_fn = mquickjs_ffi::JS_GetPropertyStr(ctx, json_obj, stringify_key.as_ptr());
@@ -273,7 +275,7 @@ impl AsyncValue {
                         let mut cstr_buf = mquickjs_ffi::JSCStringBuf { buf: [0; 5] };
                         let c_str = mquickjs_ffi::JS_ToCString(ctx, result, &mut cstr_buf);
                         if !c_str.is_null() {
-                            let rust_str = std::ffi::CStr::from_ptr(c_str)
+                            let rust_str = core::ffi::CStr::from_ptr(c_str)
                                 .to_string_lossy()
                                 .into_owned();
                             return AsyncValue::Json(rust_str);
@@ -314,7 +316,7 @@ impl AsyncValue {
             AsyncValue::Int(i) => unsafe { mquickjs_ffi::JS_NewInt32(ctx, *i) },
             AsyncValue::Float(f) => unsafe { mquickjs_ffi::JS_NewFloat64(ctx, *f) },
             AsyncValue::String(s) => {
-                let c_str = std::ffi::CString::new(s.as_str()).unwrap();
+                let c_str = alloc::ffi::CString::new(s.as_str()).unwrap();
                 unsafe { mquickjs_ffi::JS_NewString(ctx, c_str.as_ptr()) }
             }
             AsyncValue::Array(arr) => {
@@ -331,7 +333,7 @@ impl AsyncValue {
                 unsafe {
                     let js_obj = mquickjs_ffi::JS_NewObject(ctx);
                     for (key, value) in map.iter() {
-                        let c_key = std::ffi::CString::new(key.as_str()).unwrap();
+                        let c_key = alloc::ffi::CString::new(key.as_str()).unwrap();
                         let js_value = value.to_js(scope);
                         mquickjs_ffi::JS_SetPropertyStr(ctx, js_obj, c_key.as_ptr(), js_value.as_raw());
                     }
@@ -342,13 +344,13 @@ impl AsyncValue {
                 // JSON.parse
                 unsafe {
                     let global = mquickjs_ffi::JS_GetGlobalObject(ctx);
-                    let json_key = std::ffi::CString::new("JSON").unwrap();
-                    let parse_key = std::ffi::CString::new("parse").unwrap();
+                    let json_key = alloc::ffi::CString::new("JSON").unwrap();
+                    let parse_key = alloc::ffi::CString::new("parse").unwrap();
                     let json_obj = mquickjs_ffi::JS_GetPropertyStr(ctx, global, json_key.as_ptr());
                     let parse_fn = mquickjs_ffi::JS_GetPropertyStr(ctx, json_obj, parse_key.as_ptr());
 
                     if mquickjs_ffi::JS_IsFunction(ctx, parse_fn) != 0 {
-                        let c_json = std::ffi::CString::new(json_str.as_str()).unwrap();
+                        let c_json = alloc::ffi::CString::new(json_str.as_str()).unwrap();
                         let _js_json_str = mquickjs_ffi::JS_NewString(ctx, c_json.as_ptr());
                         // 调用 JSON.parse
                         let result = mquickjs_ffi::JS_Call(ctx, 0); // 简化调用

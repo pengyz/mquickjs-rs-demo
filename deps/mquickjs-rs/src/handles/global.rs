@@ -1,5 +1,7 @@
-use std::cell::UnsafeCell;
-use std::marker::PhantomData;
+#[cfg(feature = "no-std")]
+use alloc::{boxed::Box};
+use core::cell::UnsafeCell;
+use core::marker::PhantomData;
 
 use crate::handles::local::Local;
 use crate::handles::scope::{ContextId, Scope};
@@ -8,9 +10,9 @@ use crate::mquickjs_ffi;
 pub struct Global<T = crate::handles::local::Value> {
     ctx: *mut mquickjs_ffi::JSContext,
     ctx_id: ContextId,
-    inner: std::sync::Arc<crate::context::ContextInner>,
+    inner: alloc::sync::Arc<crate::context::ContextInner>,
     /// Safety: this cell holds a JSGCRef linked into ctx list via JS_AddGCRef.
-    gc_ref: std::pin::Pin<Box<UnsafeCell<mquickjs_ffi::JSGCRef>>>,
+    gc_ref: core::pin::Pin<Box<UnsafeCell<mquickjs_ffi::JSGCRef>>>,
     _t: PhantomData<T>,
 }
 
@@ -20,7 +22,7 @@ impl<T> Global<T> {
 
         let gc_ref = Box::pin(UnsafeCell::new(mquickjs_ffi::JSGCRef {
             val: mquickjs_ffi::JS_UNDEFINED,
-            prev: std::ptr::null_mut(),
+            prev: core::ptr::null_mut(),
         }));
 
         unsafe {
@@ -73,7 +75,7 @@ impl<T> Global<T> {
 
 impl<T> Drop for Global<T> {
     fn drop(&mut self) {
-        if !self.inner.alive.load(std::sync::atomic::Ordering::Acquire) {
+        if !self.inner.alive.load(core::sync::atomic::Ordering::Acquire) {
             panic!("Global must be dropped before Context drop");
         }
 

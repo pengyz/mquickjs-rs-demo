@@ -23,7 +23,7 @@ mod tests {
             let scope = crate::handles::scope::Scope::from_handle(&h);
             let v = scope.value(crate::mquickjs_ffi::JS_UNDEFINED);
             let g: Global<Value> = Global::new(&scope, v);
-            std::mem::forget(scope);
+            core::mem::forget(scope);
             g
         };
 

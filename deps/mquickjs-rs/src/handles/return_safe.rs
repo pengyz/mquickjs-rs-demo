@@ -1,7 +1,7 @@
 use crate::handles::local::{Local, Value};
 use crate::handles::scope::{ContextId, Scope};
 use crate::mquickjs_ffi;
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 
 /// A value that is safe to be returned across the native<->JS boundary.
 ///

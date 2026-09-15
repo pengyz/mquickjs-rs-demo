@@ -1,3 +1,5 @@
+#[cfg(feature = "no-std")]
+use alloc::{boxed::Box};
 use crate::handles::local::Local;
 use crate::handles::scope::Scope;
 use crate::mquickjs_ffi;

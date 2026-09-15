@@ -30,10 +30,36 @@
 //! `JS_AddGCRef` / `JS_DeleteGCRef` 直接操作 `ctx->last_gc_ref` 链表，
 //! **必须在 JS 线程调用**。`Root<T>` 是 `!Send`，与此约束一致。
 
-use std::cell::UnsafeCell;
-use std::sync::Mutex;
+#[cfg(feature = "no-std")]
+use alloc::{boxed::Box, vec::Vec};
+use core::cell::UnsafeCell;
 
 use crate::mquickjs_ffi;
+
+// JS 本身单线程，且 `Root` 刻意是 `!Send`，因此裸机上用 `RefCell` 即可；
+// std 模式保留 `Mutex`（可跨线程共享 `RootsRegistry`，虽然实践中不需要）。
+#[cfg(not(feature = "no-std"))]
+use std::sync::Mutex;
+#[cfg(feature = "no-std")]
+use core::cell::RefCell;
+
+#[cfg(not(feature = "no-std"))]
+type Slots = Mutex<Vec<Option<Box<JSGCRef>>>>;
+#[cfg(feature = "no-std")]
+type Slots = RefCell<Vec<Option<Box<JSGCRef>>>>;
+
+#[cfg(not(feature = "no-std"))]
+macro_rules! lock_slots {
+    ($this:ident) => {
+        $this.slots.lock().expect("RootsRegistry poisoned")
+    };
+}
+#[cfg(feature = "no-std")]
+macro_rules! lock_slots {
+    ($this:ident) => {
+        $this.slots.borrow_mut()
+    };
+}
 use crate::mquickjs_ffi::{JSContext, JSGCRef, JSValue};
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
@@ -48,7 +74,7 @@ pub(crate) struct RootsRegistry {
     ///
     /// `Box` 保证 `JSGCRef` 的**地址稳定**：引擎持有 `&mut *r` 的指针，
     /// 若 `JSGCRef` 自身被移动，引擎的链表即损坏。
-    slots: Mutex<Vec<Option<Box<JSGCRef>>>>,
+    slots: Slots,
 
     // 使类型在 API 边界默认 !Send/!Sync（registry 本身在 Mutex 后，
     // 但 JSContext 的线程模型不作保证）。
@@ -58,7 +84,7 @@ pub(crate) struct RootsRegistry {
 impl RootsRegistry {
     pub(crate) fn new() -> Self {
         Self {
-            slots: Mutex::new(Vec::new()),
+            slots: <Slots as Default>::default(),
             _no_send: UnsafeCell::new(()),
         }
     }
@@ -74,7 +100,7 @@ impl RootsRegistry {
 
         let mut r = Box::new(JSGCRef {
             val: mquickjs_ffi::JS_UNDEFINED,
-            prev: std::ptr::null_mut(),
+            prev: core::ptr::null_mut(),
         });
 
         // JS_AddGCRef 把 r 链接进 ctx->last_gc_ref，并返回 &mut r.val。
@@ -84,7 +110,7 @@ impl RootsRegistry {
             unsafe { *slot = v };
         }
 
-        let mut g = self.slots.lock().expect("RootsRegistry poisoned");
+        let mut g = lock_slots!(self);
         for (i, s) in g.iter_mut().enumerate() {
             if s.is_none() {
                 *s = Some(r);
@@ -101,7 +127,7 @@ impl RootsRegistry {
     /// 由于读的是引擎维护的 `JSGCRef.val`，这里拿到的是压缩重定位后的最新地址，
     /// 而不是注册时的旧副本。
     pub(crate) fn get(&self, id: RootId) -> Option<JSValue> {
-        let g = self.slots.lock().expect("RootsRegistry poisoned");
+        let g = lock_slots!(self);
         g.get(id.0 as usize)?.as_ref().map(|r| r.val)
     }
 
@@ -112,7 +138,7 @@ impl RootsRegistry {
     /// - 必须在 JS 线程调用，且 `ctx` 仍然有效
     pub(crate) unsafe fn remove(&self, ctx: *mut JSContext, id: RootId) {
         let taken = {
-            let mut g = self.slots.lock().expect("RootsRegistry poisoned");
+            let mut g = lock_slots!(self);
             match g.get_mut(id.0 as usize) {
                 Some(s) => s.take(),
                 None => None,
@@ -135,13 +161,13 @@ impl RootsRegistry {
 /// 且**压缩安全**：值由引擎的 `JSGCRef` 维护，GC 移动对象后自动更新。
 pub struct Root<T = crate::handles::local::Value> {
     ctx_id: crate::handles::scope::ContextId,
-    inner: std::sync::Arc<crate::context::ContextInner>,
+    inner: alloc::sync::Arc<crate::context::ContextInner>,
     id: RootId,
     /// 用于 Drop 时调 `JS_DeleteGCRef`。有效性由 `inner.alive` 护栏保证。
     ctx: *mut JSContext,
-    _t: std::marker::PhantomData<T>,
+    _t: core::marker::PhantomData<T>,
     // Root 不得跨线程发送：JS 线程模型不作保证。
-    _no_send: std::marker::PhantomData<UnsafeCell<()>>,
+    _no_send: core::marker::PhantomData<UnsafeCell<()>>,
 }
 
 impl<T> Root<T> {
@@ -198,8 +224,8 @@ impl<'ctx, T> Root<T> {
             inner,
             id,
             ctx,
-            _t: std::marker::PhantomData,
-            _no_send: std::marker::PhantomData,
+            _t: core::marker::PhantomData,
+            _no_send: core::marker::PhantomData,
         }
     }
 }
@@ -211,7 +237,7 @@ impl<T> Drop for Root<T> {
         if !self
             .inner
             .alive
-            .load(std::sync::atomic::Ordering::Acquire)
+            .load(core::sync::atomic::Ordering::Acquire)
         {
             return;
         }

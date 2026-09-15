@@ -1,4 +1,6 @@
-use std::ffi::CStr;
+#[cfg(feature = "no-std")]
+use alloc::{string::String, string::ToString};
+use core::ffi::CStr;
 
 use crate::handles::local::{Function, Local, Value};
 use crate::handles::scope::Scope;

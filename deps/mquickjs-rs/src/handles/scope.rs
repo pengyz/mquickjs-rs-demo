@@ -1,5 +1,7 @@
-use std::cell::RefCell;
-use std::marker::PhantomData;
+#[cfg(feature = "no-std")]
+use alloc::{vec::Vec};
+use core::cell::RefCell;
+use core::marker::PhantomData;
 
 use crate::context::ContextToken;
 
@@ -11,9 +13,13 @@ struct CurrentEntry {
     id: ContextId,
 }
 
+#[cfg(not(feature = "no-std"))]
 thread_local! {
     static TLS_CURRENT: RefCell<Vec<CurrentEntry>> = RefCell::new(Vec::new());
 }
+#[cfg(feature = "no-std")]
+static TLS_CURRENT: crate::TlsCell<RefCell<Vec<CurrentEntry>>> =
+    crate::TlsCell::new(RefCell::new(Vec::new()));
 
 pub struct EnterGuard<'ctx> {
     expected_ctx: *mut crate::mquickjs_ffi::JSContext,
@@ -50,11 +56,11 @@ impl<'ctx> Scope<'ctx> {
     }
 
     pub fn context_id(&self) -> ContextId {
-        ContextId(std::sync::Arc::as_ptr(&self.h.inner) as usize as u64)
+        ContextId(alloc::sync::Arc::as_ptr(&self.h.inner) as usize as u64)
     }
 
     pub fn from_handle(h: &'ctx ContextToken) -> Self {
-        let id = ContextId(std::sync::Arc::as_ptr(&h.inner) as usize as u64);
+        let id = ContextId(alloc::sync::Arc::as_ptr(&h.inner) as usize as u64);
         TLS_CURRENT.with(|s| {
             s.borrow_mut().push(CurrentEntry { ctx: h.ctx, id });
         });
@@ -72,7 +78,7 @@ impl<'ctx> Scope<'ctx> {
 impl ContextToken {
     pub fn enter_scope(&self) -> Scope<'_> {
         let ctx = self.ctx;
-        let id = ContextId(std::sync::Arc::as_ptr(&self.inner) as usize as u64);
+        let id = ContextId(alloc::sync::Arc::as_ptr(&self.inner) as usize as u64);
         TLS_CURRENT.with(|s| {
             s.borrow_mut().push(CurrentEntry { ctx, id });
         });

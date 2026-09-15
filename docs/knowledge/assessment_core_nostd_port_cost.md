@@ -99,7 +99,9 @@ cargo build --target thumbv7em-none-eabihf
 | 2 | C 侧需 libc 桩 | 已实证可行 | 8 个头 + ~15 个函数（`memcpy`/`memset`/`abort`/`printf` 等；`malloc` 仅字节码路径用） |
 | 3 | 异步子系统需剔除 | 代码 | 依赖 `std::thread`/`std::time`/`futures` |
 | 4 | `Cargo.toml` 的 `libc` 依赖 | 构建 | 核心不用，但需按平台条件化 |
-| 5 | `ridl-builder` 用宿主 triple | 构建系统 | 交叉编译路径未打通（`resolve_target_triple` 取 `rustc -vV`） |
+| 5 | `ridl-builder` 用宿主 triple | 构建系统 | `just nostd-check` 直接调 `mquickjs-build` 绕过；正式集成仍需打通 |
+| 6 | **32 位目标需对齐字长与 ROM 表** | 代码+构建 | 见上"为什么是 64 位目标" |
+| 7 | `mquickjs_ext_romclass_map.o` 仍由 `cc` 按宿主产出 | 构建 | 交叉链接真实固件时会暴露 |
 
 ## 工作量估计（诚实标注为估计，非实测）
 
@@ -110,6 +112,55 @@ cargo build --target thumbv7em-none-eabihf
 - **构建系统**（按目标 bindgen + C 交叉构建 + libc 桩）：与代码移植相当。
 - **异步重构**（若要保留异步能力）：需要按宿主时基/中断重做，**另计**；
   若接受剔除，则成本为零。
+
+## 固化后的仓库内实现
+
+`no_std` 路径已作为**实验性 feature** 固化，不再是 `/tmp` 里的一次性验证：
+
+```bash
+rustup target add aarch64-unknown-none
+just nostd-check        # 或直接跑 justfile 里那两条命令
+```
+
+包含：
+
+| 组件 | 改动 |
+|---|---|
+| `deps/mquickjs-rs` | `no-std` feature（与 `std` 互斥，有 `compile_error!` 守卫）；路径统一为 `core::`/`alloc::`；TLS 与 `RootsRegistry` 的锁按 mode 分派；异步子系统整体 cfg 排除 |
+| `deps/mquickjs-sys` | 加 `std` / `no-std` feature；仅 `include_dir`/`header_path` 两个构建期辅助函数需要 std |
+| `deps/mquickjs-build` | 新增 `--target`：引擎对象改用 `clang --target=<triple> -ffreestanding`；生成器工具仍用宿主编译器 |
+| `deps/mquickjs-build/nostd-include/` | 9 个裸机 libc 桩头文件（含 `sys/time.h`） |
+| `deps/mquickjs-rs/build.rs` | 交叉时把目标传给 clang，并加 **`-ffreestanding`**；no-std 时用 bindgen `.use_core()` |
+
+验证：`cargo build -p mquickjs-rs --target aarch64-unknown-none --no-default-features --features no-std` **零错误**；std 模式 `cargo test --workspace` 546 个测试全绿（无回归）。
+
+### 为什么是 64 位目标
+
+`mquickjs.h` 的 `JS_PTR64` 是**硬编码**的：
+
+```c
+#if INTPTR_MAX >= INT64_MAX
+#define JS_PTR64   /* JSValue = uint64_t */
+#endif
+```
+
+而 ROM 表由生成器按 64 位产出，其中的 `JS_ROM_VALUE(offset)` 展开为
+`(JSWord)((uintptr_t)ptr + 1)` —— 32 位目标上把 32 位地址零扩展到 64 位
+无法表达为重定位，导致 `initializer element is not a compile-time constant`。
+
+⇒ **32 位目标需要把字长配置（`JS_PTR64`）与 ROM 表生成一并对齐**，
+这是一个独立于 Rust 侧的工作项。64 位裸机目标（`aarch64-unknown-none`）
+与硬编码字长一致，因此可用于验证 Rust 侧的可移植性。
+
+### 一个隐蔽的坑：裸机目标必须给 clang 传 `-ffreestanding`
+
+不带 `-ffreestanding` 时，clang 在 `--target=aarch64-unknown-none` 下找不到
+（也不使用）目标标准头，`inttypes.h` 的 `INTPTR_MAX` 判定退化为 32 位，
+于是 `JS_PTR64` **未定义** → `JSValue` 变成 `uint32_t`。
+
+后果不是报错，而是 **bindgen 按错误的字长计算全部结构布局**，生成的断言
+与真实布局不符，以 `E0080: index out of bounds` 的形式在编译期爆出。
+实测同一头文件：带 `-ffreestanding` 时 `JSValue` 为 8 字节，不带时为 4 字节。
 
 ## 对定位的含义
 

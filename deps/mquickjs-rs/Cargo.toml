@@ -4,20 +4,32 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-libc = "0.2"
+# libc 目前未被本 crate 使用（保留以兼容既有消费者）。
+libc = { version = "0.2", optional = true }
 mquickjs-sys = { path = "../mquickjs-sys", default-features = false }
-futures = "0.3"
+# futures 仅在 std 模式（异步子系统）需要；裸机下必须关闭。
+futures = { version = "0.3", optional = true }
 
 [features]
-default = []
+default = ["std"]
+
+# hosted 模式：启用异步子系统（依赖 futures）。
+std = ["dep:futures", "dep:libc", "mquickjs-sys/std"]
+
+# 面向裸机目标以 no_std + alloc 构建（**排除异步子系统**）。
+# 用法：--no-default-features --features no-std
+# 详见 docs/knowledge/assessment_core_nostd_port_cost.md
+no-std = []
 
 # Enable RIDL stdlib extensions. This must be enabled by the application crate.
-ridl-extensions = ["mquickjs-sys/ridl-extensions"]
+# RIDL 是应用层能力，隐含 hosted 模式。
+ridl-extensions = ["mquickjs-sys/ridl-extensions", "std"]
 
 [build-dependencies]
 bindgen = "0.72"
 cc = "1"
-mquickjs-sys = { path = "../mquickjs-sys" }
+# 构建脚本始终以宿主 std 编译，因此这里显式要求 std。
+mquickjs-sys = { path = "../mquickjs-sys", features = ["std"] }
 
 [dev-dependencies]
 trybuild = "1"

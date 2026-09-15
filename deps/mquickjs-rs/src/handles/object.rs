@@ -1,3 +1,5 @@
+#[cfg(feature = "no-std")]
+use alloc::{string::String, string::ToString};
 use crate::handles::local::{Local, Object, Value};
 use crate::handles::scope::Scope;
 use crate::mquickjs_ffi;
@@ -41,7 +43,7 @@ impl<'ctx> Local<'ctx, Object> {
         name: &str,
     ) -> Result<Local<'ctx, Value>, String> {
         let c_name =
-            std::ffi::CString::new(name).map_err(|_| "Invalid property name".to_string())?;
+            alloc::ffi::CString::new(name).map_err(|_| "Invalid property name".to_string())?;
         let raw =
             unsafe { mquickjs_ffi::JS_GetPropertyStr(scope.ctx(), self.as_raw(), c_name.as_ptr()) };
         if (raw as u32) & ((1u32 << (mquickjs_ffi::JS_TAG_SPECIAL_BITS as u32)) - 1)
@@ -59,7 +61,7 @@ impl<'ctx> Local<'ctx, Object> {
         value: Local<'ctx, Value>,
     ) -> Result<(), String> {
         let c_name =
-            std::ffi::CString::new(name).map_err(|_| "Invalid property name".to_string())?;
+            alloc::ffi::CString::new(name).map_err(|_| "Invalid property name".to_string())?;
         // QuickJS property setters consume the value in many APIs; in our engine model,
         // the GC will keep the value alive when it becomes reachable.
         let r = unsafe {

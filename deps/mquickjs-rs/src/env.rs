@@ -1,3 +1,5 @@
+#[cfg(feature = "no-std")]
+use alloc::{string::String, string::ToString};
 use crate::handles::handle::Handle;
 use crate::handles::handle_scope::HandleScope;
 use crate::handles::local::{Array, Local, Object, Value};
@@ -72,7 +74,7 @@ impl<'ctx> Env<'ctx> {
     }
 
     pub fn str<'hs>(&'hs mut self, s: &str) -> Result<Handle<'hs, 'ctx, Value>, String> {
-        let c = std::ffi::CString::new(s).map_err(|_| "Invalid string".to_string())?;
+        let c = alloc::ffi::CString::new(s).map_err(|_| "Invalid string".to_string())?;
         let raw = unsafe { mquickjs_ffi::JS_NewString(self.scope.ctx_raw(), c.as_ptr()) };
         if mquickjs_ffi::js_value_special_tag(raw) == (mquickjs_ffi::JS_TAG_EXCEPTION as u32) {
             return Err("Exception during JS_NewString".to_string());
@@ -113,7 +115,7 @@ impl<'ctx> Env<'ctx> {
         if result_ptr.is_null() {
             return Err("Failed to convert Value to string".to_string());
         }
-        Ok(unsafe { std::ffi::CStr::from_ptr(result_ptr) }
+        Ok(unsafe { core::ffi::CStr::from_ptr(result_ptr) }
             .to_string_lossy()
             .into_owned())
     }

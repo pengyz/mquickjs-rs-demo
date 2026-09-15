@@ -10,7 +10,14 @@ libc = "0.2"
 
 
 [features]
-default = []
+default = ["std"]
+
+# 构建期辅助函数（include_dir / header_path）需要 std。
+# 下游 build.rs 始终以宿主 std 编译，因此显式要求该 feature。
+std = []
+
+# 面向裸机目标：FFI 声明本身与平台无关，关闭 std 即可。
+no-std = []
 
 # Enable RIDL stdlib extensions (JS_RIDL_EXTENSIONS) driven by ridl-tool plan generation.
 # This must be enabled by the application crate (single-point module selection).

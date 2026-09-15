@@ -1,7 +1,10 @@
-use std::cell::RefCell;
-use std::ffi::{CStr, CString};
-use std::os::raw::c_void;
-use std::sync::Arc;
+#[cfg(feature = "no-std")]
+use alloc::{boxed::Box, format, string::String, string::ToString, vec, vec::Vec};
+use core::cell::RefCell;
+use core::ffi::{CStr};
+use alloc::ffi::{CString};
+use core::ffi::c_void;
+use alloc::sync::Arc;
 
 use crate::handles::local::{Local, Value};
 use crate::mquickjs_ffi;
@@ -9,28 +12,30 @@ use crate::mquickjs_ffi;
 pub struct ContextInner {
     // NOTE: host per-context extensions (initialized by application-generated ridl_context_init).
     // Type-erased to avoid coupling mquickjs-rs to generated RIDL types.
-    ridl_ext_ptr: std::cell::UnsafeCell<*mut c_void>,
-    ridl_ext_drop: std::cell::UnsafeCell<Option<unsafe fn(*mut c_void)>>,
+    ridl_ext_ptr: core::cell::UnsafeCell<*mut c_void>,
+    ridl_ext_drop: core::cell::UnsafeCell<Option<unsafe fn(*mut c_void)>>,
 
     pub(crate) roots: crate::roots::RootsRegistry,
 
-    pub(crate) alive: std::sync::atomic::AtomicBool,
+    pub(crate) alive: core::sync::atomic::AtomicBool,
     
     /// Async task manager for RIDL async cancellation semantics.
     ///
     /// 以 `Arc` 共享：异步任务在 worker 线程持有它，JS 线程通过 `drain_completions`
     /// 访问同一个实例。**必须共享同一份**——按位拷贝 `AsyncTaskManager`
     /// （内含 `Mutex`）既是 UB，也会产生两把独立的锁而破坏互斥。
+    #[cfg(feature = "std")]
     pub async_task_manager: Arc<crate::async_task::AsyncTaskManager>,
 }
 
 impl ContextInner {
     pub(crate) fn new() -> Self {
         Self {
-            ridl_ext_ptr: std::cell::UnsafeCell::new(std::ptr::null_mut()),
-            ridl_ext_drop: std::cell::UnsafeCell::new(None),
+            ridl_ext_ptr: core::cell::UnsafeCell::new(core::ptr::null_mut()),
+            ridl_ext_drop: core::cell::UnsafeCell::new(None),
             roots: crate::roots::RootsRegistry::new(),
-            alive: std::sync::atomic::AtomicBool::new(true),
+            alive: core::sync::atomic::AtomicBool::new(true),
+            #[cfg(feature = "std")]
             async_task_manager: Arc::new(crate::async_task::AsyncTaskManager::new()),
         }
     }
@@ -118,9 +123,13 @@ pub struct ContextToken {
     pub inner: Arc<ContextInner>,
 }
 
+#[cfg(not(feature = "no-std"))]
 thread_local! {
     static TLS_CURRENT_CTX: RefCell<Vec<ContextToken>> = RefCell::new(Vec::new());
 }
+#[cfg(feature = "no-std")]
+static TLS_CURRENT_CTX: crate::TlsCell<RefCell<Vec<ContextToken>>> =
+    crate::TlsCell::new(RefCell::new(Vec::new()));
 
 pub struct CurrentGuard {
     _private: (),
@@ -194,11 +203,12 @@ impl Context {
     /// 返回 `Arc` 克隆（而非引用）是刻意的：async 任务需要把它移动到 worker
     /// 线程，只有共享同一份实例，worker 推入的完成项才能被 JS 线程的
     /// `drain_completions` 观察到。
+    #[cfg(feature = "std")]
     pub fn async_task_manager(&self) -> Arc<crate::async_task::AsyncTaskManager> {
         self.inner.async_task_manager.clone()
     }
 
-    pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn std::error::Error>> {
+    pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn core::error::Error>> {
         extern "C" {
             static js_stdlib: mquickjs_ffi::JSSTDLibraryDef;
         }
@@ -215,7 +225,7 @@ impl Context {
         let min_required = unsafe {
             let class_count = js_stdlib.class_count as usize;
             let header = mquickjs_ffi::JS_ContextHeaderSize();
-            let class_tables = 2 * class_count * std::mem::size_of::<mquickjs_ffi::JSValue>();
+            let class_tables = 2 * class_count * core::mem::size_of::<mquickjs_ffi::JSValue>();
             header + class_tables + MIN_HEAP_BYTES
         };
 
@@ -441,6 +451,7 @@ impl Context {
     /// # Safety
     /// - Must be called from the JS main thread
     /// - Must be called after ridl_context_init
+    #[cfg(feature = "std")]
     pub unsafe fn drain_completions(&self) {
         let completions = self.inner.async_task_manager.drain_completions();
 
@@ -453,7 +464,7 @@ impl Context {
                 match item.result {
                     Ok(value) => {
                         // Success: call callback(null, value)
-                        let c_value = std::ffi::CString::new(value.as_str()).unwrap_or_default();
+                        let c_value = alloc::ffi::CString::new(value.as_str()).unwrap_or_default();
                         let js_value = mquickjs_ffi::JS_NewString(self.ctx, c_value.as_ptr());
                         let js_null = mquickjs_ffi::JS_NULL;
 
@@ -465,7 +476,7 @@ impl Context {
                     }
                     Err(error_msg) => {
                         // Error: call callback(error, null)
-                        let c_error = std::ffi::CString::new(error_msg.as_str()).unwrap_or_default();
+                        let c_error = alloc::ffi::CString::new(error_msg.as_str()).unwrap_or_default();
                         let js_error = mquickjs_ffi::JS_NewString(self.ctx, c_error.as_ptr());
                         let js_null = mquickjs_ffi::JS_NULL;
 
@@ -486,30 +497,34 @@ impl Context {
 
 impl Drop for Context {
     fn drop(&mut self) {
-        // Mark context as dropping and cancel all cancellable async tasks
-        self.inner.async_task_manager.mark_context_dropping();
-        let cancelled_tasks = self.inner.async_task_manager.cancel_all_cancellable();
-        
-        if !cancelled_tasks.is_empty() {
-            // Log cancelled tasks for debugging
-            eprintln!(
-                "Context drop: cancelled {} cancellable async tasks",
-                cancelled_tasks.len()
-            );
-        }
-        
-        // Check for non-cancellable tasks that are still running
-        let non_cancellable_count = self.inner.async_task_manager.non_cancellable_task_count();
-        if non_cancellable_count > 0 {
-            eprintln!(
-                "Context drop: {} non-cancellable async tasks are still running",
-                non_cancellable_count
-            );
+        // no-std 模式下没有异步子系统，无需取消处理。
+        #[cfg(feature = "std")]
+        {
+            // Mark context as dropping and cancel all cancellable async tasks
+            self.inner.async_task_manager.mark_context_dropping();
+            let cancelled_tasks = self.inner.async_task_manager.cancel_all_cancellable();
+
+            if !cancelled_tasks.is_empty() {
+                // Log cancelled tasks for debugging
+                eprintln!(
+                    "Context drop: cancelled {} cancellable async tasks",
+                    cancelled_tasks.len()
+                );
+            }
+
+            // Check for non-cancellable tasks that are still running
+            let non_cancellable_count = self.inner.async_task_manager.non_cancellable_task_count();
+            if non_cancellable_count > 0 {
+                eprintln!(
+                    "Context drop: {} non-cancellable async tasks are still running",
+                    non_cancellable_count
+                );
+            }
         }
         
         self.inner
             .alive
-            .store(false, std::sync::atomic::Ordering::Release);
+            .store(false, core::sync::atomic::Ordering::Release);
 
         unsafe {
             mquickjs_ffi::JS_FreeContext(self.ctx);

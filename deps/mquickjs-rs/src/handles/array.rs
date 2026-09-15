@@ -1,3 +1,5 @@
+#[cfg(feature = "no-std")]
+use alloc::{string::String, string::ToString};
 use crate::env::Env;
 use crate::handles::any::Any;
 use crate::handles::local::{Array, Local, Object, Value};

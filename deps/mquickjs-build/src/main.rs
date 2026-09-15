@@ -36,6 +36,7 @@ fn main() {
 fn build_cmd(argv: Vec<String>) {
     let mut mquickjs_dir: Option<PathBuf> = None;
     let mut ridl_register_h: Option<PathBuf> = None;
+    let mut target: Option<String> = None;
     let mut out_dir: Option<PathBuf> = None;
 
     let mut it = argv.into_iter();
@@ -44,6 +45,9 @@ fn build_cmd(argv: Vec<String>) {
             "--mquickjs-dir" => mquickjs_dir = it.next().map(PathBuf::from),
             "--ridl-register-h" => ridl_register_h = it.next().map(PathBuf::from),
             "--out" => out_dir = it.next().map(PathBuf::from),
+            // 交叉编译目标（例如 thumbv7em-none-eabihf）。
+            // 省略时按宿主目标构建。指定后引擎对象改用 clang 编译。
+            "--target" => target = it.next().map(String::from),
             _ => {
                 eprintln!("Unknown arg: {a}");
                 std::process::exit(2);
@@ -110,6 +114,18 @@ fn build_cmd(argv: Vec<String>) {
         &mquickjs_dir.join("mquickjs.h"),
         &include_dir.join("mquickjs.h"),
     );
+
+    // 0) 解析目标工具链。
+    //
+    // 生成器工具自身（下面第 1、2 步）**必须**用宿主编译器；只有引擎对象
+    // 走目标编译器。没有完整 sysroot 时用本仓库的裸机桩头文件。
+    let cross = target.map(|triple| CrossCc {
+        triple,
+        stubs: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("nostd-include")
+            .canonicalize()
+            .expect("canonicalize nostd-include"),
+    });
 
     // 1) Build host object for tool compilation.
     let mut gcc = Command::new("gcc");
@@ -212,7 +228,7 @@ fn build_cmd(argv: Vec<String>) {
             .canonicalize()
             .unwrap_or_else(|e| die(&format!("Failed to canonicalize source {src}: {e}")));
         let obj_path = PathBuf::from(format!("{}.o", src.trim_end_matches(".c")));
-        let mut gcc = Command::new("gcc");
+    let mut gcc = cc_target(&build_dir, cross.as_ref());
         gcc.current_dir(&build_dir)
             .arg("-c")
             .arg(src_path)
@@ -238,7 +254,7 @@ fn build_cmd(argv: Vec<String>) {
         .unwrap_or_else(|e| die(&format!("Failed to canonicalize mqjs_stdlib_impl.c: {e}")));
 
     let stdlib_obj = PathBuf::from("mqjs_stdlib_impl.o");
-    let mut gcc = Command::new("gcc");
+    let mut gcc = cc_target(&build_dir, cross.as_ref());
     gcc.current_dir(&build_dir)
         .arg("-c")
         .arg(stdlib_impl)
@@ -275,7 +291,7 @@ fn build_cmd(argv: Vec<String>) {
         });
 
         let ridl_reg_obj = PathBuf::from("mquickjs_ridl_register.o");
-        let mut gcc = Command::new("gcc");
+    let mut gcc = cc_target(&build_dir, cross.as_ref());
         gcc.current_dir(&build_dir)
             .arg("-c")
             .arg(ridl_reg_c)
@@ -310,7 +326,7 @@ fn build_cmd(argv: Vec<String>) {
             .unwrap_or_else(|e| die(&format!("Failed to canonicalize require.c: {e}")));
 
         let require_obj = PathBuf::from("mqjs_require.o");
-        let mut gcc = Command::new("gcc");
+    let mut gcc = cc_target(&build_dir, cross.as_ref());
         gcc.current_dir(&build_dir)
             .arg("-c")
             .arg(require_c)
@@ -388,6 +404,37 @@ fn build_cmd(argv: Vec<String>) {
         .unwrap_or_else(|e| die(&format!("Failed to serialize build output: {e}")));
     fs::write(out_dir.join("mquickjs_build_output.json"), out_json)
         .unwrap_or_else(|e| die(&format!("Failed to write build output json: {e}")));
+}
+
+/// 交叉编译配置。
+struct CrossCc {
+    triple: String,
+    /// 裸机 libc 桩头文件目录。
+    stubs: PathBuf,
+}
+
+/// 宿主编译器命令（用于构建生成器工具本身）。
+fn cc_host(build_dir: &Path) -> Command {
+    let mut c = Command::new("gcc");
+    c.current_dir(build_dir);
+    c
+}
+
+/// 目标编译器命令。
+///
+/// 无 `--target` 时退化为宿主 `gcc`；指定后使用 `clang --target=<triple>`
+/// 并以 `-ffreestanding` + 桩头文件编译引擎对象（引擎不需要完整 libc）。
+fn cc_target(build_dir: &Path, cross: Option<&CrossCc>) -> Command {
+    let Some(x) = cross else {
+        return cc_host(build_dir);
+    };
+    let mut c = Command::new("clang");
+    c.current_dir(build_dir)
+        .arg(format!("--target={}", x.triple))
+        .arg("-ffreestanding")
+        .arg("-I")
+        .arg(&x.stubs);
+    c
 }
 
 fn run(mut cmd: Command) {

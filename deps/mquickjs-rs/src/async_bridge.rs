@@ -8,9 +8,11 @@
 //! - @nonCancellable: must complete even if context drops
 //! - @timeout(ms): auto-cancel after timeout
 
+#[cfg(feature = "no-std")]
+use alloc::{boxed::Box, format, string::String, string::ToString, vec, vec::Vec};
 use std::future::Future;
-use std::pin::Pin;
-use std::sync::Arc;
+use core::pin::Pin;
+use alloc::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::async_task::{AsyncTaskManager, CompletionItem, TaskPriority, TaskStatus};
@@ -28,8 +30,8 @@ pub enum AsyncBridgeError {
     FutureError(String),
 }
 
-impl std::fmt::Display for AsyncBridgeError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for AsyncBridgeError {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         match self {
             AsyncBridgeError::Cancelled => write!(f, "Task was cancelled"),
             AsyncBridgeError::TimedOut => write!(f, "Task timed out"),
@@ -39,7 +41,7 @@ impl std::fmt::Display for AsyncBridgeError {
     }
 }
 
-impl std::error::Error for AsyncBridgeError {}
+impl core::error::Error for AsyncBridgeError {}
 
 /// Result type for async bridge operations
 pub type AsyncBridgeResult<T> = Result<T, AsyncBridgeError>;
@@ -477,8 +479,8 @@ macro_rules! js_async {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicBool, Ordering};
-    use std::sync::Arc;
+    use core::sync::atomic::{AtomicBool, Ordering};
+    use alloc::sync::Arc;
     use std::time::Duration;
 
     #[test]

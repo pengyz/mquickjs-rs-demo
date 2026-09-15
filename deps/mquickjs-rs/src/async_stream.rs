@@ -36,11 +36,13 @@
 //! sub.unsubscribe(&mut stream);
 //! ```
 
+#[cfg(feature = "no-std")]
+use alloc::{string::String, vec::Vec};
 use crate::async_error::AsyncError;
 use crate::handles::local::{Function, Local, Value};
 use crate::handles::scope::Scope;
 use crate::Root;
-use std::marker::PhantomData;
+use core::marker::PhantomData;
 use std::sync::{Arc, Mutex, Weak};
 
 /// 订阅句柄 - 管理 callback 生命周期
@@ -82,7 +84,7 @@ impl Subscription {
     pub fn unsubscribe(self, stream: &mut AsyncStream<impl Send + 'static>) {
         stream.remove(self.id);
         // 防止 Drop 再次调用 remove
-        std::mem::forget(self);
+        core::mem::forget(self);
     }
 }
 
@@ -468,7 +470,7 @@ impl ToJsValue for bool {
 impl ToJsValue for String {
     unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
         let ctx = scope.ctx();
-        let c_str = std::ffi::CString::new(self.as_str()).unwrap();
+        let c_str = alloc::ffi::CString::new(self.as_str()).unwrap();
         let raw = crate::mquickjs_ffi::JS_NewString(ctx, c_str.as_ptr());
         scope.value(raw)
     }
@@ -477,7 +479,7 @@ impl ToJsValue for String {
 impl ToJsValue for &str {
     unsafe fn to_js_value<'a>(&self, scope: &Scope<'a>) -> Local<'a, Value> {
         let ctx = scope.ctx();
-        let c_str = std::ffi::CString::new(*self).unwrap();
+        let c_str = alloc::ffi::CString::new(*self).unwrap();
         let raw = crate::mquickjs_ffi::JS_NewString(ctx, c_str.as_ptr());
         scope.value(raw)
     }

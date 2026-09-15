@@ -1,3 +1,50 @@
+//! mquickjs 的 Rust 绑定与 GC/句柄抽象。
+//!
+//! # feature `no-std`
+//!
+//! 开启后本 crate 以 `#![no_std]` + `alloc` 构建，面向裸机目标
+//! （例如 `thumbv7em-none-eabihf`）。此时：
+//!
+//! - **异步子系统被整体排除**（`async_*`），它依赖
+//!   `std::thread` / `std::time` / `futures`，在裸机上不成立；
+//! - 其余核心（context / env / roots / traced / handles）在两种模式下
+//!   使用**同一份代码** —— 路径统一为 `core::` / `alloc::`，
+//!   仅少数几处（TLS、RootsRegistry 的锁）按 mode 分派。
+//!
+//! 背景与成本评估见 `docs/knowledge/assessment_core_nostd_port_cost.md`。
+#![cfg_attr(feature = "no-std", no_std)]
+
+#[cfg(feature = "no-std")]
+use alloc::{format, string::String, vec};
+// `std` 与 `no-std` 互斥：同时开启会让异步子系统在无 std 的环境下被编译。
+#[cfg(all(feature = "std", feature = "no-std"))]
+compile_error!("features `std` and `no-std` are mutually exclusive");
+
+// `alloc` 在 std 与 no_std 两种模式下都需要显式声明。
+extern crate alloc;
+
+/// 单线程 TLS 替身（仅 `no-std`）。
+///
+/// 裸机没有 `thread_local!`。mquickjs 的 `JSContext` 本身要求单线程访问，
+/// `Root` 等类型也刻意是 `!Send`，因此以"单线程假设"实现的 `UnsafeCell`
+/// 容器与其等价 —— **调用点（`.with(...)`）无需任何改动**。
+#[cfg(feature = "no-std")]
+pub(crate) struct TlsCell<T>(core::cell::UnsafeCell<T>);
+
+#[cfg(feature = "no-std")]
+unsafe impl<T> Sync for TlsCell<T> {}
+
+#[cfg(feature = "no-std")]
+impl<T> TlsCell<T> {
+    pub(crate) const fn new(v: T) -> Self {
+        Self(core::cell::UnsafeCell::new(v))
+    }
+    pub(crate) fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        // Safety: 单线程访问；见本类型文档。
+        unsafe { f(&*self.0.get()) }
+    }
+}
+
 // bindgen output is noisy and not actionable for this project.
 #[allow(
     non_camel_case_types,
@@ -79,6 +126,7 @@ pub use traced::Traced;
 /// 模块符号，而嵌套 crate 不可能提供那些符号。
 ///
 /// 返回 `None` 表示 base stdlib 尚未构建（需先跑 `ridl-builder prepare`）。
+#[cfg(feature = "std")]
 pub fn native_test_link_args() -> Option<String> {
     let include_dir = mquickjs_sys::include_dir();
     // <mode>/<variant>/include → <mode>/<variant> → <mode>
@@ -107,10 +155,15 @@ pub mod ridl_runtime;
 #[cfg(feature = "ridl-extensions")]
 pub mod ridl_ext_access;
 
+#[cfg(feature = "std")]
 pub mod async_task;
+#[cfg(feature = "std")]
 pub mod async_bridge;
+#[cfg(feature = "std")]
 pub mod async_value;
+#[cfg(feature = "std")]
 pub mod async_stream;
+#[cfg(feature = "std")]
 pub mod async_error;
 
 pub fn register_extensions() {
@@ -136,10 +189,10 @@ pub fn register_all_ridl_modules() {
     register_extensions();
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
-    use std::ffi::CString;
+    use alloc::ffi::CString;
 
     use crate::context::ContextToken;
 

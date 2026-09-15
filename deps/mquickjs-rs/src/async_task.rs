@@ -10,9 +10,11 @@
 //! - @nonCancellable: must complete even if context drops
 //! - @timeout(ms): auto-cancel after timeout
 
+#[cfg(feature = "no-std")]
+use alloc::{string::String, vec, vec::Vec};
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicU64, Ordering};
+use core::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -162,7 +164,7 @@ pub struct AsyncTaskManager {
     /// Active tasks
     pub(crate) tasks: Mutex<HashMap<u64, AsyncTask>>,
     /// Whether the context is being dropped
-    context_dropping: std::sync::atomic::AtomicBool,
+    context_dropping: core::sync::atomic::AtomicBool,
     /// 完成队列 - Worker 线程将结果放入此队列
     completion_queue: Mutex<VecDeque<CompletionItem>>,
     /// 回调注册表 - 存储 JS 函数引用
@@ -175,7 +177,7 @@ impl AsyncTaskManager {
         Self {
             next_id: AtomicU64::new(1),
             tasks: Mutex::new(HashMap::new()),
-            context_dropping: std::sync::atomic::AtomicBool::new(false),
+            context_dropping: core::sync::atomic::AtomicBool::new(false),
             completion_queue: Mutex::new(VecDeque::new()),
             callback_registry: Mutex::new(HashMap::new()),
         }
@@ -408,7 +410,7 @@ impl Default for AsyncTaskManager {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::Arc;
+    use alloc::sync::Arc;
     use std::thread;
     use std::time::Duration;
 
