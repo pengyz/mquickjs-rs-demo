@@ -139,16 +139,7 @@ void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower 
     void *opaque
 );
 
-{%- if class|has_traced_fields %}
-// GC mark function for classes with Traced<T> opaque fields.
-// TODO(phase-3): Rust-side FFI implementation is deferred until Traced<T> lands;
-// see {{ class.name|to_upper_camel_case }}Opaque::gc_mark in the generated Rust API.
-void js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark(
-    JSContext *ctx,
-    void *opaque,
-    const JSMarkFunc *mf
-);
-{%- endif %}
+// NOTE: class-level gc_mark callback 已废弃，不再声明（见 rust_glue.rs.j2 说明）。
 {%- endfor %}
 {%- endfor %}
 

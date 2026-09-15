@@ -159,3 +159,74 @@ fn gc_compaction_does_not_relocate_root_registry() {
 
     unsafe { mquickjs_ffi::JS_DeleteGCRef(raw_ctx, &mut *gc_ref) };
 }
+
+/// 核心缺陷测试：`Traced<T>` 持有的 `JSValue` 在压缩后不更新。
+///
+/// `Traced<T>` 存在的目的是"由 owner 对象的 gc_mark 回调保活"，
+/// 但 gc_mark 只能 **标记**（mark），无法注册重定位。
+/// 因此它与修复前的 `Root` 有完全相同的缺陷。
+///
+/// 差分对比：
+/// - `JSGCRef.val` → 引擎重定位 → 指向移动后的真实对象（同时充当局方保活）
+/// - `Traced::as_raw()` → 只被标记、不重定位 → 仍指向旧地址
+#[test]
+fn gc_compaction_does_not_relocate_traced() {
+    let mut ctx = mquickjs_rs::Context::new(1024 * 1024).expect("create context");
+    let handle = ctx.token();
+    let raw_ctx = handle.ctx;
+
+    // 制造垃圾 → 目标对象
+    ctx.eval_jsvalue(GARBAGE_JS).expect("eval garbage");
+    let target = ctx
+        .eval_jsvalue("({marker: 31337})")
+        .expect("eval target object");
+
+    let scope = handle.enter_scope();
+
+    // 基准：JSGCRef。它同时保活目标对象并随压缩重定位，
+    // 因此 Traced 里的旧值不会因为对象被回收而"碰巧"失效。
+    let mut gc_ref = Box::new(JSGCRef {
+        val: mquickjs_ffi::JS_UNDEFINED,
+        prev: std::ptr::null_mut(),
+    });
+    let slot = unsafe { mquickjs_ffi::JS_AddGCRef(raw_ctx, &mut *gc_ref) };
+    unsafe { *slot = target };
+
+    // 被测：Traced（应委托给基于 JSGCRef 的 Root，因此随压缩重定位）
+    let local: Local<'_, Value> = scope.value(target);
+    let traced = mquickjs_rs::Traced::new(&scope, local);
+
+    assert_eq!(
+        get_marker(raw_ctx, traced.as_raw()),
+        Some(31337),
+        "GC 前应能通过 Traced 读到 marker"
+    );
+
+    // 触发 GC（压缩）
+    gc(raw_ctx);
+
+    let authoritative = unsafe { *slot };
+    assert_eq!(
+        get_marker(raw_ctx, authoritative),
+        Some(31337),
+        "JSGCRef 基准值应正确（证明对象仍存活且可解引用）"
+    );
+
+    let traced_after = traced.as_raw();
+    println!(
+        "traced={:#x} relocated={:#x} same={}",
+        traced_after,
+        authoritative,
+        traced_after == authoritative
+    );
+
+    assert_eq!(
+        traced_after, authoritative,
+        "缺陷：Traced 持有的 JSValue 未随压缩重定位\n\
+         对象实际已移动到 {:#x}，但 Traced 仍持有 {:#x}\n\
+         此后通过 Traced 解引用将访问已移动的内存",
+        authoritative, traced_after
+    );
+
+    unsafe { mquickjs_ffi::JS_DeleteGCRef(raw_ctx, &mut *gc_ref) };
+}

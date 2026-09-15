@@ -11,6 +11,100 @@ pub struct Config {
     pub app_id: Option<String>,
 }
 
+/// 应用侧（拥有完整 RIDL 模块集合的**叶子**二进制）链接 ridl 变体的 C stdlib。
+///
+/// # 为什么需要它
+///
+/// 应用的 C stdlib（`mqjs_stdlib_impl.o`）里的 `js_c_function_table` 会**强引用**
+/// 该应用全部 RIDL 模块的 C 入口符号。哪个二进制需要 RIDL 是**叶子**的属性，
+/// 不是全局 feature 的属性 —— 因此由各叶子自行声明：
+///
+/// - **应用**（本函数）：链接 ridl stdlib → RIDL 完整可用
+/// - **`mquickjs-rs` 自身的 test 目标**：由其 `build.rs` 的
+///   `rustc-link-arg-tests` 固定链接 base stdlib → 不引用任何 RIDL 符号
+///
+/// 两者互不干扰，因为 `rustc-link-arg-*` 只作用于发出指令的包自己的目标，
+/// 不会随 rlib 传播给依赖方。
+///
+/// # 何时调用
+///
+/// 在应用自己的 `build.rs` 中调用（通常紧跟 `ridl-tool module` 之后）。
+pub fn emit_native_stdlib_link() {
+    let target_dir = resolve_target_dir();
+
+    let triple = env::var("TARGET").expect("TARGET is set by cargo for build scripts");
+    let mode = match env::var("PROFILE").as_deref() {
+        Ok("release") => "release",
+        _ => "debug",
+    };
+
+    // 与 ridl-builder 写入产物的路径保持一致：
+    //   target/mquickjs-build/framework/<triple>/<mode>/{base,ridl}
+    let lib_dir = target_dir
+        .join("mquickjs-build")
+        .join("framework")
+        .join(&triple)
+        .join(mode)
+        .join("ridl")
+        .join("lib");
+
+    let stdlib = lib_dir.join("libmquickjs_stdlib_ridl.a");
+    if !stdlib.exists() {
+        panic!(
+            "Missing RIDL native stdlib. Run: cargo run -p ridl-builder -- prepare\nExpected: {}",
+            stdlib.display()
+        );
+    }
+
+    println!("cargo:rerun-if-changed={}", stdlib.display());
+
+    // 用 `--whole-archive` 强制包含归档全部成员，而不是 `-L<dir> -lmquickjs_stdlib_ridl`。
+    //
+    // 原因：由 `rustc-link-lib` 产生的 `-l` 会被 cargo 放在 **rlib 之前**。
+    // 静态归档只在"扫描到它时存在未定义符号"的情况下才会抽出成员，
+    // 因此放在 rlib 之前会导致 `mqjs_stdlib_impl.o`（定义 `js_stdlib` 与
+    // `js_c_function_table`）不被抽出 → 后续 `undefined symbol: js_stdlib`。
+    //
+    // `--whole-archive` 无条件包含全部成员，从而消除对库顺序的依赖；
+    // 同时 `mquickjs_ridl_register.o` 也被强制包含，它对 RIDL 模块 C 入口的
+    // 未定义引用由随后的模块 rlib 满足。
+    //
+    // 整个参数写成**单个** `-Wl,...`，以保证三个子参数在命令行中相邻且有序。
+    println!(
+        "cargo:rustc-link-arg=-Wl,--whole-archive,{},--no-whole-archive",
+        stdlib.display()
+    );
+}
+
+/// 解析本应用构建产物所在的 target 目录。
+///
+/// 优先级与 `emit()` 一致：env override > 配置文件 > cargo metadata。
+fn resolve_target_dir() -> PathBuf {
+    let cfg = find_and_parse_config();
+
+    if let Ok(dir) = env::var("MQUICKJS_RIDL_TARGET_DIR") {
+        return PathBuf::from(dir);
+    }
+    if let Some(dir) = cfg.as_ref().and_then(|c| c.target_dir.clone()) {
+        return dir;
+    }
+
+    let cargo_toml = env::var("MQUICKJS_RIDL_CARGO_TOML")
+        .map(PathBuf::from)
+        .ok()
+        .or_else(|| cfg.as_ref().map(|c| c.root_dir.join("Cargo.toml")))
+        .unwrap_or_else(|| {
+            panic!(
+                "Unable to locate root Cargo.toml. Provide MQUICKJS_RIDL_CARGO_TOML or create mquickjs.ridl.toml in an ancestor directory."
+            )
+        });
+    let cargo_toml = cargo_toml
+        .canonicalize()
+        .expect("canonicalize root Cargo.toml");
+
+    cargo_metadata(&cargo_toml).target_directory.clone()
+}
+
 pub fn emit() {
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
 

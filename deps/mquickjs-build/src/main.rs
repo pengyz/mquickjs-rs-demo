@@ -126,6 +126,11 @@ fn build_cmd(argv: Vec<String>) {
         .arg("-D__HOST__")
         .arg("-include")
         .arg("stddef.h");
+    // mquickjs_build.c 负责**生成** js_stdlib 的定义文本，其链接属性
+    // （base=weak / ridl=strong）由此宏决定，因此这里也必须与变体一致。
+    if ridl_register_h.is_some() {
+        gcc.arg("-DMQUICKJS_ENABLE_RIDL_EXTENSIONS");
+    }
     run(gcc);
 
     // 2) Build mqjs_ridl_stdlib tool from template.
@@ -248,6 +253,14 @@ fn build_cmd(argv: Vec<String>) {
     if ridl_register_h.is_some() {
         gcc.arg("-include").arg("mquickjs_ridl_api.h");
         gcc.arg("-DMQUICKJS_ENABLE_RIDL_EXTENSIONS");
+    } else {
+        // base 变体的导出符号（js_stdlib / js_date_constructor / js_date_now）
+        // 以 weak 定义。原因：应用最终二进制会同时拿到两个变体的 stdlib ——
+        // base 经 mquickjs-rs 的 rlib 元数据传播（供其自身测试与 trybuild
+        // 这类嵌套构建），ridl 由应用自己的 build script 链接。
+        // 若两者都是 strong 会 duplicate symbol；weak 可与之共存，
+        // 且单独链接 base 时仍可用。
+        gcc.arg("-DJS_STDLIB_LINKAGE=__attribute__((weak))");
     }
     run(gcc);
 
@@ -317,18 +330,34 @@ fn build_cmd(argv: Vec<String>) {
         objects.push(require_obj);
     }
 
-    // 7) Pack final libmquickjs.a
-    // Keep lib output path relative to build_dir to avoid toolchain path oddities.
-    let lib_path = PathBuf::from("../lib/libmquickjs.a");
+    // 7) Pack archives.
+    //
+    // 拆成三个归档，原因是「变体选择必须由叶子二进制决定，而不是由全局 feature 决定」：
+    //
+    // - libmquickjs_core.a   : 变体无关的引擎对象（两变体字节相同，已核实）
+    // - libmquickjs_stdlib.a : 变体专属的 stdlib impl（+ ridl 专属对象）
+    // - libmquickjs.a        : 两者合并（向后兼容：selftest / 外部 consumer 仍可整体链接）
+    //
+    // `js_stdlib` 只定义在 mqjs_stdlib_impl.o 中，而任何使用 mquickjs-rs 的二进制
+    // 都必须引用它 —— 这是「变体专属对象」与「共享 rlib」之间唯一的连接点。
+    // 拆开后：应用侧链接 ridl stdlib（完整 RIDL），而 mquickjs-rs 自身的 test
+    // 目标链接 base stdlib（不引用任何 RIDL 模块符号），两者互不干扰。
+    //
+    // Keep lib output paths relative to build_dir to avoid toolchain path oddities.
+    let core_objects: Vec<PathBuf> = objects.iter().take(core_sources.len()).cloned().collect();
+    let stdlib_objects: Vec<PathBuf> = objects.iter().skip(core_sources.len()).cloned().collect();
 
-    let mut ar = Command::new("ar");
-    ar.current_dir(&build_dir)
-        .arg("rcs")
-        .arg(lib_path.to_str().expect("lib path is utf-8"));
-    for obj in &objects {
-        ar.arg(obj);
-    }
-    run(ar);
+    // stdlib 归档按**变体命名**，避免 base 与 ridl 下同名归档需要靠 `-L` 顺序区分。
+    // 链接期用 `-lmquickjs_stdlib_<variant>` 解析，无歧义。
+    let variant = if ridl_register_h.is_some() { "ridl" } else { "base" };
+    let stdlib_name = format!("../lib/libmquickjs_stdlib_{variant}.a");
+
+    // 清理历史遗留的通用名归档，避免与按变体命名的归档形成歧义。
+    let _ = fs::remove_file(build_dir.join("../lib/libmquickjs_stdlib.a"));
+
+    pack_archive(&build_dir, "../lib/libmquickjs.a", &objects);
+    pack_archive(&build_dir, "../lib/libmquickjs_core.a", &core_objects);
+    pack_archive(&build_dir, &stdlib_name, &stdlib_objects);
 
     let build_output = BuildOutput {
         schema_version: 1,
@@ -338,7 +367,11 @@ fn build_cmd(argv: Vec<String>) {
         include_dir: include_dir
             .canonicalize()
             .unwrap_or_else(|e| die(&format!("Failed to canonicalize include dir: {e}"))),
-        libs: vec!["mquickjs".to_string()],
+        libs: vec![
+            "mquickjs".to_string(),
+            "mquickjs_core".to_string(),
+            format!("mquickjs_stdlib_{variant}"),
+        ],
         inputs: vec![
             mquickjs_build_c,
             mquickjs_dir.join("mquickjs.c"),
@@ -366,6 +399,21 @@ fn run(mut cmd: Command) {
     if !status.success() {
         die(&format!("Command failed with status {status}"));
     }
+}
+
+/// 打包静态归档。
+///
+/// 先删除既有归档：`ar rcs` 对**同名**成员是替换，但当对象集合发生变化时
+/// （例如变体切换导致成员增减）会残留陈旧成员，进而造成难以诊断的链接行为。
+fn pack_archive(build_dir: &Path, rel_path: &str, objects: &[PathBuf]) {
+    let _ = fs::remove_file(build_dir.join(rel_path));
+
+    let mut ar = Command::new("ar");
+    ar.current_dir(build_dir).arg("rcs").arg(rel_path);
+    for obj in objects {
+        ar.arg(obj);
+    }
+    run(ar);
 }
 
 fn run_capture(mut cmd: Command) -> Vec<u8> {

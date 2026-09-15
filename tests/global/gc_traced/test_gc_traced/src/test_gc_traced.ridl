@@ -4,4 +4,10 @@ class GcTracedNode {
     }
 
     fn finalizerCount() -> i32;
+
+    // 存入一个 JS 值到 opaque 的 Traced 字段（any 参数 ⇒ needs_scope）
+    fn setHeld(v: any) -> i32;
+
+    // 读取 held 所指对象的 marker 属性（用于验证 GC 压缩后仍正确）
+    fn heldMarker() -> i32;
 }

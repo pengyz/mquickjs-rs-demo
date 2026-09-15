@@ -64,6 +64,35 @@ pub use roots::Root;
 mod traced;
 pub use traced::Traced;
 
+/// 返回本 crate 自身 test 目标所需的 native stdlib 链接参数（base 变体）。
+///
+/// # 为什么需要它
+///
+/// `mquickjs-rs` 的 `build.rs` 通过 `rustc-link-arg` 为本包的 test 目标指定
+/// base 变体 stdlib —— 该指令**不会**传播到依赖方，也不会传播到
+/// **嵌套构建**（例如 trybuild 在 `target/tests/trybuild/` 下自行发起的 cargo 构建）。
+/// 嵌套 crate 因此既拿不到 base、也拿不到 ridl stdlib。
+///
+/// 需要启动嵌套构建的测试应把它注入 `RUSTFLAGS`。
+///
+/// 选 base 而非 ridl 的原因：base 的 `js_c_function_table` 不引用任何 RIDL
+/// 模块符号，而嵌套 crate 不可能提供那些符号。
+///
+/// 返回 `None` 表示 base stdlib 尚未构建（需先跑 `ridl-builder prepare`）。
+pub fn native_test_link_args() -> Option<String> {
+    let include_dir = mquickjs_sys::include_dir();
+    // <mode>/<variant>/include → <mode>/<variant> → <mode>
+    let mode_root = include_dir.parent()?.parent()?;
+    let base_lib_dir = mode_root.join("base").join("lib");
+    if !base_lib_dir.join("libmquickjs_stdlib_base.a").exists() {
+        return None;
+    }
+    Some(format!(
+        "-L {} -l static=mquickjs_stdlib_base",
+        base_lib_dir.display()
+    ))
+}
+
 pub mod env;
 
 pub mod handles;

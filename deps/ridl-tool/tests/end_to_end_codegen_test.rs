@@ -45,7 +45,12 @@ class SimpleNode {
     assert!(api_content.contains("pub count: i32"), "Should have i32 field");
     assert!(api_content.contains("fn get_value"), "Should have getter method");
     assert!(api_content.contains("fn set_value"), "Should have setter method");
-    assert!(api_content.contains("fn gc_mark"), "Should have gc_mark method");
+    // class 级 gc_mark 已废弃（Traced 现基于引擎 JSGCRef，mark/重定位由引擎自动处理；
+    // 且旧生成的 gc_mark FFI 带有 4 参 vs 3 参的致命 ABI 缺陷）。
+    assert!(
+        !api_content.contains("fn gc_mark"),
+        "class gc_mark 不应再生成"
+    );
 }
 
 /// 测试多种类型的 opaque 字段生成
@@ -91,11 +96,14 @@ class TypeTest {
     assert!(api_content.contains("pub array_field: Vec<i32>"), "array<i32> → Vec<i32>");
     assert!(api_content.contains("pub map_field: std::collections::HashMap<String, i32>"), "map<string, i32> → HashMap");
 
-    // 验证 gc_mark 只处理 Traced 字段
-    assert!(api_content.contains("self.traced_val.gc_mark(mf)"), "Should mark traced_val");
-    assert!(api_content.contains("if let Some(ref inner) = self.optional_traced"), "Should unwrap optional_traced");
-    assert!(!api_content.contains("self.plain_int.gc_mark"), "Should not mark plain_int");
-    assert!(!api_content.contains("self.plain_string.gc_mark"), "Should not mark plain_string");
+    // 类型映射正确即可：class gc_mark 已废弃，不再生成
+    //（Traced 基于 JSGCRef，由引擎在 mark 与重定位两个阶段自动处理）
+    // 注意：生成文件里的说明注释也会出现 "gc_mark" 字样，
+    // 因此这里检查的是**方法定义与调用**，而不是任意子串。
+    assert!(
+        !api_content.contains("fn gc_mark") && !api_content.contains(".gc_mark("),
+        "class gc_mark 不应再生成"
+    );
 }
 
 /// 测试方法签名生成（snake_case 转换）
@@ -245,10 +253,13 @@ class NestedTraced {
     assert!(api_content.contains("pub cache: std::collections::HashMap<String, mquickjs_rs::Traced<mquickjs_rs::Value>>"), "Map<K, Traced>");
     assert!(api_content.contains("pub optional: Option<mquickjs_rs::Traced<mquickjs_rs::Value>>"), "Option<Traced>");
 
-    // 验证 gc_mark 处理嵌套类型
-    assert!(api_content.contains("for item in &self.items"), "Should iterate array");
-    assert!(api_content.contains("for (_key, value) in &self.cache"), "Should iterate map");
-    assert!(api_content.contains("if let Some(ref inner) = self.optional"), "Should unwrap optional");
+    // 嵌套类型映射正确即可：class gc_mark 已废弃，不再生成
+    // 注意：生成文件里的说明注释也会出现 "gc_mark" 字样，
+    // 因此这里检查的是**方法定义与调用**，而不是任意子串。
+    assert!(
+        !api_content.contains("fn gc_mark") && !api_content.contains(".gc_mark("),
+        "class gc_mark 不应再生成"
+    );
 }
 
 /// 测试 singleton 生成

@@ -3,13 +3,57 @@ use std::{env, path::PathBuf};
 fn main() {
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
 
-    // The mquickjs-sys crate provides the include dir; the static lib is in its sibling lib/.
-    let lib_dir = mquickjs_sys::include_dir()
+    // 变体目录布局：<mode>/{base,ridl}/{include,lib}
+    //   mquickjs_sys::include_dir() → <mode>/<variant>/include
+    let variant_root = mquickjs_sys::include_dir()
         .parent()
         .expect("include_dir has parent")
-        .join("lib");
-    println!("cargo:rustc-link-search=native={}", lib_dir.display());
-    println!("cargo:rustc-link-lib=static=mquickjs");
+        .to_path_buf(); // <mode>/<variant>
+    let mode_root = variant_root
+        .parent()
+        .expect("variant root has parent")
+        .to_path_buf(); // <mode>
+
+    // 1) 链接**变体无关**的引擎对象。
+    //
+    // mquickjs_core.a 只含 mquickjs.o / dtoa.o / libm.o / cutils.o，
+    // 这些对象在 base 与 ridl 变体中字节完全相同（已核实），
+    // 因此可以随本 crate 的 rlib 传播给任何消费者。
+    //
+    // **不能**在这里链接含 stdlib 的归档：js_stdlib 只定义在
+    // mqjs_stdlib_impl.o 中，而该对象是**变体专属**的 —— ridl 变体的它
+    // 强引用应用的全部 RIDL 模块符号。哪些二进制需要 RIDL 是**叶子**的属性，
+    // 不是全局 feature 的属性，因此由各叶子自行选择（见下）。
+    println!(
+        "cargo:rustc-link-search=native={}",
+        variant_root.join("lib").display()
+    );
+    println!("cargo:rustc-link-lib=static=mquickjs_core");
+
+    // 2) 本 crate **自身的 test 目标**固定使用 base 变体的 stdlib。
+    //
+    // base 的 js_c_function_table 不引用任何 RIDL 模块符号（实测 0 个），
+    // 而 mquickjs-rs 不可能依赖那些模块（会形成 Cargo 依赖环）。
+    //
+    // `rustc-link-arg-tests` 只作用于**发出该指令的包自己的 test 目标**，
+    // 不会随 rlib 传播给依赖方 —— 应用侧由自己的 build script 链接
+    // ridl stdlib（见 mquickjs_ridl_glue::emit_native_stdlib_link）。
+    //
+    // 这里用 `-L<base/lib> -lmquickjs_stdlib_base`：stdlib 归档已**按变体命名**
+    // （base / ridl 各自不同名），因此不存在"靠 -L 顺序选对归档"的歧义，
+    // 同时 `-l` 由 cargo 放在库序列的正确位置（直接用归档绝对路径当 link-arg
+    // 会因其出现在引用方之前而无法被回溯搜索，导致 js_stdlib 未定义）。
+    let base_lib_dir = mode_root.join("base").join("lib");
+    let base_stdlib = base_lib_dir.join("libmquickjs_stdlib_base.a");
+    if base_stdlib.exists() {
+        println!("cargo:rerun-if-changed={}", base_stdlib.display());
+        // 既用 rustc-link-arg（本包 test 目标），也用 rustc-link-lib（可传播）。
+        // 传播是必要的：trybuild 等会发起**嵌套 cargo 构建**，那些 crate 不是本包的
+        // target，只能通过 rlib 元数据里的链接指令获得 stdlib。
+        println!("cargo:rustc-link-search=native={}", base_lib_dir.display());
+        println!("cargo:rustc-link-lib=static=mquickjs_stdlib_base");
+        println!("cargo:rustc-link-arg=-lmquickjs_stdlib_base");
+    }
 
     let include_dir = mquickjs_sys::include_dir();
 

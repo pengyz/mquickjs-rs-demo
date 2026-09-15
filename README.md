@@ -348,24 +348,30 @@ impl MyServiceSingleton for DefaultMyService {
 
 ```bash
 # 运行所有测试
-cargo test -p ridl-tool          # RIDL 工具链测试（97 个）
-cargo test -p mquickjs-rs        # Rust 绑定测试（131 个）
+cargo test --workspace           # 整个 workspace（543 个）
 cargo run -- tests               # JS 集成测试（26 个）
+
+# 或逐包运行（便于定位失败来源，等价于 just test）
+cargo test -p ridl-tool          # RIDL 工具链测试（357 个）
+cargo test -p mquickjs-rs        # 绑定 / GC / 异步测试（150 个）
+cargo test -p mquickjs-demo      # 应用测试（32 个）
 
 # 运行特定测试
 cargo test -p ridl-tool --test comprehensive_syntax_test  # 语法覆盖测试
 cargo test -p ridl-tool --test end_to_end_codegen_test    # 端到端代码生成测试
+cargo test -p mquickjs-rs --test gc_compaction            # GC 压缩/重定位测试
 cargo test -p mquickjs-rs --test async_callback           # 异步回调测试
 ```
 
 ### 测试覆盖
 
-| 组件 | 测试数 | 覆盖率 |
+| 组件 | 测试数 | 说明 |
 |---|---|---|
-| RIDL 解析器 | 97 | 100% 语法规则 |
-| mquickjs-rs 绑定 | 131 | 核心功能 |
-| JS 集成 | 26 | 全部通过 |
-| **总计** | **254+** | — |
+| RIDL 工具链 | 357 | 解析 / 校验 / 代码生成 |
+| mquickjs-rs 绑定 | 150 | GC、异步、类型转换、生命周期 |
+| 应用 | 32 | demo 应用集成 |
+| JS 集成 | 26 | 端到端 JS 用例 |
+| **总计** | **565** | — |
 
 ## 知识库
 

@@ -77,9 +77,6 @@ impl PropertyTestClassClass for DefaultPropertyTestClass {
         self.mutable_string = value;
     }
 
-    fn gc_mark(&self, _mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
-        // No GC-traced fields
-    }
 }
 
 pub fn create_property_test_class_class() -> Box<dyn PropertyTestClassClass> {

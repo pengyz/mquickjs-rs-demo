@@ -1,3 +1,15 @@
+//! class 级 `gc_mark` **已废弃**：头文件回归守卫。
+//!
+//! 此前本测试验证"含 `Traced<T>` 字段的 class 会在注册头与 API 头中声明
+//! `gc_mark` 并接入 `JS_CLASS_DEF`"。该机制已被整体移除：
+//!
+//! - 生成的 Rust 定义是 4 参，而引擎契约是 3 参 `(ctx, opaque, mf)`，
+//!   错位后会在 GC 时把 `JSMarkFunc` 当 fat pointer 解引用 → SIGSEGV；
+//! - `Traced<T>` 现基于引擎的 `JSGCRef`，引擎已在 mark 与重定位两个阶段
+//!   自动处理，class 回调纯属冗余。
+//!
+//! 因此现在断言的是：**任何 class 都不再产生 gc_mark 声明或注册表项**。
+
 use std::fs;
 use std::path::PathBuf;
 
@@ -5,7 +17,7 @@ use ridl_tool::generator::generate_aggregate_consolidated;
 use ridl_tool::plan::{GeneratedPaths, RidlModule, RidlPlan};
 
 #[test]
-fn gc_mark_registered_in_header_for_traced_class_only() {
+fn no_gc_mark_declared_or_registered_for_any_class() {
     let tempdir = tempfile::tempdir().unwrap();
     let out_dir = tempdir.path().to_path_buf();
 
@@ -33,40 +45,30 @@ fn gc_mark_registered_in_header_for_traced_class_only() {
     generate_aggregate_consolidated(&plan, &out_dir).unwrap();
 
     let hdr = fs::read_to_string(out_dir.join("mquickjs_ridl_register.h")).unwrap();
-
-    // GcNode has a Traced<i32> opaque field -> gc_mark decl + registration expected.
-    assert!(
-        hdr.contains("void js_m1_class_gcnode_gc_mark(\n    JSContext *ctx,\n    void *opaque,\n    const JSMarkFunc *mf\n);"),
-        "expected gc_mark declaration for GcNode, got:\n{hdr}"
-    );
-    assert!(
-        hdr.contains("js_m1_class_gcnode_finalizer,\n        js_m1_class_gcnode_gc_mark"),
-        "expected gc_mark wired into JS_CLASS_DEF for GcNode, got:\n{hdr}"
-    );
-    assert!(
-        hdr.contains("(void)&js_m1_class_gcnode_gc_mark;"),
-        "expected gc_mark referenced in keepalive function for GcNode, got:\n{hdr}"
-    );
-
-    // PlainNode has no Traced fields -> no gc_mark decl, NULL passed instead.
-    assert!(
-        !hdr.contains("js_m1_class_plainnode_gc_mark"),
-        "did not expect gc_mark symbol for PlainNode, got:\n{hdr}"
-    );
-    assert!(
-        hdr.contains("js_m1_class_plainnode_finalizer,\n        NULL\n    );"),
-        "expected NULL gc_mark for PlainNode, got:\n{hdr}"
-    );
-
-    // Also verify mquickjs_ridl_api.h gets the declaration (this is the header the
-    // ROM build actually includes for js_c_mark_table scanning).
     let api_hdr = fs::read_to_string(out_dir.join("mquickjs_ridl_api.h")).unwrap();
+
+    // 任何 class（含带 Traced 字段的 GcNode）都不应再有 gc_mark 符号。
+    for name in ["gcnode", "plainnode"] {
+        let sym = format!("js_m1_class_{name}_gc_mark");
+        assert!(
+            !hdr.contains(&sym),
+            "注册头不应再出现 {sym}，实际:\n{hdr}"
+        );
+        assert!(
+            !api_hdr.contains(&sym),
+            "API 头不应再出现 {sym}，实际:\n{api_hdr}"
+        );
+    }
+
+    // 注册表里的 gc_mark 槽位恒为 NULL（JS_CLASS_DEF 的 gc_mark 位置参数）。
     assert!(
-        api_hdr.contains("void js_m1_class_gcnode_gc_mark(\n    JSContext *ctx,\n    void *opaque,\n    const JSMarkFunc *mf\n);"),
-        "expected gc_mark declaration for GcNode in mquickjs_ridl_api.h, got:\n{api_hdr}"
+        hdr.contains("js_m1_class_gcnode_finalizer,\n        NULL"),
+        "GcNode 的 gc_mark 槽位应为 NULL，实际:\n{hdr}"
     );
+
+    // keepalive 函数不应再引用 gc_mark 符号。
     assert!(
-        !api_hdr.contains("js_m1_class_plainnode_gc_mark"),
-        "did not expect gc_mark symbol for PlainNode in mquickjs_ridl_api.h, got:\n{api_hdr}"
+        !hdr.contains("js_m1_class_gcnode_gc_mark;"),
+        "keepalive 不应再引用 gc_mark，实际:\n{hdr}"
     );
 }

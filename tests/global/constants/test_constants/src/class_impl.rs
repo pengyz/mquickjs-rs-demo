@@ -47,9 +47,6 @@ impl ConstantTestClassClass for DefaultConstantTestClass {
         self.status = value;
     }
 
-    fn gc_mark(&self, _mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
-        // No GC-traced fields
-    }
 }
 
 pub fn create_constant_test_class_class() -> Box<dyn ConstantTestClassClass> {

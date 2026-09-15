@@ -1,12 +1,30 @@
-/// Integration test for gc_mark function generation.
-/// Verifies that:
-/// - Classes with Traced<T> fields generate gc_mark functions
-/// - Optional<Traced<T>> fields are unwrapped before gc_mark
-/// - Non-Traced fields are not included in gc_mark
-/// - Classes without Traced fields don't generate gc_mark
+//! class 级 `gc_mark` **已废弃**：回归守卫。
+//!
+//! # 背景
+//!
+//! 本文件此前验证的是"为含 `Traced<T>` 字段的 class 生成 gc_mark 函数"。
+//! 该机制已被**整体移除**，原因有二：
+//!
+//! 1. **致命 ABI 缺陷**：生成的 Rust 定义是 4 参
+//!    `(_ctx, _obj, opaque, mf)`，而引擎契约是 3 参
+//!    `(ctx, opaque, mf)`（`mquickjs.h` 的 `JSCMark`；
+//!    调用点 `mquickjs.c` 的 `c_mark_table[...](s->ctx, p->u.user.opaque, &mf)`）。
+//!    寄存器错位后 `opaque` 实参收到 `&mf`（栈地址），被当作 `Box<dyn Trait>`
+//!    fat pointer 解引用 → 虚表跳转 → **SIGSEGV**。
+//!    只要 GC 时该类对象可达就会崩溃。
+//!    复现见 `tests/gc_traced.rs::traced_node_reachable_during_gc_invokes_gc_mark`。
+//!
+//! 2. **已冗余**：`Traced<T>` 现基于引擎的 `JSGCRef`，该链在 mark 与重定位
+//!    两个阶段都被引擎扫描，无需 class 回调辅助标记。
+//!
+//! 参见 `docs/knowledge/gotcha_mquickjs_gc_mark_signature.md` 与
+//! `docs/knowledge/gotcha_mquickjs_gc_compaction_and_finalizer.md`。
 
+/// 含 `Traced<T>` 字段的 class：**不再**生成任何 class gc_mark。
+///
+/// 同时确认 opaque 字段的类型映射仍然正确（移除 gc_mark 不影响它）。
 #[test]
-fn test_gc_mark_generation_basic() {
+fn class_with_traced_fields_generates_no_gc_mark() {
     let ridl_input = r#"
 class traced_node {
     opaque {
@@ -32,41 +50,46 @@ class traced_node {
     )
     .unwrap();
 
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
+    let api_content = std::fs::read_to_string(output_dir.join("api.rs")).unwrap();
 
-    // Verify gc_mark function is generated
+    // 字段类型映射保持正确
     assert!(
-        api_content.contains("impl TracedNodeOpaque"),
-        "Should generate impl block for TracedNodeOpaque"
+        api_content.contains("pub struct TracedNodeOpaque"),
+        "Opaque struct 仍应生成"
     );
     assert!(
-        api_content.contains(
-            "pub(crate) unsafe fn gc_mark(&self, mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc)"
-        ),
-        "Should generate gc_mark function signature"
+        api_content.contains("pub held: mquickjs_rs::Traced<i32>"),
+        "Traced 字段类型映射应保持不变"
+    );
+
+    // gc_mark 的定义与调用都不应出现
+    // （生成文件里的说明注释也会含 "gc_mark" 字样，故检查定义/调用而非任意子串）
+    assert!(
+        !api_content.contains("unsafe fn gc_mark"),
+        "不应再生成 Opaque::gc_mark 定义"
     );
     assert!(
-        api_content.contains("self.held.gc_mark(mf)"),
-        "Should call gc_mark on Traced field"
+        !api_content.contains(".gc_mark(mf)"),
+        "不应再生成 gc_mark 调用"
     );
-    // count is i32, should NOT be in gc_mark
     assert!(
-        !api_content.contains("self.count.gc_mark"),
-        "Should not call gc_mark on non-Traced field"
+        !api_content.contains("fn gc_mark(&self"),
+        "trait 里也不应再有 gc_mark 方法"
     );
 }
 
+/// 生成的 glue 里不应再有 class 级 `gc_mark` FFI 导出。
+///
+/// 该导出正是 ABI 缺陷的载体，必须彻底消失。
 #[test]
-fn test_gc_mark_generation_optional_traced() {
+fn glue_exports_no_class_gc_mark_ffi() {
     let ridl_input = r#"
-class optional_node {
+class traced_node {
     opaque {
-        optional_held: Traced<string>?
-        regular_field: i32
+        held: Traced<i32>
     }
 
-    fn test() -> void;
+    fn getValue() -> i32;
 }
 "#;
 
@@ -84,206 +107,9 @@ class optional_node {
     )
     .unwrap();
 
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
-
-    // Verify Optional<Traced<T>> unwrapping
+    let glue_content = std::fs::read_to_string(output_dir.join("glue.rs")).unwrap();
     assert!(
-        api_content.contains("if let Some(ref inner) = self.optional_held"),
-        "Should unwrap Optional before calling gc_mark"
-    );
-    assert!(
-        api_content.contains("inner.gc_mark(mf)"),
-        "Should call gc_mark on unwrapped value"
-    );
-}
-
-#[test]
-fn test_gc_mark_not_generated_without_traced_fields() {
-    let ridl_input = r#"
-class no_traced_fields {
-    opaque {
-        id: i32
-        label: string
-    }
-
-    fn getId() -> i32;
-}
-"#;
-
-    let tempdir = tempfile::tempdir().unwrap();
-    let output_dir = tempdir.path().join("output");
-    std::fs::create_dir(&output_dir).unwrap();
-
-    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
-    ridl_tool::generator::generate_module_files(
-        &parsed.items,
-        parsed.module,
-        parsed.mode,
-        &output_dir,
-        "test_module",
-    )
-    .unwrap();
-
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
-
-    // Verify struct is generated but no gc_mark impl block
-    assert!(
-        api_content.contains("pub struct NoTracedFieldsOpaque"),
-        "Should generate opaque struct"
-    );
-    // Trait always has gc_mark (default no-op), but impl block should not exist
-    assert!(
-        !api_content.contains("impl NoTracedFieldsOpaque"),
-        "Should not generate impl block without Traced fields"
-    );
-}
-
-#[test]
-fn test_gc_mark_mixed_fields() {
-    let ridl_input = r#"
-class mixed_fields {
-    opaque {
-        name: string
-        traced_data: Traced<i32>
-        regular_count: i32
-        optional_traced: Traced<string>?
-    }
-
-    fn getName() -> string;
-}
-"#;
-
-    let tempdir = tempfile::tempdir().unwrap();
-    let output_dir = tempdir.path().join("output");
-    std::fs::create_dir(&output_dir).unwrap();
-
-    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
-    ridl_tool::generator::generate_module_files(
-        &parsed.items,
-        parsed.module,
-        parsed.mode,
-        &output_dir,
-        "test_module",
-    )
-    .unwrap();
-
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
-
-    // Verify only Traced fields are marked
-    assert!(
-        api_content.contains("self.traced_data.gc_mark(mf)"),
-        "Should mark traced_data"
-    );
-    assert!(
-        api_content.contains("if let Some(ref inner) = self.optional_traced"),
-        "Should mark optional_traced with unwrap"
-    );
-    // Non-Traced fields should not be mentioned
-    assert!(
-        !api_content.contains("self.name.gc_mark"),
-        "Should not mark string field"
-    );
-    assert!(
-        !api_content.contains("self.regular_count.gc_mark"),
-        "Should not mark i32 field"
-    );
-}
-
-// ========================================================================
-// P0: Traced<T> 嵌套类型映射测试
-// ========================================================================
-
-#[test]
-fn test_gc_mark_traced_in_array() {
-    let ridl_input = r#"
-class array_node {
-    opaque {
-        items: array<Traced<Value>>
-        plain: i32
-    }
-
-    fn test() -> void;
-}
-"#;
-
-    let tempdir = tempfile::tempdir().unwrap();
-    let output_dir = tempdir.path().join("output");
-    std::fs::create_dir(&output_dir).unwrap();
-
-    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
-    ridl_tool::generator::generate_module_files(
-        &parsed.items,
-        parsed.module,
-        parsed.mode,
-        &output_dir,
-        "test_module",
-    )
-    .unwrap();
-
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
-
-    // Verify opaque struct has correct type
-    assert!(
-        api_content.contains("pub items: Vec<mquickjs_rs::Traced<mquickjs_rs::Value>>"),
-        "Array<Traced<T>> should generate Vec<Traced<T>>"
-    );
-    // Verify gc_mark iterates array
-    assert!(
-        api_content.contains("for item in &self.items"),
-        "gc_mark should iterate array items"
-    );
-    assert!(
-        api_content.contains("item.gc_mark(mf)"),
-        "gc_mark should mark each array item"
-    );
-}
-
-#[test]
-fn test_gc_mark_traced_in_map_value() {
-    let ridl_input = r#"
-class map_node {
-    opaque {
-        cache: map<string, Traced<Value>>
-        plain: i32
-    }
-
-    fn test() -> void;
-}
-"#;
-
-    let tempdir = tempfile::tempdir().unwrap();
-    let output_dir = tempdir.path().join("output");
-    std::fs::create_dir(&output_dir).unwrap();
-
-    let parsed = ridl_tool::parser::parse_ridl_file(ridl_input).unwrap();
-    ridl_tool::generator::generate_module_files(
-        &parsed.items,
-        parsed.module,
-        parsed.mode,
-        &output_dir,
-        "test_module",
-    )
-    .unwrap();
-
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
-
-    // Verify opaque struct has correct type
-    assert!(
-        api_content.contains("pub cache: std::collections::HashMap<String, mquickjs_rs::Traced<mquickjs_rs::Value>>"),
-        "Map<K, Traced<T>> should generate HashMap<K, Traced<T>>"
-    );
-    // Verify gc_mark iterates map values
-    assert!(
-        api_content.contains("for (_key, value) in &self.cache"),
-        "gc_mark should iterate map values"
-    );
-    assert!(
-        api_content.contains("value.gc_mark(mf)"),
-        "gc_mark should mark each map value"
+        !glue_content.contains("_class_traced_node_gc_mark"),
+        "glue 不应再导出 class gc_mark FFI"
     );
 }

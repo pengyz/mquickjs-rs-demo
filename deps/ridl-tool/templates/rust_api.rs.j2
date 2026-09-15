@@ -194,12 +194,6 @@ pub trait {{ class.name|to_upper_camel_case }}Class {
 {%- endif %}
 {%- endif %}
 {%- endfor %}
-
-    /// Mark GC-traced fields during garbage collection.
-    /// Default implementation does nothing. Override for classes with Traced<T> fields.
-    fn gc_mark(&self, _mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
-        // Default: no-op. Classes with Traced<T> fields should override.
-    }
 }
 
 {%- if class.properties|any_proto_props %}
@@ -257,39 +251,12 @@ pub struct {{ class.name|to_upper_camel_case }}Opaque {
 {%- endfor %}
 }
 
-{%- if class|has_traced_fields %}
-
-impl {{ class.name|to_upper_camel_case }}Opaque {
-    /// Mark GC-traced fields during garbage collection.
-    ///
-    /// `mf` is the engine-provided mark function pointer (see
-    /// `mquickjs_rs::roots::RootsRegistry::gc_mark` for the convention).
-    ///
-    /// Marks all Traced<T> fields as reachable during GC.
-    #[allow(dead_code)]
-    pub(crate) unsafe fn gc_mark(&self, mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc) {
-{%- for field in class.opaque_fields %}
-{%- if field.field_type|contains_traced %}
-{%- if field.field_type|is_optional %}
-        if let Some(ref inner) = self.{{ field.name|to_snake_case }} {
-            unsafe { inner.gc_mark(mf) };
-        }
-{%- else %}{% if field.field_type|is_array %}
-        for item in &self.{{ field.name|to_snake_case }} {
-            unsafe { item.gc_mark(mf) };
-        }
-{%- else %}{% if field.field_type|is_map %}
-        for (_key, value) in &self.{{ field.name|to_snake_case }} {
-            unsafe { value.gc_mark(mf) };
-        }
-{%- else %}
-        unsafe { self.{{ field.name|to_snake_case }}.gc_mark(mf) };
-{%- endif %}{% endif %}{% endif %}
-{%- endif %}
-{%- endfor %}
-    }
-}
-{%- endif %}
+// NOTE: 这里**不再生成** `Opaque::gc_mark`。
+//
+// `Traced<T>` 现在基于引擎的 `JSGCRef`，其链由引擎在 mark 与重定位两个阶段
+// 自动扫描，因此无需 class 侧的标记辅助函数。
+// （此前生成的 class gc_mark FFI 还带有致命的 ABI 缺陷：Rust 4 参
+//  vs 引擎 3 参 `(ctx, opaque, mf)` → SIGSEGV。详见 rust_glue.rs.j2 说明。）
 {%- endif %}
 {%- endfor %}
 

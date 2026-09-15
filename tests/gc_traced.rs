@@ -36,6 +36,75 @@ fn gc(ctx: &mut mquickjs_rs::Context) {
     }
 }
 
+/// 【ABI 缺陷复现】GC 时节点**可达** ⇒ 引擎调用 class 的 `gc_mark` 回调。
+///
+/// 引擎契约是 **3 参** `(ctx, opaque, mf)`
+/// （`mquickjs.h:232` 的 `JSCMark`；调用点 `mquickjs.c:12174`），
+/// 而 RIDL 曾生成的 Rust 定义是 **4 参** `(_ctx, _obj, opaque, mf)`。
+/// 寄存器错位后 `opaque` 实参收到的是 `&mf`（栈地址、非空），
+/// 被当作 `Box<dyn Trait>` fat pointer 解引用 → 虚表跳转 → SIGSEGV。
+///
+/// 既有测试之所以没崩，是因为它们都**先 `delete globalThis.node` 再 GC**
+/// —— 对象不可达 ⇒ `gc_mark_all` 不会遍历到它 ⇒ 该回调从不被调用。
+#[cfg(feature = "ridl-extensions")]
+#[test]
+fn traced_node_reachable_during_gc_invokes_gc_mark() {
+    mquickjs_rs::ridl_bootstrap!();
+    let mut ctx = mquickjs_rs::Context::new(1024 * 1024).expect("create context");
+    init_ridl_context(&ctx);
+
+    // 关键：节点**保持可达**，让 gc_mark_all 遍历到它。
+    ctx.eval("globalThis.node = new GcTracedNode();").unwrap();
+
+    // 若 class gc_mark 的 ABI 不匹配，这一步会 SIGSEGV。
+    gc(&mut ctx);
+
+    // 存活校验：GC 后对象仍可用。
+    let count = ctx.eval("node.finalizerCount()").unwrap();
+    assert!(
+        count.trim().parse::<i32>().is_ok(),
+        "GC 后节点应仍可用，实际: {count}"
+    );
+}
+
+/// 【端到端】`Traced` 字段在 GC 压缩后仍指向正确对象。
+///
+/// 覆盖三件事：
+/// 1. class gc_mark ABI 缺陷已修（节点可达时 GC 不再 SIGSEGV）
+/// 2. `Traced` 随堆压缩重定位（`as_raw()` 返回最新地址）
+/// 3. opaque 内嵌 `Traced` 的完整链路可用
+#[cfg(feature = "ridl-extensions")]
+#[test]
+fn traced_field_survives_compaction_end_to_end() {
+    mquickjs_rs::ridl_bootstrap!();
+    let mut ctx = mquickjs_rs::Context::new(1024 * 1024).expect("create context");
+    init_ridl_context(&ctx);
+
+    // 先制造垃圾，再建节点并把目标对象存入其 Traced 字段
+    // —— 目标位于垃圾之后，压缩时会被前移。
+    ctx.eval(
+        r#"
+        (function(){ var g=[]; for (var i=0;i<400;i++){ g.push({a:i,b:i,c:i}); } })();
+        globalThis.node = new GcTracedNode();
+        node.setHeld({marker: 8888});
+        "#,
+    )
+    .unwrap();
+
+    // 节点保持可达 ⇒ GC 会遍历到它（曾经在此崩溃）
+    gc(&mut ctx);
+    gc(&mut ctx);
+
+    // 压缩后通过 Traced 读 marker：
+    // 若 Traced 未随压缩重定位，这里会读到错误数据或崩溃。
+    let m = ctx.eval("node.heldMarker()").unwrap();
+    assert_eq!(
+        m.trim(),
+        "8888",
+        "Traced 字段应在 GC 压缩后仍指向正确对象"
+    );
+}
+
 /// GcTracedNode with Traced<T> opaque field: finalizer fires at teardown.
 #[cfg(feature = "ridl-extensions")]
 #[test]

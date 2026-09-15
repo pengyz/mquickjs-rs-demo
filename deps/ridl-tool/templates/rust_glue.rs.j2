@@ -544,24 +544,20 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     }
 }
 
-{%- if class|has_traced_fields %}
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_{{ class.name|lower }}_gc_mark(
-    _ctx: *mut mquickjs_rs::mquickjs_ffi::JSContext,
-    _obj: mquickjs_rs::mquickjs_ffi::JSValue,
-    opaque: *mut core::ffi::c_void,
-    mf: *const mquickjs_rs::mquickjs_ffi::JSMarkFunc,
-) {
-    if opaque.is_null() || mf.is_null() {
-        return;
-    }
-    let holder_ptr = opaque as *mut Box<dyn crate::api::{{ class.name|to_upper_camel_case }}Class>;
-    if !holder_ptr.is_null() {
-        let holder = unsafe { &*holder_ptr };
-        holder.gc_mark(mf);
-    }
-}
-{%- endif %}
+// NOTE: 此处**不再生成** class 的 `gc_mark` FFI。
+//
+// 原因一（致命 ABI 缺陷）：该函数此前被生成成 **4 参**
+//   `(_ctx, _obj, opaque, mf)`
+// 而引擎契约是 **3 参** `(ctx, opaque, mf)`
+//   （`mquickjs.h:232` 的 `JSCMark`；调用点 `mquickjs.c:12174`）。
+// 寄存器错位后 `opaque` 实参收到的是 `&mf`（栈地址、非空），
+// 被当作 `Box<dyn Trait>` fat pointer 解引用 → 虚表跳转 → SIGSEGV。
+// 复现见 tests/gc_traced.rs::traced_node_reachable_during_gc_invokes_gc_mark。
+// 参见 docs/knowledge/gotcha_mquickjs_gc_mark_signature.md。
+//
+// 原因二（已冗余）：`Traced<T>` 现在基于引擎的 `JSGCRef`，该链由引擎在
+// mark 与重定位两个阶段自动扫描，无需再由 class 回调手动标记。
+// 因此注册表中的 gc_mark 槽位恒为 NULL。
 
 {%- for method in class.methods %}
 #[unsafe(no_mangle)]

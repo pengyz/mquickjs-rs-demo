@@ -14,11 +14,23 @@ build:
     cargo build
 
 # 运行所有测试
-test: test-ridl test-demo test-js
+#
+# 逐包运行，便于定位失败来源；`cargo test --workspace` 现在同样是全绿的
+# （变体选择已下沉到叶子二进制，见
+#  docs/knowledge/architecture_base_vs_ridl_variant_selection.md）。
+test: test-ridl test-mquickjs test-demo test-js
+
+# 运行整个 workspace 的测试（等价覆盖，一次跑完）
+test-workspace:
+    cargo test --workspace
 
 # 运行 RIDL 工具链测试
 test-ridl:
     cargo test -p ridl-tool
+
+# 运行 mquickjs-rs 绑定测试
+test-mquickjs:
+    cargo test -p mquickjs-rs
 
 # 运行 demo 应用测试
 test-demo:
@@ -92,8 +104,10 @@ help:
     @echo "命令:"
     @echo "  doctor        检查环境"
     @echo "  build         构建项目"
-    @echo "  test          运行所有测试"
+    @echo "  test          运行所有测试（逐包）"
+    @echo "  test-workspace 运行整个 workspace 的测试"
     @echo "  test-ridl     运行 RIDL 工具链测试"
+    @echo "  test-mquickjs 运行 mquickjs-rs 绑定测试"
     @echo "  test-demo     运行 demo 应用测试"
     @echo "  test-js       运行 JS 集成测试"
     @echo "  test-async    运行异步相关测试"
