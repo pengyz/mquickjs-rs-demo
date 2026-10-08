@@ -1,0 +1,11 @@
+############################################################################
+# ports/openvela/app/Make.defs
+#
+# Register the mqjs app into the apps build sweep (mirrors
+# apps/examples/rust/baremetal/Make.defs). Without this the directory is
+# never entered into CONFIGURED_APPS and the builtin is not built.
+############################################################################
+
+ifneq ($(CONFIG_MQJS_JS),)
+CONFIGURED_APPS += $(APPDIR)/system/mqjs
+endif

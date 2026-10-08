@@ -3,3 +3,16 @@ Cargo.lock
 target/
 .vscode/
 .cargo/config.toml.mimosa/
+ports/openvela/app/gen/
+ports/openvela/app/engine_src/
+ports/openvela/app/framework.mk
+ports/openvela/app/.built
+ports/openvela/app/.depend
+ports/openvela/app/*.o
+ports/openvela/app/.built
+ports/openvela/app/.depend
+ports/openvela/app/Make.dep
+ports/openvela/app/*.o
+ports/openvela/app/*.gcno
+ports/openvela/app/framework.cmake
+ports/openvela/cases/_*

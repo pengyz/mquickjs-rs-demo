@@ -1,0 +1,31 @@
+#
+# ports/openvela/app/Kconfig — NSH builtin registration for the mquickjs
+# `js` command (OpenVela sim port of mquickjs-rs; see ports/openvela/README.md).
+#
+
+config MQJS_JS
+	bool "mquickjs JS interpreter (mquickjs-rs OpenVela port)"
+	default n
+	---help---
+		Run JS scripts under the NSH shell with the mquickjs engine
+		(base framework variant, pure C layer — no RIDL/Rust yet).
+		Usage: js <script.js> [...]
+
+if MQJS_JS
+
+config MQJS_JS_PROGNAME
+	string "Program name"
+	default "js"
+
+config MQJS_JS_PRIORITY
+	int "Priority"
+	default 100
+
+config MQJS_JS_STACKSIZE
+	int "Stack size (bytes)"
+	default 65536
+	---help---
+		The engine's recursive parser needs headroom; the NSH builtin
+		default stack (KB-level) is not enough. 64 KiB minimum.
+
+endif
