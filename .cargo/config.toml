@@ -1,0 +1,2 @@
+[env]
+MQUICKJS_RIDL_TOOL = { value = "/home/peng/workspace/mquickjs-rs-demo/target/debug/ridl-tool", force = true }

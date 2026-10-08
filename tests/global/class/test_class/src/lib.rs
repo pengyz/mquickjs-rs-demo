@@ -7,10 +7,8 @@ pub mod impls {
         Box::new(crate::class_impl::DefaultTestClassSingleton)
     }
 
-    pub fn user_constructor() -> Box<dyn crate::api::UserClass> {
-        Box::new(crate::class_impl::DefaultUser {
-            name: String::new(),
-        })
+    pub fn user_constructor(name: String) -> Box<dyn crate::api::UserClass> {
+        Box::new(crate::class_impl::DefaultUser { name })
     }
 }
 

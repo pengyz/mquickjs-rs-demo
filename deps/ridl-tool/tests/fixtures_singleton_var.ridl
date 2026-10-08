@@ -1,0 +1,9 @@
+// Fixture for singleton_var_install_render_test.rs:
+// GLOBAL-mode singleton with plain var fields (Phase C).
+singleton Store {
+    var count: i32 = 42;
+    var flag: bool = true;
+    var title: string = "he said \"hi\"";
+    var nothing: null = null;
+    fn describe() -> string;
+}

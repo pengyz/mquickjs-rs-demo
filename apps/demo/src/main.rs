@@ -1,4 +1,4 @@
-use std::{env, path::Path, process};
+use std::{env, path::{Path, PathBuf}, process};
 
 use mquickjs_demo::test_runner;
 
@@ -10,13 +10,14 @@ fn main() {
 
     let args: Vec<String> = env::args().collect();
 
-    let files = if args.len() < 2 {
-        // Temporary hard-coded defaults (per repo convention):
+    let files: Vec<PathBuf> = if args.len() < 2 {
+        // Default roots are resolved against the workspace root, not the CWD:
         // - tests/: framework-level integration tests
         // - ridl-modules/: module-level tests
+        let root = test_runner::workspace_root();
         let mut all = Vec::new();
-        for p in [Path::new("tests"), Path::new("ridl-modules")] {
-            match test_runner::collect_js_files(p) {
+        for p in [root.join("tests"), root.join("ridl-modules")] {
+            match test_runner::collect_js_files(&p) {
                 Ok(mut v) => all.append(&mut v),
                 Err(e) => {
                     eprintln!("Error: {e}");
@@ -35,6 +36,10 @@ fn main() {
             }
         }
     };
+
+    // Grouping keys are path-shape based and relativized against the workspace
+    // root inside `test_runner::group_key_for_path`, so both absolute default
+    // roots and CWD-relative explicit paths group identically.
 
     if files.is_empty() {
         eprintln!(

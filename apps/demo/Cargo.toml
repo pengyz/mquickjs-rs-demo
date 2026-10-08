@@ -15,6 +15,9 @@ path = "src/main.rs"
 mquickjs-rs = { path = "../../deps/mquickjs-rs" }
 mquickjs-sys = { path = "../../deps/mquickjs-sys" }
 
+[dev-dependencies]
+tempfile = "3"
+
 [build-dependencies]
 mquickjs-ridl-glue = { path = "../../deps/mquickjs-ridl-glue" }
 
@@ -24,6 +27,12 @@ path = "../../ridl-modules/stdlib"
 
 [dependencies.ridl_test_g_types]
 path = "../../tests/global/types/test_types"
+
+[dependencies.ridl_test_g_varargs]
+path = "../../tests/global/varargs/test_varargs"
+
+[dependencies.ridl_test_g_struct_enum]
+path = "../../tests/global/struct_enum/test_struct_enum"
 
 [dependencies.ridl_test_g_literals]
 path = "../../tests/global/literals/test_literals"
@@ -39,6 +48,9 @@ path = "../../tests/global/class/test_class"
 
 [dependencies.ridl_test_g_singleton]
 path = "../../tests/global/singleton/test_singleton"
+
+[dependencies.ridl_test_g_singleton_var]
+path = "../../tests/global/singleton_var/test_singleton_var"
 
 [dependencies.ridl_test_g_import_using]
 path = "../../tests/global/import_using/test_import_using"

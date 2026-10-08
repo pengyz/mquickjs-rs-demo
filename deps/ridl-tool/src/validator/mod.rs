@@ -50,6 +50,9 @@ impl RIDLError {
 pub struct SemanticValidator {
     errors: Vec<RIDLError>,
     file_path: String,
+    /// 当前 IDL 中定义的命名类型（struct/enum），用于 Custom 引用解析校验。
+    /// 在 `validate` 入口处填充；按单文件（= 单模块）校验，跨模块引用无法解析。
+    named_types: std::collections::HashSet<String>,
 }
 
 impl SemanticValidator {
@@ -57,6 +60,7 @@ impl SemanticValidator {
         SemanticValidator {
             errors: Vec::new(),
             file_path,
+            named_types: std::collections::HashSet::new(),
         }
     }
 
@@ -64,6 +68,14 @@ impl SemanticValidator {
     pub fn validate(&mut self, idl: &IDL) -> Result<(), Vec<RIDLError>> {
         // 检查module声明是否在文件开头
         self.validate_module_position(idl);
+
+        // 收集命名类型定义集（struct/enum），供 Custom 引用解析校验使用。
+        self.named_types = idl
+            .structs
+            .iter()
+            .map(|s| s.name.clone())
+            .chain(idl.enums.iter().map(|e| e.name.clone()))
+            .collect();
 
         // 收集所有定义的标识符，用于重复定义检查
         let mut defined_identifiers = HashMap::new();
@@ -133,41 +145,108 @@ impl SemanticValidator {
         }
     }
 
-    /// 收集所有定义的标识符
+    /// 收集所有定义的标识符（带 kind），并对重名（同 kind 或跨 kind）立即报错。
+    ///
+    /// Phase D.1：此前本函数用 HashMap 覆盖写入、`validate_duplicate_definitions`
+    /// 为空实现，`struct X {} enum X {}` 这类跨 kind 重名会静默通过并在生成期
+    /// 产生互相劫持的类型定义。这里改为 entry 检测：任何两个
+    /// {interface, class, enum, struct, using} 定义重名都拒绝。
     fn collect_defined_identifiers(
         &mut self,
         idl: &IDL,
-        identifiers: &mut HashMap<String, (usize, usize)>,
+        identifiers: &mut HashMap<String, (&'static str, usize, usize)>,
     ) {
-        // 检查接口定义
+        let record = |name: &str,
+                          kind: &'static str,
+                          pos: Option<&crate::parser::ast::SourcePos>,
+                          identifiers: &mut HashMap<String, (&'static str, usize, usize)>,
+                          errors: &mut Vec<RIDLError>,
+                          file: &str| {
+            let (line, col) = pos.map(|p| (p.line, p.column)).unwrap_or((0, 0));
+            match identifiers.entry(name.to_string()) {
+                std::collections::hash_map::Entry::Occupied(prev) => {
+                    let (prev_kind, _, _) = prev.get();
+                    errors.push(RIDLError::new(
+                        format!(
+                            "Duplicate definition '{name}': '{name}' is already defined as a {prev_kind} and cannot be redefined as a {kind} (names must be unique across struct/enum/class/interface)"
+                        ),
+                        line,
+                        col,
+                        file.to_string(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+                std::collections::hash_map::Entry::Vacant(v) => {
+                    v.insert((kind, line, col));
+                }
+            }
+        };
+
         for interface in &idl.interfaces {
-            identifiers.insert(interface.name.clone(), (0, 0)); // TODO: 添加位置信息
+            record(
+                &interface.name,
+                "interface",
+                None,
+                identifiers,
+                &mut self.errors,
+                &self.file_path,
+            );
         }
 
-        // 检查类定义
         for class in &idl.classes {
-            identifiers.insert(class.name.clone(), (0, 0)); // TODO: 添加位置信息
+            record(
+                &class.name,
+                "class",
+                class.pos.as_ref(),
+                identifiers,
+                &mut self.errors,
+                &self.file_path,
+            );
         }
 
-        // 检查枚举定义
         for enum_def in &idl.enums {
-            identifiers.insert(enum_def.name.clone(), (0, 0)); // TODO: 添加位置信息
+            record(
+                &enum_def.name,
+                "enum",
+                None,
+                identifiers,
+                &mut self.errors,
+                &self.file_path,
+            );
         }
 
-        // 检查结构体定义
         for struct_def in &idl.structs {
-            identifiers.insert(struct_def.name.clone(), (0, 0)); // TODO: 添加位置信息
+            record(
+                &struct_def.name,
+                "struct",
+                None,
+                identifiers,
+                &mut self.errors,
+                &self.file_path,
+            );
         }
 
-        // 检查类型别名
         for using in &idl.using {
-            identifiers.insert(using.name.clone(), (0, 0)); // TODO: 添加位置信息
+            record(
+                &using.name,
+                "using alias",
+                None,
+                identifiers,
+                &mut self.errors,
+                &self.file_path,
+            );
         }
     }
 
-    /// 检查重复定义（已集成到collect_defined_identifiers中，保留为空实现向后兼容）
-    fn validate_duplicate_definitions(&mut self, _identifiers: &HashMap<String, (usize, usize)>) {
-        // 重复定义检查已在collect_defined_identifiers中完成
+    /// 检查重复定义。
+    ///
+    /// Phase D.1：真正的重复检测在 `collect_defined_identifiers` 内完成（那里
+    /// 才能同时拿到两个冲突定义的 kind）；本方法保留用于向后兼容与未来扩展
+    /// （例如按位置排序输出全部冲突）。
+    fn validate_duplicate_definitions(
+        &mut self,
+        _identifiers: &HashMap<String, (&'static str, usize, usize)>,
+    ) {
     }
 
     /// 验证类型引用
@@ -231,12 +310,26 @@ impl SemanticValidator {
     fn validate_type(&mut self, idl_type: &Type) {
         match idl_type {
             Type::ClassRef(_name) => {
-                // class 引用的定义校验需要全局上下文；暂不在这里做。
+                // class 引用由 parser 的 class_ref_rewrite 保证来自同文件 class 定义。
             }
-            Type::Custom(_name) => {
-                // 检查自定义类型是否已定义
-                // 这里需要更复杂的逻辑来检查类型是否已定义
-                // 暂时跳过，因为我们需要访问全局定义上下文
+            Type::Custom(name) => {
+                // Phase D.1：Custom 引用必须解析到本模块（同文件）的 struct/enum
+                // 定义。此前这里显式跳过，未知名会流入生成期并静默退化为 `()`。
+                //
+                // 例外：`(A | B)` 形式的 Custom 是 union 在 Optional 内的编码
+                // （见 generator::union_enum_path_for_ty），由 union 路径处理，
+                // 不参与命名类型解析。
+                if !name.starts_with('(') && !self.named_types.contains(name) {
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Unknown named type '{name}': Custom types must reference a struct or enum defined in the same module (cross-module named-type references are not supported in v1)"
+                        ),
+                        0,
+                        0,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
             }
             Type::Optional(boxed_type) => {
                 self.validate_type(boxed_type);
@@ -553,7 +646,8 @@ impl SemanticValidator {
             }
         }
 
-        // Ensure singletons do not use proto property modifiers (parser should already reject).
+        // Ensure singletons do not use proto property modifiers (parser should already reject),
+        // and validate their js_fields (plain `var` only — see validate_singleton_js_fields).
         for singleton in &idl.singletons {
             for p in &singleton.properties {
                 if p.modifiers.contains(&PropertyModifier::Proto) {
@@ -573,6 +667,147 @@ impl SemanticValidator {
                         RIDLErrorType::SemanticError,
                     ));
                 }
+            }
+
+            self.validate_singleton_js_fields(singleton);
+        }
+    }
+
+    /// singleton js_fields 语义校验（Phase C，对抗复核裁定）。
+    ///
+    /// singleton 经 `JS_OBJECT_DEF(name, props)` 注册为 class_id=NULL 的匿名
+    /// class：**没有 class id 与可寻址 proto**。因此：
+    /// - `proto var` 一律拒绝（无法安装到任何 proto 上）；
+    /// - plain `var` 字面量类型集为 `{i32, bool, string, null}`——比 class 侧
+    ///   更严（class 侧允许 I64/F32/F64 但 glue 模板 `unreachable!()` panic，
+    ///   singleton 侧在编译期直接拒绝，杜绝同类地雷）。
+    fn validate_singleton_js_fields(&mut self, singleton: &Singleton) {
+        for f in &singleton.js_fields {
+            let (line, col) = f.pos.as_ref().map(|p| (p.line, p.column)).unwrap_or((0, 0));
+
+            // Singleton is an anonymous JS_OBJECT_DEF class: no class id, no
+            // addressable prototype. `proto var` has nowhere to be installed.
+            if f.modifiers.contains(&PropertyModifier::Proto) {
+                self.errors.push(RIDLError::new(
+                    format!(
+                        "Invalid singleton field '{}': singleton cannot declare 'proto var' — a singleton is registered as an anonymous object with no prototype; use a plain 'var' instead",
+                        f.name
+                    ),
+                    line,
+                    col,
+                    self.file_path.clone(),
+                    RIDLErrorType::SemanticError,
+                ));
+                continue;
+            }
+
+            if singleton.properties.iter().any(|p| p.name == f.name) {
+                self.errors.push(RIDLError::new(
+                    format!(
+                        "Invalid js field '{}': js-only fields cannot share name with native property in singleton '{}'",
+                        f.name, singleton.name
+                    ),
+                    line,
+                    col,
+                    self.file_path.clone(),
+                    RIDLErrorType::SemanticError,
+                ));
+            }
+
+            if singleton.methods.iter().any(|m| m.name == f.name) {
+                self.errors.push(RIDLError::new(
+                    format!(
+                        "Invalid js field '{}': js-only fields cannot share name with method in singleton '{}'",
+                        f.name, singleton.name
+                    ),
+                    line,
+                    col,
+                    self.file_path.clone(),
+                    RIDLErrorType::SemanticError,
+                ));
+            }
+
+            // Strict literal/type set for singleton fields.
+            let literal_mismatch = |expected: &str| {
+                format!(
+                    "Invalid js field '{}': literal '{}' does not match field type {} in singleton '{}'",
+                    f.name, f.init_literal, expected, singleton.name
+                )
+            };
+            match &f.field_type {
+                Type::I32 => {
+                    if f.init_literal.parse::<i32>().is_err() {
+                        self.errors.push(RIDLError::new(
+                            literal_mismatch("i32"),
+                            line,
+                            col,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
+                    }
+                }
+                Type::Bool => {
+                    if f.init_literal != "true" && f.init_literal != "false" {
+                        self.errors.push(RIDLError::new(
+                            literal_mismatch("bool"),
+                            line,
+                            col,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
+                    }
+                }
+                Type::String => {
+                    // init_literal is the decoded string text; any literal is valid.
+                }
+                Type::Null => {
+                    if f.init_literal != "null" {
+                        self.errors.push(RIDLError::new(
+                            literal_mismatch("null"),
+                            line,
+                            col,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
+                    }
+                }
+                other => {
+                    self.errors.push(RIDLError::new(
+                        format!(
+                            "Invalid js field '{}': singleton var literal type only supports {{i32, bool, string, null}}, got '{}' in singleton '{}'",
+                            f.name, other, singleton.name
+                        ),
+                        line,
+                        col,
+                        self.file_path.clone(),
+                        RIDLErrorType::SemanticError,
+                    ));
+                }
+            }
+        }
+
+        // Disallow duplicate names among the singleton's js_fields themselves.
+        let mut js_names = std::collections::HashMap::<&str, usize>::new();
+        for f in &singleton.js_fields {
+            *js_names.entry(&f.name).or_insert(0) += 1;
+        }
+        for (name, cnt) in js_names {
+            if cnt > 1 {
+                let (line, col) = singleton
+                    .pos
+                    .as_ref()
+                    .map(|p| (p.line, p.column))
+                    .unwrap_or((0, 0));
+                self.errors.push(RIDLError::new(
+                    format!(
+                        "Duplicate js field '{}': js-only fields must have unique names within singleton '{}'",
+                        name, singleton.name
+                    ),
+                    line,
+                    col,
+                    self.file_path.clone(),
+                    RIDLErrorType::SemanticError,
+                ));
             }
         }
     }

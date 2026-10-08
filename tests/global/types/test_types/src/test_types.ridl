@@ -8,6 +8,7 @@ singleton TestTypes {
 
     fn echoStringNullable(v: string?) -> string?;
     fn echoI32Nullable(v: i32?) -> i32?;
+    fn echoBoolOpt(v: bool?) -> bool?;
 
     fn echoAny(v: any) -> any;
     fn maybeAny(v: bool) -> any?;

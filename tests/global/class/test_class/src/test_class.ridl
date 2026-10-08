@@ -1,6 +1,8 @@
 mode strict;
 
 class User {
+    constructor(name: string);
+
     fn getName() -> string;
 
     // any? param/return coverage on class methods

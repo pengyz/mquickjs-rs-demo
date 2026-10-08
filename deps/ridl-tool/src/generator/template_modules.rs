@@ -31,7 +31,7 @@ pub(super) fn build_template_modules(
 
         let mut interfaces: Vec<TemplateInterface> = Vec::new();
         let mut functions: Vec<TemplateFunction> = Vec::new();
-        let singletons: Vec<TemplateSingleton> = Vec::new();
+        let mut singletons: Vec<TemplateSingleton> = Vec::new();
         let mut local_classes: Vec<TemplateClass> = Vec::new();
 
         for item in &parsed.items {
@@ -51,8 +51,15 @@ pub(super) fn build_template_modules(
                     ))
                 }
                 parser::ast::IDLItem::Singleton(s) => {
-                    // Singleton aggregation is not needed for mquickjs_ridl_register.c generation.
-                    let _ = (s, &module_name);
+                    // Singleton method glue is not generated here (slot dispatch
+                    // lives in the per-module glue), but mquickjs_ridl_register.c
+                    // needs the singleton (its plain `var` js_fields) to emit the
+                    // JS_RIDL_StdlibInit field installation for GLOBAL mode.
+                    singletons.push(TemplateSingleton::from_ast(
+                        s.clone(),
+                        module_name.clone(),
+                        parsed.mode,
+                    ));
                 }
                 parser::ast::IDLItem::Class(c) => {
                     local_classes.push(TemplateClass::from_with_mode(
@@ -125,4 +132,46 @@ pub(super) fn build_template_modules(
     }
 
     Ok(modules)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::ast::Type;
+
+    /// 三构造点透传（Phase C.3）：build_template_modules 构造的
+    /// TemplateSingleton 必须携带 singleton 的 plain var js_fields，
+    /// mquickjs_ridl_register.c 才能生成字段安装代码。
+    #[test]
+    fn build_template_modules_carries_singleton_js_fields() {
+        let dir = tempfile::tempdir().unwrap();
+        let ridl_path = dir.path().join("fixture_singleton_var.ridl");
+        std::fs::write(
+            &ridl_path,
+            "singleton Store {\n    var count: i32 = 42;\n    var title: string = \"hi\";\n    fn ping() -> i32;\n}\n",
+        )
+        .unwrap();
+
+        let modules = build_template_modules(&[ridl_path], &[]).unwrap();
+        assert_eq!(modules.len(), 1);
+        let m = &modules[0];
+        assert!(m.module_decl.is_none(), "fixture is GLOBAL mode");
+        assert_eq!(m.singletons.len(), 1);
+
+        let s = &m.singletons[0];
+        assert_eq!(s.name, "Store");
+        assert_eq!(s.methods.len(), 1);
+        assert_eq!(s.js_fields.len(), 2, "js_fields must be carried through");
+
+        let f0 = &s.js_fields[0];
+        assert_eq!(f0.name, "count");
+        assert_eq!(f0.field_type, Type::I32);
+        assert_eq!(f0.init_literal, "42");
+        assert!(!f0.is_proto);
+
+        let f1 = &s.js_fields[1];
+        assert_eq!(f1.name, "title");
+        assert_eq!(f1.field_type, Type::String);
+        assert_eq!(f1.init_literal, "hi");
+    }
 }

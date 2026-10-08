@@ -1,0 +1,15 @@
+// C.4 e2e: singleton plain var fields (Phase C).
+//
+// 字面量类型集 {i32, bool, string, null}；escaped 覆盖 \" 转义解码 ->
+// escape_c_string 重新转义 -> C 字符串字面量的全链路。
+singleton TestSingletonVar {
+    var count: i32 = 42;
+    var flag: bool = true;
+    var title: string = "hello";
+    var nothing: null = null;
+    var escaped: string = "he said \"hi\"";
+
+    // Rust impl 读不到 JS-only 字段（它们只挂在 JS 对象上），
+    // 因此方法返回固定串；JS 侧先直读字段，再调方法验证引擎状态。
+    fn describe() -> string;
+}

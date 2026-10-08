@@ -1,5 +1,5 @@
 use crate::generator::code_writer::CodeWriter;
-use crate::generator::TemplateParam;
+use crate::generator::{NamedTypeInfo, NamedTypeShape, TemplateParam};
 use crate::parser::ast::{PropertyModifier, Type};
 use crate::parser::FileMode;
 
@@ -680,6 +680,86 @@ pub fn normalize_ident(s: &str) -> ::askama::Result<String> {
     Ok(out)
 }
 
+/// Escape decoded literal text for embedding inside a C string literal.
+///
+/// init_literal (parser) stores the decoded text; emitting it raw would
+/// generate illegal C source for `"` / `\` / newlines. Non-ASCII characters
+/// pass through unchanged (the generated C files are UTF-8, consistent with
+/// the rest of the templates).
+pub fn escape_c_string(s: &str) -> ::askama::Result<String> {
+    Ok(escape_string_literal_common(s))
+}
+
+/// Escape decoded literal text for embedding inside a Rust string literal.
+///
+/// Same escape set as `escape_c_string`; kept as a separate named filter so
+/// templates declare the target language at the emission site.
+pub fn escape_rust_string(s: &str) -> ::askama::Result<String> {
+    Ok(escape_string_literal_common(s))
+}
+
+fn escape_string_literal_common(s: &str) -> String {
+    let mut out = String::with_capacity(s.len() + 8);
+    for ch in s.chars() {
+        match ch {
+            '"' => out.push_str("\\\""),
+            '\\' => out.push_str("\\\\"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\t' => out.push_str("\\t"),
+            '\0' => out.push_str("\\0"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{escape_c_string, escape_rust_string};
+
+    #[test]
+    fn escape_c_string_quotes_and_backslashes() {
+        assert_eq!(escape_c_string("he said \"hi\"").unwrap(), "he said \\\"hi\\\"");
+        assert_eq!(escape_c_string("a\\b").unwrap(), "a\\\\b");
+        assert_eq!(escape_c_string("").unwrap(), "");
+        assert_eq!(escape_c_string("plain").unwrap(), "plain");
+    }
+
+    #[test]
+    fn escape_c_string_control_chars() {
+        assert_eq!(escape_c_string("l1\nl2").unwrap(), "l1\\nl2");
+        assert_eq!(escape_c_string("col\tval").unwrap(), "col\\tval");
+        assert_eq!(escape_c_string("cr\rx").unwrap(), "cr\\rx");
+        assert_eq!(escape_c_string("nul\0x").unwrap(), "nul\\0x");
+    }
+
+    #[test]
+    fn escape_c_string_non_ascii_passes_through() {
+        // UTF-8 source is embedded directly (consistent with existing templates).
+        assert_eq!(escape_c_string("你好").unwrap(), "你好");
+        assert_eq!(escape_c_string("héllo").unwrap(), "héllo");
+    }
+
+    #[test]
+    fn escape_rust_string_matches_c_escape_set() {
+        for src in [
+            "he said \"hi\"",
+            "a\\b",
+            "l1\nl2",
+            "col\tval",
+            "你好",
+            "",
+        ] {
+            assert_eq!(
+                escape_rust_string(src).unwrap(),
+                escape_c_string(src).unwrap(),
+                "Rust and C escapes must agree for {src:?}"
+            );
+        }
+    }
+}
+
 pub fn to_snake_case(s: &str) -> ::askama::Result<String> {
     Ok(crate::generator::naming::to_snake_case(s))
 }
@@ -780,7 +860,12 @@ pub fn emit_param_extract(
     idx1: &usize,
     module_name_normalized: &str,
 ) -> ::askama::Result<String> {
-    let raw = if param.variadic {
+    // Phase D: named-type params (bare struct/enum reference) get their own
+    // conversion family; the shape info rides on the param (filled by the
+    // named-type override pass).
+    let raw = if let Some(named) = &param.named {
+        emit_named_param_extract(named, &param.rust_name, *idx0, *idx1)?
+    } else if param.variadic {
         emit_varargs_collect(&param.rust_name, &param.ty, param.file_mode, *idx0)?
     } else if let Type::Optional(inner) = &param.ty {
         let mut w = CodeWriter::new();
@@ -1033,6 +1118,417 @@ fn emit_union_param_extract_from_jsvalue(
 
 pub fn emit_call_arg(param: &TemplateParam) -> ::askama::Result<String> {
     Ok(param.rust_name.clone())
+}
+
+// ---------------------------------------------------------------------------
+// Phase D: named-type (struct/enum) conversion emitters
+//
+// struct 参数 = JS plain object 逐字段提取（基础类型分支递归复用
+// emit_single_param_extract_from_jsvalue）；缺失字段 strict 报错；多余字段忽略。
+// struct 返回 = 逐字段注入 JS object（嵌套 struct / array 字段递归）。
+// enum（纯 C-like）参数 = JS 字符串按 RIDL 原始变体名匹配；返回 = Rust
+// PascalCase 变体映射回原始变体名字符串。
+//
+// 嵌套形状由 named-type 表在构建期解析并挂在 TemplateStructField::nested 上
+// （含环检测），emitter 保持无全局状态。
+// ---------------------------------------------------------------------------
+
+fn emit_named_param_extract(
+    named: &NamedTypeInfo,
+    name: &str,
+    idx0: usize,
+    idx1: usize,
+) -> ::askama::Result<String> {
+    let mut w = CodeWriter::new();
+
+    emit_missing_arg(&mut w, idx1, name);
+    emit_argv_v_let(&mut w, idx0);
+
+    let inner = emit_named_param_extract_from_jsvalue(named, name)?;
+    for line in inner.lines() {
+        w.push_line(line.to_string());
+    }
+
+    Ok(w.into_string())
+}
+
+/// Emit named-type extraction from a JSValue named `v`; binds `let {name}: {path}`.
+pub(super) fn emit_named_param_extract_from_jsvalue(
+    named: &NamedTypeInfo,
+    name: &str,
+) -> ::askama::Result<String> {
+    let mut w = CodeWriter::new();
+
+    match &named.shape {
+        NamedTypeShape::Enum(variants) => {
+            let expected = variants
+                .iter()
+                .map(|(raw, _)| raw.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            let err =
+                format!("invalid enum argument: {name}: expected string (one of: {expected})");
+            emit_check_is_string_expr(&mut w, "v", &format!("\"{err}\""));
+
+            w.push_line(
+                "let mut __ridl_enum_buf = mquickjs_rs::mquickjs_ffi::JSCStringBuf { buf: [0u8; 5] };"
+                    .to_string(),
+            );
+            w.push_line(
+                "let __ridl_enum_ptr = unsafe { mquickjs_rs::mquickjs_ffi::JS_ToCString(ctx, v, &mut __ridl_enum_buf as *mut _) };"
+                    .to_string(),
+            );
+            w.push_line(format!(
+                "if __ridl_enum_ptr.is_null() {{ return js_throw_type_error(ctx, \"invalid enum argument: {name}\"); }}"
+            ));
+            w.push_line(
+                "let __ridl_enum_s = unsafe { core::ffi::CStr::from_ptr(__ridl_enum_ptr) }.to_string_lossy().into_owned();"
+                    .to_string(),
+            );
+
+            w.push_line(format!(
+                "let {name}: {path} = match __ridl_enum_s.as_str() {{",
+                name = name,
+                path = named.rust_path
+            ));
+            w.indent();
+            for (raw, pascal) in variants {
+                w.push_line(format!(
+                    "\"{raw}\" => {path}::{pascal},",
+                    path = named.rust_path,
+                    pascal = pascal
+                ));
+            }
+            w.push_line(format!(
+                "other => return js_throw_type_error(ctx, &format!(\"invalid enum argument: {name}: unknown variant '{{}}' (expected one of: {expected})\", other)),"
+            ));
+            w.dedent();
+            w.push_line("};".to_string());
+        }
+        NamedTypeShape::Struct(fields) => {
+            let owner = named.ridl_name.as_str();
+            // 对象检查与固定绑定都在块内：嵌套 struct 递归会再次进入本函数，
+            // 其 `__ridl_struct_obj_{name}` 绑定必须只在自己的块内生效，
+            // 否则会遮蔽外层结构体的对象绑定（后续字段读错对象）。
+            // 绑定名携带 {name}（参数名/字段名，同一作用域内唯一）避免碰撞。
+            w.push_line(format!(
+                "let {name}: {path} = {{",
+                name = name,
+                path = named.rust_path
+            ));
+            w.indent();
+            // plain object 检查（与 map 参数同款：JS_CLASS_OBJECT）。
+            w.push_line(format!(
+                "if v == mquickjs_rs::mquickjs_ffi::JS_NULL || unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, v) }} != mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_OBJECT as i32 {{ return js_throw_type_error(ctx, \"struct '{owner}': expected object\"); }}"
+            ));
+            // 固定对象绑定：字段提取会把 `v` 重绑为属性值，后续字段的属性
+            // 读取必须始终指向结构体对象本身。
+            w.push_line(format!(
+                "let __ridl_struct_obj_{name}: JSValue = v;"
+            ));
+            for f in fields {
+                emit_struct_field_extract(&mut w, owner, f, &format!("__ridl_struct_obj_{name}"))?;
+            }
+            let init = fields
+                .iter()
+                .map(|f| f.rust_name.as_str())
+                .collect::<Vec<_>>()
+                .join(", ");
+            w.push_line(format!("{path} {{ {init} }}", path = named.rust_path));
+            w.dedent();
+            w.push_line("};".to_string());
+        }
+    }
+
+    Ok(w.into_string())
+}
+
+/// Emit extraction of one struct field from the object JSValue `v`.
+///
+/// Contract: the object JSValue is bound as `v`; each field re-binds `v` to its
+/// property JSValue and reuses the base extractors (which read `v`).
+fn emit_struct_field_extract(
+    w: &mut CodeWriter,
+    owner: &str,
+    f: &crate::generator::TemplateStructField,
+    obj_binding: &str,
+) -> ::askama::Result<()> {
+    let fname = &f.rust_name;
+    w.push_line(format!(
+        "let __ridl_prop_name_{fname} = CString::new(\"{name}\").unwrap_or_else(|_| CString::new(\"\").unwrap());",
+        fname = fname,
+        name = f.name
+    ));
+    // 属性读取固定从结构体对象绑定取（`v` 会被上一个字段的提取重绑）。
+    w.push_line(format!(
+        "let __ridl_prop_{fname} = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetPropertyStr(ctx, {obj}, __ridl_prop_name_{fname}.as_ptr()) }};",
+        fname = fname,
+        obj = obj_binding
+    ));
+    // strict: a missing property is an error (extra properties are ignored —
+    // only declared fields are ever read).
+    w.push_line(format!(
+        "if mquickjs_rs::mquickjs_ffi::js_value_special_tag(__ridl_prop_{fname}) == (mquickjs_rs::mquickjs_ffi::JS_TAG_UNDEFINED as u32) {{ return js_throw_type_error(ctx, \"struct '{owner}': missing field '{name}'\"); }}",
+        fname = fname,
+        owner = owner,
+        name = f.name
+    ));
+    w.push_line(format!(
+        "let v: JSValue = __ridl_prop_{fname};",
+        fname = fname
+    ));
+
+    match &f.ty {
+        Type::Array(inner) => emit_array_field_extract(w, owner, f, inner)?,
+        _ => {
+            if let Some(nested) = &f.nested {
+                // Nested struct: recurse (own object check + field extraction).
+                let inner_code = emit_named_param_extract_from_jsvalue(nested, fname)?;
+                for line in inner_code.lines() {
+                    w.push_line(line.to_string());
+                }
+            } else {
+                // 基础类型分支复用 emit_single_param_extract_from_jsvalue（读取
+                // `v`，产出 `let {fname}: T`）。字段拒绝矩阵保证此处只会出现
+                // 基元/string。
+                let inner_code = emit_single_param_extract_from_jsvalue(fname, &f.ty, "GLOBAL")?;
+                for line in inner_code.lines() {
+                    w.push_line(line.to_string());
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Extract an `array<...>` struct field: read `length`, loop elements.
+fn emit_array_field_extract(
+    w: &mut CodeWriter,
+    owner: &str,
+    f: &crate::generator::TemplateStructField,
+    inner: &Type,
+) -> ::askama::Result<()> {
+    let fname = &f.rust_name;
+    let inner_rust_ty = f
+        .rust_ty
+        .strip_prefix("Vec<")
+        .and_then(|s| s.strip_suffix('>'))
+        .unwrap_or(&f.rust_ty)
+        .to_string();
+    let elem_name = format!("{fname}_elem");
+
+    w.push_line(format!(
+        "let __ridl_arr_{fname}: JSValue = v;",
+        fname = fname
+    ));
+    // 数组性检查：JS 字符串等 array-like 对象也有 `length`，不检查会把
+    // 非数组输入静默按元素拆解（strict 语义要求可诊断拒绝）。
+    w.push_line(format!(
+        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetClassID(ctx, __ridl_arr_{fname}) }} != mquickjs_rs::mquickjs_ffi::JSObjectClassEnum_JS_CLASS_ARRAY as i32 {{ return js_throw_type_error(ctx, \"struct '{owner}': field '{name}': expected array\"); }}",
+        fname = fname,
+        owner = owner,
+        name = f.name
+    ));
+    w.push_line(format!(
+        "let mut {fname}: Vec<{ty}> = Vec::new();",
+        fname = fname,
+        ty = inner_rust_ty
+    ));
+
+    w.push_line(format!(
+        "let __ridl_len_name_{fname} = CString::new(\"length\").unwrap_or_else(|_| CString::new(\"\").unwrap());",
+        fname = fname
+    ));
+    w.push_line(format!(
+        "let __ridl_len_val_{fname} = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetPropertyStr(ctx, __ridl_arr_{fname}, __ridl_len_name_{fname}.as_ptr()) }};",
+        fname = fname
+    ));
+    w.push_line(format!(
+        "let mut __ridl_len_num_{fname}: f64 = 0.0;",
+        fname = fname
+    ));
+    w.push_line(format!(
+        "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_ToNumber(ctx, &mut __ridl_len_num_{fname} as *mut _, __ridl_len_val_{fname}) }} < 0 {{ return js_throw_type_error(ctx, \"struct '{owner}': field '{name}': expected array\"); }}",
+        fname = fname,
+        owner = owner,
+        name = f.name
+    ));
+    w.push_line(format!(
+        "let __ridl_len_{fname}: i32 = __ridl_len_num_{fname} as i32;",
+        fname = fname
+    ));
+
+    w.push_line(format!(
+        "for __ridl_i_{fname} in 0..__ridl_len_{fname} {{",
+        fname = fname
+    ));
+    w.indent();
+    w.push_line(format!(
+        "let v: JSValue = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_GetPropertyUint32(ctx, __ridl_arr_{fname}, __ridl_i_{fname} as u32) }};",
+        fname = fname
+    ));
+
+    if let Some(nested) = &f.nested {
+        let elem_code = emit_named_param_extract_from_jsvalue(nested, &elem_name)?;
+        for line in elem_code.lines() {
+            w.push_line(line.to_string());
+        }
+    } else {
+        let elem_code = emit_single_param_extract_from_jsvalue(&elem_name, inner, "GLOBAL")?;
+        for line in elem_code.lines() {
+            w.push_line(line.to_string());
+        }
+    }
+
+    w.push_line(format!(
+        "{fname}.push({elem});",
+        fname = fname,
+        elem = elem_name
+    ));
+    w.dedent();
+    w.push_line("}".to_string());
+
+    Ok(())
+}
+
+/// Phase D template filter: convert a named-type value into a JSValue
+/// (statements + trailing JSValue expression, mirroring `emit_value_to_js`).
+pub fn emit_named_return_convert(
+    named: &NamedTypeInfo,
+    value_expr: &str,
+) -> ::askama::Result<String> {
+    let mut w = CodeWriter::new();
+    emit_named_value_to_js_lines(&mut w, named, value_expr)?;
+    Ok(w.into_string())
+}
+
+/// Emit named-type JS-value injection: statements + trailing JSValue expression.
+fn emit_named_value_to_js_lines(
+    w: &mut CodeWriter,
+    named: &NamedTypeInfo,
+    value_expr: &str,
+) -> ::askama::Result<()> {
+    match &named.shape {
+        NamedTypeShape::Enum(variants) => {
+            w.push_line(format!(
+                "let __ridl_enum_str: &'static str = match {value} {{",
+                value = value_expr
+            ));
+            w.indent();
+            for (raw, pascal) in variants {
+                w.push_line(format!(
+                    "{path}::{pascal} => \"{raw}\",",
+                    path = named.rust_path,
+                    pascal = pascal,
+                    raw = raw
+                ));
+            }
+            w.dedent();
+            w.push_line("};".to_string());
+            w.push_line(
+                "let cstr = CString::new(__ridl_enum_str).unwrap_or_else(|_| CString::new(\"\").unwrap());"
+                    .to_string(),
+            );
+            w.push_line(
+                "unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, cstr.as_ptr()) }".to_string(),
+            );
+        }
+        NamedTypeShape::Struct(fields) => {
+            w.push_line(
+                "let __ridl_obj = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewObject(ctx) };"
+                    .to_string(),
+            );
+            for f in fields {
+                let field_value = format!("{}.{}", value_expr, f.rust_name);
+                emit_struct_field_to_js(w, f, &field_value)?;
+            }
+            w.push_line("__ridl_obj".to_string());
+        }
+    }
+    Ok(())
+}
+
+/// Inject one struct field value into the enclosing `__ridl_obj` JS object.
+fn emit_struct_field_to_js(
+    w: &mut CodeWriter,
+    f: &crate::generator::TemplateStructField,
+    value_expr: &str,
+) -> ::askama::Result<()> {
+    let fname = &f.rust_name;
+    w.push_line(format!(
+        "let __ridl_field_name_{fname} = CString::new(\"{name}\").unwrap_or_else(|_| CString::new(\"\").unwrap());",
+        fname = fname,
+        name = f.name
+    ));
+
+    // Field value is produced as a block expression (statements + trailing
+    // JSValue expression) bound to `__ridl_field_{fname}`.
+    w.push_line(format!(
+        "let __ridl_field_{fname}: JSValue = {{",
+        fname = fname
+    ));
+    w.indent();
+
+    match &f.ty {
+        Type::Array(inner) => {
+            w.push_line(format!(
+                "let __ridl_arr = unsafe {{ mquickjs_rs::mquickjs_ffi::JS_NewArray(ctx, {value}.len() as i32) }};",
+                value = value_expr
+            ));
+            w.push_line(format!(
+                "for (__ridl_i, __ridl_item) in {value}.iter().enumerate() {{",
+                value = value_expr
+            ));
+            w.indent();
+            let elem_expr = match inner.as_ref() {
+                Type::Bool | Type::I32 | Type::I64 | Type::F32 | Type::F64 => "*__ridl_item",
+                _ => "__ridl_item",
+            };
+            w.push_line("let __ridl_item_js: JSValue = {".to_string());
+            w.indent();
+            if let Some(nested) = &f.nested {
+                emit_named_value_to_js_lines(w, nested, elem_expr)?;
+            } else {
+                let elem_code = emit_value_to_js(inner, elem_expr)?;
+                for line in elem_code.lines() {
+                    w.push_line(line.to_string());
+                }
+            }
+            w.dedent();
+            w.push_line("};".to_string());
+            w.push_line(
+                "unsafe { mquickjs_rs::mquickjs_ffi::JS_SetPropertyUint32(ctx, __ridl_arr, __ridl_i as u32, __ridl_item_js) };"
+                    .to_string(),
+            );
+            w.dedent();
+            w.push_line("}".to_string());
+            w.push_line("__ridl_arr".to_string());
+        }
+        _ => {
+            if let Some(nested) = &f.nested {
+                // Nested struct: inject a full object (own __ridl_obj, scoped
+                // to this block; the outer __ridl_obj binding is untouched).
+                emit_named_value_to_js_lines(w, nested, value_expr)?;
+            } else {
+                let field_code = emit_value_to_js(&f.ty, value_expr)?;
+                for line in field_code.lines() {
+                    w.push_line(line.to_string());
+                }
+            }
+        }
+    }
+
+    w.dedent();
+    w.push_line("};".to_string());
+
+    w.push_line(format!(
+        "unsafe {{ mquickjs_rs::mquickjs_ffi::JS_SetPropertyStr(ctx, __ridl_obj, __ridl_field_name_{fname}.as_ptr(), __ridl_field_{fname}) }};",
+        fname = fname
+    ));
+
+    Ok(())
 }
 
 fn emit_missing_arg(w: &mut CodeWriter, idx1: usize, name: &str) {
@@ -1568,8 +2064,17 @@ fn emit_varargs_collect(
 
     match ty {
         Type::String => {
+            // Trait surface is `Vec<String>` (rust_type_from_idl); the glue must
+            // materialize an owned String per element inside the loop.
+            //
+            // JS_ToCString returns a *borrowed* pointer: either into the caller's
+            // `JSCStringBuf` stack buffer (short strings) or into GC-owned string
+            // storage (long strings). It must never be cached beyond this
+            // iteration (mquickjs has no JS_FreeCString; see mquickjs.c
+            // JS_ToCStringLen). Copying to String per element fixes both the
+            // glue/trait type mismatch and the dangling-pointer soundness bug.
             w.push_line(format!(
-                "let mut {name}: Vec<*const core::ffi::c_char> = Vec::new();",
+                "let mut {name}: Vec<String> = Vec::new();",
                 name = name
             ));
             emit_varargs_loop_header(&mut w, start_idx0, true);
@@ -1581,7 +2086,11 @@ fn emit_varargs_collect(
             );
             emit_check_is_string_expr(&mut w, "v", &err_expr);
             emit_to_cstring_ptr_expr(&mut w, "v", "ptr", &err_expr);
-            w.push_line(format!("{name}.push(ptr);", name = name));
+            w.push_line(
+                "let s = unsafe { core::ffi::CStr::from_ptr(ptr) }.to_string_lossy().into_owned();"
+                    .to_string(),
+            );
+            w.push_line(format!("{name}.push(s);", name = name));
 
             w.dedent();
             w.push_line("}");
@@ -1711,9 +2220,36 @@ fn emit_varargs_collect(
             w.dedent();
             w.push_line("}");
         }
-        _ => {
+        // Unsupported varargs shapes still fail at compile time (v1 behavior),
+        // but each family gets its own diagnostic so the RIDL author can tell
+        // what to rewrite without reading generator sources.
+        Type::Optional(_) => {
             w.push_line(format!(
-                "compile_error!(\"v1 glue: unsupported varargs type for {name}\");",
+                "compile_error!(\"v1 glue: varargs does not support Optional<T> for {name} (v1): use a concrete supported type or any\");",
+                name = name
+            ));
+        }
+        Type::Union(_) => {
+            w.push_line(format!(
+                "compile_error!(\"v1 glue: varargs does not support union types for {name} (v1): use a concrete supported type or any\");",
+                name = name
+            ));
+        }
+        Type::Map(_, _) => {
+            w.push_line(format!(
+                "compile_error!(\"v1 glue: varargs does not support map<K, V> for {name} (v1): use a concrete supported type or any\");",
+                name = name
+            ));
+        }
+        Type::Callback | Type::CallbackWithParams(_) => {
+            w.push_line(format!(
+                "compile_error!(\"v1 glue: varargs does not support callback types for {name} (v1): use a concrete supported type or any\");",
+                name = name
+            ));
+        }
+        other => {
+            w.push_line(format!(
+                "compile_error!(\"v1 glue: unsupported varargs type for {name}: {other}\");",
                 name = name
             ));
         }

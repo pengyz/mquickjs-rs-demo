@@ -21,7 +21,10 @@ static JSValue ridl_make_i32_{{ pv.init_literal|normalize_ident|lower }}(JSConte
 }
 {%- else if pv.field_type == crate::parser::ast::Type::Bool %}
 static JSValue ridl_make_bool_{{ pv.init_literal|normalize_ident|lower }}(JSContext *ctx) {
-    return JS_NewBool(ctx, {{ pv.init_literal }} ? 1 : 0);
+    // JS_NewBool is a 1-arg static inline in mquickjs.h (no ctx parameter);
+    // C here has no stdbool, so map the RIDL bool literal to 1/0.
+    (void)ctx;
+    return JS_NewBool({% if pv.init_literal == "true" %}1{% else %}0{% endif %});
 }
 {%- else if pv.field_type == crate::parser::ast::Type::Null %}
 static JSValue ridl_make_null(JSContext *ctx) {
@@ -109,6 +112,52 @@ static int ridl_module_extensions_init_once(JSContext *ctx) {
     return 0;
 }
 
+// GLOBAL singleton js-only `var` fields (plain var) are installed onto the
+// singleton object by JS_RIDL_StdlibInit below. Module-mode singletons are not
+// reachable from JS today, so they get no installation code.
+// NOTE: the validator restricts singleton var literal types to
+// {i32, bool, string, null}; anything else fails generation loudly.
+{%- for m in modules %}
+{%- if m.module_decl.is_none() %}
+{%- for s in m.singletons %}
+{%- if s.js_fields|length > 0 %}
+static int ridl_install_singleton_{{ s.name|to_snake_case }}_fields(JSContext *ctx) {
+    JSValue global_obj = JS_GetGlobalObject(ctx);
+    JSValue obj = JS_GetPropertyStr(ctx, global_obj, "{{ s.name }}");
+    if (JS_IsException(obj))
+        return -1;
+    if (JS_IsUndefined(obj))
+        return -1;
+
+    JSValue v;
+{%- for f in s.js_fields %}
+{%- if f.is_proto %}
+#error "ridl: singleton 'proto var' is rejected by the validator (plain 'var' only)"
+{%- else if f.field_type == crate::parser::ast::Type::I32 %}
+    v = JS_NewInt32(ctx, {{ f.init_literal }});
+{%- else if f.field_type == crate::parser::ast::Type::Bool %}
+    {# C has no stdbool here: map the RIDL bool literal to 1/0. #}
+    v = JS_NewBool({% if f.init_literal == "true" %}1{% else %}0{% endif %});
+{%- else if f.field_type == crate::parser::ast::Type::String %}
+    v = JS_NewString(ctx, "{{ f.init_literal|escape_c_string }}");
+{%- else if f.field_type == crate::parser::ast::Type::Null %}
+    v = JS_NULL;
+{%- else %}
+#error "ridl: singleton var literal type only supports {i32, bool, string, null}"
+{%- endif %}
+    if (JS_IsException(v))
+        return -1;
+    if (JS_SetPropertyStr(ctx, obj, "{{ f.name }}", v) < 0)
+        return -1;
+{%- endfor %}
+
+    return 0;
+}
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
+
 int JS_RIDL_StdlibInit(JSContext *ctx) {
     if (!ctx)
         return 0;
@@ -119,6 +168,20 @@ int JS_RIDL_StdlibInit(JSContext *ctx) {
     // Install proto vars once (after module classes are materialized).
     if (ridl_install_proto_vars_all(ctx) < 0)
         return -1;
+
+    // Install GLOBAL singleton js-only var fields (plain var). This runs before
+    // any user script, so the fields are readable before any singleton method
+    // is first called.
+{%- for m in modules %}
+{%- if m.module_decl.is_none() %}
+{%- for s in m.singletons %}
+{%- if s.js_fields|length > 0 %}
+    if (ridl_install_singleton_{{ s.name|to_snake_case }}_fields(ctx) < 0)
+        return -1;
+{%- endif %}
+{%- endfor %}
+{%- endif %}
+{%- endfor %}
 
     return 0;
 }

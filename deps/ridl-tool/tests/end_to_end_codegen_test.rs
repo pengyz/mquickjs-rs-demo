@@ -743,6 +743,9 @@ json struct Config {
 }
 
 /// P1-2: struct 带可选字段
+///
+/// Phase D 拒绝矩阵：`T?` 字段是生成期硬错误（此前静默生成 Option 字段，
+/// 但无任何 JS↔Rust 转换路径——静默错误面被明确拒绝取代）。
 #[test]
 fn test_struct_with_optional_fields() {
     let ridl_input = r#"
@@ -766,15 +769,10 @@ struct UserProfile {
         "test_module",
     );
 
-    assert!(result.is_ok(), "struct with optional fields should succeed: {:?}", result.err());
-
-    let api_file = output_dir.join("api.rs");
-    let api_content = std::fs::read_to_string(&api_file).unwrap();
-
-    assert!(api_content.contains("pub struct UserProfile"), "Should generate UserProfile struct");
-    assert!(api_content.contains("pub name: String"), "Should have name field");
-    assert!(api_content.contains("pub email: Option<String>"), "Should have optional email field");
-    assert!(api_content.contains("pub age: Option<i32>"), "Should have optional age field");
+    let err = result.expect_err("optional struct fields must be rejected with a diagnostic");
+    let msg = err.to_string();
+    assert!(msg.contains("UserProfile"), "error must name the struct: {msg}");
+    assert!(msg.contains("email") && msg.contains("optional"), "error must name the field and the rule: {msg}");
 }
 
 /// P1-3: using 别名生成
@@ -807,7 +805,9 @@ using IntList = array<i32>;
     assert!(api_content.contains("type IntList"), "Should generate IntList alias");
 }
 
-/// P1-4: Custom 类型作为参数（使用 enum）— v1 不支持，记录为已知限制
+/// P1-4: Custom 类型作为参数（使用 enum）
+///
+/// Phase D 起 enum 作为方法参数/返回被端到端支持（此前 v1 拒绝）。
 #[test]
 fn test_enum_as_parameter() {
     let ridl_input = r#"
@@ -836,11 +836,21 @@ class ColorPicker {
         "test_module",
     );
 
-    // v1 不支持 Custom 类型作为参数/返回值（需要 JS↔Rust 转换代码）
-    assert!(result.is_err(), "v1 does not support enum as parameter yet");
+    result.expect("Phase D supports enum as parameter/return");
+
+    let api_content = std::fs::read_to_string(output_dir.join("api.rs")).unwrap();
+    assert!(api_content.contains("pub enum Color"), "Should generate Rust enum");
+    assert!(api_content.contains("c: crate::api::Color"), "Class method param must use the enum path");
+    assert!(api_content.contains(") -> crate::api::Color;"), "Class method return must use the enum path");
+
+    let glue_content = std::fs::read_to_string(output_dir.join("glue.rs")).unwrap();
+    assert!(glue_content.contains("\"RED\" => crate::api::Color::Red"), "Param must map raw variant names");
+    assert!(glue_content.contains("crate::api::Color::Red => \"RED\""), "Return must map back to raw variant names");
 }
 
-/// P1-4: Custom 类型作为参数（使用 struct）— v1 不支持，记录为已知限制
+/// P1-4: Custom 类型作为参数（使用 struct）
+///
+/// Phase D 起 struct 作为方法参数/返回被端到端支持（此前 v1 拒绝）。
 #[test]
 fn test_struct_as_parameter() {
     let ridl_input = r#"
@@ -868,8 +878,16 @@ class Canvas {
         "test_module",
     );
 
-    // v1 不支持 Custom 类型作为参数/返回值
-    assert!(result.is_err(), "v1 does not support struct as parameter yet");
+    result.expect("Phase D supports struct as parameter/return");
+
+    let api_content = std::fs::read_to_string(output_dir.join("api.rs")).unwrap();
+    assert!(api_content.contains("pub struct Point"), "Should generate Rust struct");
+    assert!(api_content.contains("p: crate::api::Point"), "Class method param must use the struct path");
+    assert!(api_content.contains(") -> crate::api::Point;"), "Class method return must use the struct path");
+
+    let glue_content = std::fs::read_to_string(output_dir.join("glue.rs")).unwrap();
+    assert!(glue_content.contains("struct 'Point': expected object"), "Param must expect a plain object");
+    assert!(glue_content.contains("crate::api::Point { x, y }"), "Param must build the struct literal");
 }
 
 // ========================================================================

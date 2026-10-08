@@ -1,0 +1,9 @@
+// Fixture for singleton_var_install_render_test.rs:
+// module-mode singleton with var fields — fields must NOT be installed
+// (module-mode singletons are not reachable from JS today; GLOBAL only).
+module test.store@1.0
+
+singleton MStore {
+    var count: i32 = 7;
+    fn ping() -> i32;
+}

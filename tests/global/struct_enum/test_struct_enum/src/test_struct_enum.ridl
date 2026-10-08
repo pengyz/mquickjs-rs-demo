@@ -1,0 +1,19 @@
+// Phase D (TODO 3a): struct/enum 命名类型端到端。
+//
+// - struct Address：基元 + string 字段；
+// - struct Person：嵌套 struct（address）+ array<string>（tags）字段；
+// - enum Color：纯 C-like，JS 形态 = RIDL 原始变体名（"RED"/"GREEN"/"BLUE"）。
+//
+// 方法签名覆盖：构造返回（字段注入）、echo 透传（对象逐字段提取 + 重新注入）、
+// 枚举 next/echo（双向映射）。
+struct Address { street: string; num: i32; }
+struct Person { name: string; address: Address; tags: array<string>; }
+enum Color { RED, GREEN, BLUE }
+
+singleton TestStructEnum {
+    fn makeAddress(street: string, num: i32) -> Address;
+    fn echoAddress(a: Address) -> Address;
+    fn makePerson(p: Person) -> Person;
+    fn nextColor(c: Color) -> Color;
+    fn echoColor(c: Color) -> Color;
+}

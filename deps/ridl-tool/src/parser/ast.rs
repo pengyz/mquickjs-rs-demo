@@ -85,6 +85,11 @@ pub struct Singleton {
     pub pos: Option<SourcePos>,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
+    /// JS-only fields (`var name: T = literal;`) defined on the singleton object.
+    /// Mirrors `Class.js_fields`; `proto var` parses here but is rejected by the
+    /// validator (a singleton has no addressable prototype).
+    #[serde(default)]
+    pub js_fields: Vec<JsField>,
     pub module: Option<ModuleDeclaration>,
 }
 

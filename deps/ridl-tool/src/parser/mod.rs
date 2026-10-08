@@ -1427,6 +1427,7 @@ fn parse_singleton(
     // singleton body
     let mut methods = Vec::new();
     let mut properties = Vec::new();
+    let mut js_fields = Vec::new();
 
     for p in inner_pairs {
         match p.as_rule() {
@@ -1447,6 +1448,23 @@ fn parse_singleton(
                         let prop = parse_readwrite_property(member_pair)?;
                         properties.push(prop);
                     }
+                    Rule::const_member => {
+                        let mut f = parse_var_field(member_pair)?;
+                        f.kind = crate::parser::ast::JsFieldKind::Const;
+                        js_fields.push(f);
+                    }
+                    Rule::var_member => {
+                        let f = parse_var_field(member_pair)?;
+                        js_fields.push(f);
+                    }
+                    Rule::proto_var_member => {
+                        // Parsed (not grammar-rejected) so the validator can
+                        // report a friendly, located error instead.
+                        let mut f = parse_var_field(member_pair)?;
+                        f.modifiers
+                            .insert(0, crate::parser::ast::PropertyModifier::Proto);
+                        js_fields.push(f);
+                    }
                     _ => {}
                 }
             }
@@ -1460,6 +1478,7 @@ fn parse_singleton(
         pos,
         methods,
         properties,
+        js_fields,
         module: None,
     })
 }

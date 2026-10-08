@@ -35,6 +35,10 @@ impl TestTypesSingleton for DefaultTestTypesSingleton {
         v
     }
 
+    fn echo_bool_opt(&mut self, v: Option<bool>) -> Option<bool> {
+        v
+    }
+
     fn echo_any<'ctx>(
         &mut self,
         env: &mut mquickjs_rs::Env<'ctx>,

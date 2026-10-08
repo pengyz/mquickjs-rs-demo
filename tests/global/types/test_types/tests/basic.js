@@ -80,6 +80,20 @@ assertEq(t.echoI32Nullable(null), null)
 assertEq(t.echoI32Nullable(undefined), null)
 assertEq(t.echoI32Nullable(123), 123)
 
+// Optional(bool): false must survive (not be swallowed as falsy/None)
+assertEq(t.echoBoolOpt(null), null)
+assertEq(t.echoBoolOpt(undefined), null)
+assertEq(t.echoBoolOpt(true), true)
+assertEq(t.echoBoolOpt(false), false)
+
+threw = false
+try {
+  t.echoBoolOpt(1)
+} catch (e2b) {
+  threw = true
+}
+assert(threw, 'expected TypeError for echoBoolOpt(1)')
+
 // TypeError cases (RIDL is strict even in default mode)
 var threw = false
 try {

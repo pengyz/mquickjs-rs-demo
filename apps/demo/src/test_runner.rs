@@ -39,7 +39,14 @@ pub fn collect_js_files(path: &Path) -> Result<Vec<PathBuf>, String> {
             let ent = ent.map_err(|e| format!("failed to read dir entry: {e}"))?;
             let p = ent.path();
             if p.is_dir() {
-                stack.push(p);
+                // Skip `_`-prefixed directories (scratch/diag output, not test corpora).
+                let skip = p
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with('_'));
+                if !skip {
+                    stack.push(p);
+                }
                 continue;
             }
             if p.extension().and_then(|s| s.to_str()) == Some("js") {
@@ -105,21 +112,26 @@ pub struct RunSummary {
 }
 
 pub fn group_key_for_path(path: &Path) -> String {
-    // Grouping heuristics (stable, path-based):
+    // Grouping heuristics (stable, path-shape based):
     // - tests/global/<group>/... -> global/<group>
     // - tests/<mode>/<module>/... -> <mode>/<module>
     // - ridl-modules/<module>/tests/... -> module/<module>
-    let parts: Vec<String> = path
+    //
+    // Paths may be absolute (default roots are resolved against the workspace
+    // root), so relativize against it first; keep the original path when it is
+    // not under the workspace root.
+    let rel = path
+        .strip_prefix(workspace_root())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|_| path.to_path_buf());
+
+    let parts: Vec<String> = rel
         .components()
         .map(|c| c.as_os_str().to_string_lossy().to_string())
         .collect();
 
     if parts.len() >= 3 && parts[0] == "tests" && parts[1] == "global" {
         return format!("global/{}", parts[2]);
-    }
-
-    if parts.len() >= 5 && parts[0] == "ridl-modules" && parts[1] == "tests" {
-        return format!("{}/{}", parts[2], parts[3]);
     }
 
     if parts.len() >= 3 && parts[0] == "ridl-modules" {
@@ -149,4 +161,43 @@ pub fn run_files_with_summary(files: &[PathBuf]) -> RunSummary {
     }
 
     summary
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collect_js_files_skips_underscore_prefixed_dirs() {
+        let root = tempfile::tempdir().expect("tempdir");
+
+        std::fs::write(root.path().join("a.js"), "// ok").expect("write a.js");
+        std::fs::create_dir(root.path().join("_diag")).expect("mkdir _diag");
+        std::fs::write(root.path().join("_diag").join("b.js"), "// diag").expect("write b.js");
+        std::fs::create_dir(root.path().join("_private")).expect("mkdir _private");
+        std::fs::write(root.path().join("_private").join("c.js"), "// private").expect("write c.js");
+        // Nested `_` dirs are skipped at any depth.
+        std::fs::create_dir_all(root.path().join("sub").join("_deep")).expect("mkdir sub/_deep");
+        std::fs::write(root.path().join("sub").join("d.js"), "// nested ok").expect("write d.js");
+        std::fs::write(
+            root.path().join("sub").join("_deep").join("e.js"),
+            "// deep skipped",
+        )
+        .expect("write e.js");
+
+        let mut files = collect_js_files(root.path()).expect("collect_js_files");
+        files.sort();
+
+        let names: Vec<String> = files
+            .iter()
+            .map(|p| {
+                p.strip_prefix(root.path())
+                    .expect("path under temp root")
+                    .to_string_lossy()
+                    .to_string()
+            })
+            .collect();
+
+        assert_eq!(names, vec!["a.js", "sub/d.js"]);
+    }
 }

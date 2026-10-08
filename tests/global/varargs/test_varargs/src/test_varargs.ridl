@@ -1,0 +1,6 @@
+singleton TestVarargs {
+    // Fixed param + string varargs: the v1 string-varargs path.
+    // Glue must collect owned Strings (Vec<String>) matching the API trait;
+    // the JS_ToCString pointer is borrowed and must not outlive a loop iteration.
+    fn joinAll(sep: string, ...parts: string) -> string;
+}

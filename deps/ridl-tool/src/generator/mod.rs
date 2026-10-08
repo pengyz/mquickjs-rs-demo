@@ -120,6 +120,187 @@ fn contains_union(ty: &Type) -> bool {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Phase D: named-type override pass
+//
+// 与 union 覆写同一范式：渲染前对方法/函数签名中的命名类型（同模块
+// struct/enum）改写 rust_ty 为生成类型路径，并把解析出的类型形状挂到
+// 模板节点上供转换 emitter 使用。
+//
+// 执行顺序契约：先 union 覆写、后 named-type 覆写（见 generate_module_files）。
+// 两个 pass 的作用域天然不相交（union 覆写只改写含 Union 的类型；
+// named-type 覆写只改写裸 Custom），顺序测试钉死在
+// tests/generator_named_types_override_test.rs。
+// ---------------------------------------------------------------------------
+
+/// Classify where a named-type reference occurs inside `ty`.
+enum NamedTypeRef<'a> {
+    /// Bare `Custom(name)` resolving to a same-module struct/enum.
+    Direct(&'a NamedTypeInfo),
+    /// A resolvable named type appears in a nested position (array/optional/map/
+    /// traced/union/group) — unsupported in v1, diagnosable error.
+    Nested(&'a NamedTypeInfo, String),
+    /// No resolvable named type inside `ty`.
+    None,
+}
+
+fn classify_named_type_ref<'a>(ty: &Type, named_types: &'a [NamedTypeInfo]) -> NamedTypeRef<'a> {
+    match ty {
+        Type::Custom(name) => {
+            // `(A | B)` shaped Custom strings are the union-in-Optional encoding
+            // handled by the union pass; never treat them as named types.
+            if name.starts_with('(') {
+                return NamedTypeRef::None;
+            }
+            match named_types.iter().find(|n| n.ridl_name == *name) {
+                Some(info) => NamedTypeRef::Direct(info),
+                None => NamedTypeRef::None,
+            }
+        }
+        Type::Optional(inner) => classify_nested(inner, named_types, "optional"),
+        Type::Group(inner) => classify_nested(inner, named_types, "group"),
+        Type::Traced(inner) => classify_nested(inner, named_types, "Traced"),
+        Type::Array(inner) => classify_nested(inner, named_types, "array"),
+        Type::Map(k, v) => {
+            for (ty, pos) in [(k.as_ref(), "map key"), (v.as_ref(), "map value")] {
+                if let NamedTypeRef::Direct(info) = classify_named_type_ref(ty, named_types) {
+                    return NamedTypeRef::Nested(info, pos.to_string());
+                }
+            }
+            NamedTypeRef::None
+        }
+        Type::Union(types) => {
+            for t in types {
+                if let NamedTypeRef::Direct(info) = classify_named_type_ref(t, named_types) {
+                    return NamedTypeRef::Nested(info, "union member".to_string());
+                }
+            }
+            NamedTypeRef::None
+        }
+        _ => NamedTypeRef::None,
+    }
+}
+
+fn classify_nested<'a>(
+    ty: &Type,
+    named_types: &'a [NamedTypeInfo],
+    position: &str,
+) -> NamedTypeRef<'a> {
+    match classify_named_type_ref(ty, named_types) {
+        NamedTypeRef::Direct(info) => NamedTypeRef::Nested(info, position.to_string()),
+        other => other,
+    }
+}
+
+fn apply_named_type_rust_ty_overrides(
+    named_types: &[NamedTypeInfo],
+    tpl: &mut impl RustGlueLikeTemplate,
+) -> Result<(), String> {
+    for itf in tpl.interfaces_mut().iter_mut() {
+        for m in &mut itf.methods {
+            let name = m.name.clone();
+            apply_named_type_overrides_method(named_types, &name, m)?;
+        }
+    }
+
+    for f in tpl.functions_mut().iter_mut() {
+        let name = f.name.clone();
+        apply_named_type_overrides_function(named_types, &name, f)?;
+    }
+
+    for s in tpl.singletons_mut().iter_mut() {
+        for m in &mut s.methods {
+            let name = m.name.clone();
+            apply_named_type_overrides_method(named_types, &name, m)?;
+        }
+    }
+
+    for c in tpl.classes_mut().iter_mut() {
+        if let Some(ctor) = &mut c.constructor {
+            let name = ctor.name.clone();
+            apply_named_type_overrides_function(named_types, &name, ctor)?;
+        }
+        for m in &mut c.methods {
+            let name = m.name.clone();
+            apply_named_type_overrides_method(named_types, &name, m)?;
+        }
+    }
+
+    Ok(())
+}
+
+fn apply_named_type_overrides_function(
+    named_types: &[NamedTypeInfo],
+    fn_name: &str,
+    f: &mut TemplateFunction,
+) -> Result<(), String> {
+    for p in &mut f.params {
+        apply_named_type_overrides_param(named_types, fn_name, p)?;
+    }
+    apply_named_type_overrides_return(named_types, fn_name, &f.return_type, &mut f.return_rust_ty, &mut f.return_named)
+}
+
+fn apply_named_type_overrides_method(
+    named_types: &[NamedTypeInfo],
+    fn_name: &str,
+    m: &mut TemplateMethod,
+) -> Result<(), String> {
+    for p in &mut m.params {
+        apply_named_type_overrides_param(named_types, fn_name, p)?;
+    }
+    apply_named_type_overrides_return(named_types, fn_name, &m.return_type, &mut m.return_rust_ty, &mut m.return_named)
+}
+
+fn apply_named_type_overrides_param(
+    named_types: &[NamedTypeInfo],
+    fn_name: &str,
+    p: &mut TemplateParam,
+) -> Result<(), String> {
+    // 方案外缺口（按方案精神补齐的可诊断拒绝）：`...rest: Address` 形式的
+    // 命名类型变参不在 v1 范围（变参收集循环与命名类型提取不兼容）。
+    if p.variadic {
+        if let NamedTypeRef::Direct(info) = classify_named_type_ref(&p.ty, named_types) {
+            return Err(format!(
+                "named type '{}' (struct/enum) in fn '{fn_name}' variadic param '{}': varargs of named types are not supported in v1",
+                info.ridl_name, p.name
+            ));
+        }
+    }
+    match classify_named_type_ref(&p.ty, named_types) {
+        NamedTypeRef::Direct(info) => {
+            p.rust_ty = info.rust_path.clone();
+            p.named = Some(info.clone());
+            Ok(())
+        }
+        NamedTypeRef::Nested(info, position) => Err(format!(
+            "named type '{}' (struct/enum) in fn '{fn_name}' param '{}': named types are not supported inside {position} in v1 (use the named type directly as a parameter/return type)",
+            info.ridl_name, p.name
+        )),
+        NamedTypeRef::None => Ok(()),
+    }
+}
+
+fn apply_named_type_overrides_return(
+    named_types: &[NamedTypeInfo],
+    fn_name: &str,
+    ty: &Type,
+    out_rust_ty: &mut String,
+    out_named: &mut Option<NamedTypeInfo>,
+) -> Result<(), String> {
+    match classify_named_type_ref(ty, named_types) {
+        NamedTypeRef::Direct(info) => {
+            *out_rust_ty = info.rust_path.clone();
+            *out_named = Some(info.clone());
+            Ok(())
+        }
+        NamedTypeRef::Nested(info, position) => Err(format!(
+            "named type '{}' (struct/enum) in fn '{fn_name}' return type: named types are not supported inside {position} in v1 (use the named type directly as a parameter/return type)",
+            info.ridl_name
+        )),
+        NamedTypeRef::None => Ok(()),
+    }
+}
+
 fn union_enum_path_for_ty(
     union_types: &[TemplateUnionType],
     fn_name: &str,
@@ -364,20 +545,7 @@ fn generate_register_h_and_symbols(
                         .map(|m| m.module_path.as_str())
                         .unwrap_or("GLOBAL")
                         .to_string();
-                    singletons.push(TemplateSingleton {
-                        name: s.name,
-                        module_name_normalized: crate::generator::filters::normalize_ident(
-                            &module_name,
-                        )
-                        .unwrap_or_else(|_| "GLOBAL".to_string()),
-                        module_name,
-                        methods: s
-                            .methods
-                            .into_iter()
-                            .map(|m| TemplateMethod::from_with_mode(m, parsed.mode))
-                            .collect(),
-                        properties: s.properties,
-                    })
+                    singletons.push(TemplateSingleton::from_ast(s, module_name, parsed.mode))
                 }
                 crate::parser::ast::IDLItem::Class(c) => {
                     let module_name_normalized =
@@ -672,6 +840,45 @@ struct TemplateSingleton {
     module_name_normalized: String,
     methods: Vec<TemplateMethod>,
     properties: Vec<crate::parser::ast::Property>,
+    /// JS-only `var` fields installed by JS_RIDL_StdlibInit (GLOBAL mode only).
+    /// Never rendered by the Rust glue/api templates: glue has no access to the
+    /// singleton's JSValue (ctx-slot dispatch only).
+    js_fields: Vec<TemplateJsField>,
+}
+
+impl TemplateSingleton {
+    fn from_ast(
+        s: crate::parser::ast::Singleton,
+        module_name: String,
+        file_mode: crate::parser::FileMode,
+    ) -> Self {
+        let module_name_normalized = crate::generator::filters::normalize_ident(&module_name)
+            .unwrap_or_else(|_| "GLOBAL".to_string());
+        TemplateSingleton {
+            name: s.name,
+            module_name_normalized,
+            module_name,
+            methods: s
+                .methods
+                .into_iter()
+                .map(|m| TemplateMethod::from_with_mode(m, file_mode))
+                .collect(),
+            properties: s.properties,
+            js_fields: s
+                .js_fields
+                .into_iter()
+                .map(|f| TemplateJsField {
+                    name: f.name,
+                    field_type: f.field_type,
+                    init_literal: f.init_literal,
+                    is_proto: f
+                        .modifiers
+                        .contains(&crate::parser::ast::PropertyModifier::Proto),
+                    kind: f.kind,
+                })
+                .collect(),
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -719,6 +926,8 @@ struct TemplateMethod {
     params: Vec<TemplateParam>,
     return_type: Type,
     return_rust_ty: String,
+    /// Phase D: named-type info when the return type is a bare struct/enum ref.
+    return_named: Option<NamedTypeInfo>,
     has_variadic: bool,
     needs_scope: bool,
     decorators: Vec<TemplateDecorator>,
@@ -756,6 +965,33 @@ pub(crate) struct TemplateParam {
     // Filled during template construction.
     // For union types this will be a fully qualified path under `crate::api::{domain}::union::*`.
     pub(crate) rust_ty: String,
+
+    /// Phase D: named-type info when this param's RIDL type is a bare struct/enum
+    /// reference resolved by the named-type override pass (bare `Type::Custom`).
+    /// Filled by `apply_named_type_rust_ty_overrides`; the conversion emitters
+    /// (filters.rs) switch on this to generate struct/enum conversion code.
+    pub(crate) named: Option<NamedTypeInfo>,
+}
+
+/// Phase D: resolved named-type description carried on template nodes so the
+/// conversion emitters can generate struct/enum JS<->Rust code without touching
+/// stateless filter signatures (mirrors how union overrides rewrite rust_ty).
+#[derive(Debug, Clone)]
+pub(crate) struct NamedTypeInfo {
+    /// Original RIDL name (e.g. `Address`).
+    pub(crate) ridl_name: String,
+    /// Generated Rust path (e.g. `crate::api::Address`).
+    pub(crate) rust_path: String,
+    pub(crate) shape: NamedTypeShape,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) enum NamedTypeShape {
+    /// Struct with its fields (in RIDL declaration order).
+    Struct(Vec<TemplateStructField>),
+    /// C-like enum: (RIDL raw variant name, Rust PascalCase variant name).
+    /// JS string form is the RIDL raw name (e.g. "RED").
+    Enum(Vec<(String, String)>),
 }
 
 #[derive(Debug, Clone)]
@@ -777,11 +1013,16 @@ struct TemplateStruct {
 }
 
 #[derive(Debug, Clone)]
-struct TemplateStructField {
+pub(crate) struct TemplateStructField {
     name: String,
     rust_name: String,
     ty: Type,
     rust_ty: String,
+    /// Phase D: resolved shape for a nested struct field (`Custom` field) or
+    /// for the element type of an `array<struct>` field. None for
+    /// primitive/string/array<primitive> fields (conversion emitters use this
+    /// instead of reaching a stateful named-type table).
+    nested: Option<Box<NamedTypeInfo>>,
 }
 
 #[derive(Debug, Clone)]
@@ -798,6 +1039,8 @@ struct TemplateFunction {
     params: Vec<TemplateParam>,
     return_type: Type,
     return_rust_ty: String,
+    /// Phase D: named-type info when the return type is a bare struct/enum ref.
+    return_named: Option<NamedTypeInfo>,
 }
 
 impl TemplateInterface {
@@ -878,6 +1121,7 @@ impl TemplateMethod {
             params,
             return_type,
             return_rust_ty,
+            return_named: None,
             has_variadic,
             needs_scope,
             decorators,
@@ -902,6 +1146,7 @@ impl TemplateParam {
             variadic: param.variadic,
             file_mode,
             rust_ty,
+            named: None,
         }
     }
 }
@@ -928,6 +1173,7 @@ impl TemplateFunction {
             params,
             return_type,
             return_rust_ty,
+            return_named: None,
         }
     }
 }
@@ -1055,6 +1301,23 @@ pub fn generate_module_files(
     let mut structs = Vec::new();
     let mut using_aliases = Vec::new();
 
+    // Phase D: pre-collect same-module named-type names so struct fields can
+    // resolve nested struct references regardless of definition order.
+    let struct_names: std::collections::HashSet<String> = items
+        .iter()
+        .filter_map(|it| match it {
+            crate::parser::ast::IDLItem::Struct(s) => Some(s.name.clone()),
+            _ => None,
+        })
+        .collect();
+    let enum_names: std::collections::HashSet<String> = items
+        .iter()
+        .filter_map(|it| match it {
+            crate::parser::ast::IDLItem::Enum(e) => Some(e.name.clone()),
+            _ => None,
+        })
+        .collect();
+
     for item in items {
         match item {
             crate::parser::ast::IDLItem::Function(f) => {
@@ -1110,25 +1373,7 @@ pub fn generate_module_files(
                 });
             }
             crate::parser::ast::IDLItem::Struct(s) => {
-                structs.push(TemplateStruct {
-                    name: s.name.clone(),
-                    fields: s
-                        .fields
-                        .iter()
-                        .map(|f| {
-                            let rust_ty =
-                                crate::generator::filters::rust_type_from_idl(&f.field_type)
-                                    .unwrap_or_else(|_| "JSValue".to_string());
-                            TemplateStructField {
-                                name: f.name.clone(),
-                                rust_name: crate::generator::filters::rust_ident(&f.name)
-                                    .unwrap_or_else(|_| f.name.clone()),
-                                ty: f.field_type.clone(),
-                                rust_ty,
-                            }
-                        })
-                        .collect(),
-                });
+                structs.push(build_template_struct(s, &struct_names, &enum_names)?);
             }
             crate::parser::ast::IDLItem::Using(u) => {
                 let rust_ty = crate::generator::filters::rust_type_from_idl(&u.alias_type)
@@ -1155,21 +1400,11 @@ pub fn generate_module_files(
                 .map(|m| m.module_path.as_str())
                 .unwrap_or("GLOBAL")
                 .to_string();
-            singletons.push(TemplateSingleton {
-                name: s.name.clone(),
-                module_name_normalized: crate::generator::filters::normalize_ident(
-                    &singleton_module_name,
-                )
-                .unwrap_or_else(|_| "GLOBAL".to_string()),
-                module_name: singleton_module_name,
-                methods: s
-                    .methods
-                    .clone()
-                    .into_iter()
-                    .map(|m| TemplateMethod::from_with_mode(m, file_mode))
-                    .collect(),
-                properties: s.properties.clone(),
-            });
+            singletons.push(TemplateSingleton::from_ast(
+                s.clone(),
+                singleton_module_name,
+                file_mode,
+            ));
         }
     }
 
@@ -1189,8 +1424,14 @@ pub fn generate_module_files(
         &rust_glue_template.functions,
         &rust_glue_template.singletons,
         &classes,
-    );
+    )?;
+    // Phase D order contract: union overrides FIRST, named-type overrides SECOND.
     apply_union_rust_ty_overrides(&union_types, &mut rust_glue_template);
+
+    let named_types = build_named_type_table(&enums, &structs)
+        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+    apply_named_type_rust_ty_overrides(&named_types, &mut rust_glue_template)
+        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
     let rust_glue_code = rust_glue_template.render()?;
     std::fs::write(output_path.join("glue.rs"), rust_glue_code)?;
 
@@ -1211,14 +1452,229 @@ pub fn generate_module_files(
         union_types_by_domain: group_union_types_by_domain(union_types.clone()),
     };
 
-    // Keep API trait signatures consistent with glue by applying the same union overrides.
+    // Keep API trait signatures consistent with glue by applying the same union
+    // overrides, then the same named-type overrides (same order as glue).
     apply_union_rust_ty_overrides(&union_types, &mut rust_api_template);
+    apply_named_type_rust_ty_overrides(&named_types, &mut rust_api_template)
+        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
     let rust_api_code = rust_api_template.render()?;
     std::fs::write(output_path.join("api.rs"), rust_api_code)?;
 
     // 注意：模块命令只生成 Rust glue 与 API，其他文件在 aggregate 命令中生成
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// Phase D: named-type table + struct field rejection matrix
+// ---------------------------------------------------------------------------
+
+/// Build the per-module named-type table consumed by the override pass.
+///
+/// `structs` must already have passed the struct-field rejection matrix (see
+/// `build_template_struct`). Nested struct shapes are resolved here with
+/// memoization + cycle detection and stored on `TemplateStructField::nested`
+/// so the conversion emitters stay stateless.
+fn build_named_type_table(
+    enums: &[TemplateEnum],
+    structs: &[TemplateStruct],
+) -> Result<Vec<NamedTypeInfo>, String> {
+    let mut out: Vec<NamedTypeInfo> = Vec::new();
+    let mut memo: std::collections::HashMap<String, NamedTypeInfo> =
+        std::collections::HashMap::new();
+
+    for s in structs {
+        out.push(resolve_struct_shape(&s.name, structs, &mut memo, &mut Vec::new())?);
+    }
+
+    for e in enums {
+        let variants = e
+            .variants
+            .iter()
+            .map(|v| {
+                let pascal = crate::generator::filters::to_pascal_case(&v.name)
+                    .unwrap_or_else(|_| v.name.clone());
+                (v.name.clone(), pascal)
+            })
+            .collect();
+        out.push(NamedTypeInfo {
+            ridl_name: e.name.clone(),
+            rust_path: format!(
+                "crate::api::{}",
+                crate::generator::naming::to_upper_camel_case(&e.name)
+            ),
+            shape: NamedTypeShape::Enum(variants),
+        });
+    }
+
+    Ok(out)
+}
+
+/// Resolve a struct's full conversion shape, filling `TemplateStructField::nested`
+/// recursively. `stack` carries the current resolution chain for cycle
+/// diagnostics (`struct A { b: B } struct B { a: A }` is an infinitely sized
+/// value and is rejected with a named chain instead of a rustc size error).
+fn resolve_struct_shape(
+    name: &str,
+    structs: &[TemplateStruct],
+    memo: &mut std::collections::HashMap<String, NamedTypeInfo>,
+    stack: &mut Vec<String>,
+) -> Result<NamedTypeInfo, String> {
+    if let Some(info) = memo.get(name) {
+        return Ok(info.clone());
+    }
+    if let Some(pos) = stack.iter().position(|s| s == name) {
+        let mut chain = stack[pos..].to_vec();
+        chain.push(name.to_string());
+        return Err(format!(
+            "recursive struct nesting is not supported (chain: {} — the generated Rust type would be infinitely sized)",
+            chain.join(" -> ")
+        ));
+    }
+
+    let s = structs
+        .iter()
+        .find(|s| s.name == name)
+        .ok_or_else(|| format!("unknown struct '{name}' in named-type table"))?;
+
+    stack.push(name.to_string());
+    let mut fields = s.fields.clone();
+    for f in &mut fields {
+        // A nested reference is either a bare `Custom` field or the element of
+        // an `array<Custom>` field; the field matrix already restricted both to
+        // same-module structs (enum fields are rejected).
+        let target = match &f.ty {
+            Type::Custom(n) => Some(n.clone()),
+            Type::Array(inner) => match inner.as_ref() {
+                Type::Custom(n) => Some(n.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        if let Some(target) = target {
+            let info = resolve_struct_shape(&target, structs, memo, stack)?;
+            f.nested = Some(Box::new(info));
+        }
+    }
+    stack.pop();
+
+    let info = NamedTypeInfo {
+        ridl_name: name.to_string(),
+        rust_path: format!(
+            "crate::api::{}",
+            crate::generator::naming::to_upper_camel_case(name)
+        ),
+        shape: NamedTypeShape::Struct(fields),
+    };
+    memo.insert(name.to_string(), info.clone());
+    Ok(info)
+}
+
+/// Build a `TemplateStruct`, enforcing the Phase D field rejection matrix.
+///
+/// 允许集：基元(i32/i64/f32/f64/bool) / string / 嵌套 struct / array<允许集>。
+/// 明确拒绝（全部带可诊断错误，指明 struct 与字段）：
+/// - `Traced<T>`（Traced 是 class opaque 专用）
+/// - union 成员
+/// - ClassRef（class 同名 Custom 已被 parser 的 class_ref_rewrite 改写为
+///   ClassRef，struct 字段引用 class 会与 class 语义互相劫持）
+/// - map
+/// - `T?` 字段
+/// - enum 类型字段（v1 允许集未包含；enum 作为方法参数/返回使用）
+///
+/// 旧实现中 `rust_type_from_idl` 失败会静默回退 `rust_ty = "JSValue"`；该回退
+/// 已移除：所有允许集分支都能确定地给出 rust_ty，其余一律硬错误。
+fn build_template_struct(
+    s: &crate::parser::ast::StructDef,
+    struct_names: &std::collections::HashSet<String>,
+    enum_names: &std::collections::HashSet<String>,
+) -> Result<TemplateStruct, Box<dyn std::error::Error>> {
+    let mut fields: Vec<TemplateStructField> = Vec::new();
+    for f in &s.fields {
+        let rust_ty = struct_field_rust_ty(&s.name, &f.name, &f.field_type, struct_names, enum_names)
+            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?;
+        fields.push(TemplateStructField {
+            name: f.name.clone(),
+            rust_name: crate::generator::filters::rust_ident(&f.name)
+                .unwrap_or_else(|_| f.name.clone()),
+            ty: f.field_type.clone(),
+            rust_ty,
+            nested: None,
+        });
+    }
+    Ok(TemplateStruct {
+        name: s.name.clone(),
+        fields,
+    })
+}
+
+fn struct_field_rust_ty(
+    owner: &str,
+    field_name: &str,
+    ty: &Type,
+    struct_names: &std::collections::HashSet<String>,
+    enum_names: &std::collections::HashSet<String>,
+) -> Result<String, String> {
+    let reject = |why: String| -> Result<String, String> {
+        Err(format!(
+            "struct '{owner}': field '{field_name}' of type '{ty}': {why}"
+        ))
+    };
+
+    match ty {
+        Type::Bool | Type::I32 | Type::I64 | Type::F32 | Type::F64 | Type::String => {
+            crate::generator::filters::rust_type_from_idl(ty)
+                .map_err(|e| format!("struct '{owner}': field '{field_name}': {e}"))
+        }
+        Type::Custom(name) if !name.starts_with('(') => {
+            if struct_names.contains(name) {
+                Ok(format!(
+                    "crate::api::{}",
+                    crate::generator::naming::to_upper_camel_case(name)
+                ))
+            } else if enum_names.contains(name) {
+                reject(
+                    "struct fields of enum type are not supported in v1 (allowed field set: \
+                     primitives/string/nested struct/array<allowed>); use the enum directly as a \
+                     method parameter/return type"
+                        .to_string(),
+                )
+            } else {
+                reject(format!(
+                    "unknown named type '{name}': struct fields may only reference structs \
+                     defined in the same module"
+                ))
+            }
+        }
+        Type::Array(inner) => {
+            let inner_rust = struct_field_rust_ty(owner, field_name, inner, struct_names, enum_names)?;
+            Ok(format!("Vec<{}>", inner_rust))
+        }
+        Type::Optional(_) => reject(
+            "optional struct fields (`T?`) are not supported in v1 (allowed field set: \
+             primitives/string/nested struct/array<allowed>)"
+                .to_string(),
+        ),
+        Type::Map(_, _) => reject(
+            "map fields are not supported in v1 (allowed field set: primitives/string/nested \
+             struct/array<allowed>)"
+                .to_string(),
+        ),
+        Type::Union(_) => reject(
+            "union fields are not supported in v1 (allowed field set: primitives/string/nested \
+             struct/array<allowed>)"
+                .to_string(),
+        ),
+        Type::Traced(_) => reject(
+            "Traced<T> fields are not supported in structs (Traced is for class opaque fields)"
+                .to_string(),
+        ),
+        Type::ClassRef(name) => reject(format!(
+            "class type '{name}' is not allowed as a struct field (classes are reference types; \
+             the reference was rewritten from a named-type mention by class_ref_rewrite)"
+        )),
+        other => reject(format!("unsupported struct field type: {other:?}")),
+    }
 }
 
 #[allow(dead_code)]

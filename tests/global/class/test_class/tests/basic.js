@@ -15,6 +15,16 @@
     throw new Error("getName mismatch");
   }
 
+  // constructor(name: string) coverage: JS-side construction must forward args
+  var u2 = new User("x");
+  if (!u2) throw new Error("new User returned falsy");
+  if (typeof u2.getName !== "function") {
+    throw new Error("expected constructed User.getName to be function");
+  }
+  if (u2.getName() !== "x") {
+    throw new Error("new User('x').getName() mismatch, got " + u2.getName());
+  }
+
   if (typeof u.echoAny !== "function") {
     throw new Error("expected User.echoAny to be function");
   }

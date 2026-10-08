@@ -13,53 +13,61 @@ pub(super) fn collect_union_types(
     functions: &[TemplateFunction],
     singletons: &[TemplateSingleton],
     classes: &[TemplateClass],
-) -> Vec<TemplateUnionType> {
+) -> Result<Vec<TemplateUnionType>, String> {
     let domain = domain_name(&module_decl);
 
     let mut out: Vec<TemplateUnionType> = vec![];
 
     for itf in interfaces {
         for m in &itf.methods {
-            collect_from_method(&domain, m, &mut out);
+            collect_from_method(&domain, m, &mut out)?;
         }
     }
 
     for f in functions {
-        collect_from_function(&domain, f, &mut out);
+        collect_from_function(&domain, f, &mut out)?;
     }
 
     for s in singletons {
         for m in &s.methods {
-            collect_from_method(&domain, m, &mut out);
+            collect_from_method(&domain, m, &mut out)?;
         }
     }
 
     for c in classes {
         if let Some(ctor) = &c.constructor {
-            collect_from_function(&domain, ctor, &mut out);
+            collect_from_function(&domain, ctor, &mut out)?;
         }
         for m in &c.methods {
-            collect_from_method(&domain, m, &mut out);
+            collect_from_method(&domain, m, &mut out)?;
         }
     }
 
-    out
+    Ok(out)
 }
 
-fn collect_from_method(domain: &str, m: &TemplateMethod, out: &mut Vec<TemplateUnionType>) {
+fn collect_from_method(
+    domain: &str,
+    m: &TemplateMethod,
+    out: &mut Vec<TemplateUnionType>,
+) -> Result<(), String> {
     for p in &m.params {
-        collect_from_param(domain, &m.name, p, out);
+        collect_from_param(domain, &m.name, p, out)?;
     }
 
-    collect_from_return(domain, &m.name, &m.return_type, out);
+    collect_from_return(domain, &m.name, &m.return_type, out)
 }
 
-fn collect_from_function(domain: &str, f: &TemplateFunction, out: &mut Vec<TemplateUnionType>) {
+fn collect_from_function(
+    domain: &str,
+    f: &TemplateFunction,
+    out: &mut Vec<TemplateUnionType>,
+) -> Result<(), String> {
     for p in &f.params {
-        collect_from_param(domain, &f.name, p, out);
+        collect_from_param(domain, &f.name, p, out)?;
     }
 
-    collect_from_return(domain, &f.name, &f.return_type, out);
+    collect_from_return(domain, &f.name, &f.return_type, out)
 }
 
 fn collect_from_param(
@@ -67,12 +75,17 @@ fn collect_from_param(
     fn_name: &str,
     p: &TemplateParam,
     out: &mut Vec<TemplateUnionType>,
-) {
-    collect_from_type(domain, fn_name, &p.name, &p.ty, out);
+) -> Result<(), String> {
+    collect_from_type(domain, fn_name, &p.name, &p.ty, out)
 }
 
-fn collect_from_return(domain: &str, fn_name: &str, ty: &Type, out: &mut Vec<TemplateUnionType>) {
-    collect_from_type(domain, fn_name, "return", ty, out);
+fn collect_from_return(
+    domain: &str,
+    fn_name: &str,
+    ty: &Type,
+    out: &mut Vec<TemplateUnionType>,
+) -> Result<(), String> {
+    collect_from_type(domain, fn_name, "return", ty, out)
 }
 
 fn collect_from_type(
@@ -81,7 +94,7 @@ fn collect_from_type(
     label: &str,
     ty: &Type,
     out: &mut Vec<TemplateUnionType>,
-) {
+) -> Result<(), String> {
     match ty {
         Type::Optional(inner) => collect_from_type(domain, fn_name, label, inner, out),
         Type::Group(inner) => collect_from_type(domain, fn_name, label, inner, out),
@@ -92,6 +105,23 @@ fn collect_from_type(
             // - Same union type used for param/return
             // - Nullable unions are represented as Option<UnionEnum> (null is normalized out)
             let name = union_name_from_members(&member_types);
+
+            // Phase D rejection matrix: a named type (struct/enum reference or a
+            // class reference produced by class_ref_rewrite) must not silently
+            // disappear from the member set (it previously degraded e.g.
+            // `string | Address` into `UnionString` holding only String).
+            for mt in &member_types {
+                let named_member = match mt {
+                    Type::Custom(n) if !n.starts_with('(') => Some(n.clone()),
+                    Type::ClassRef(n) => Some(n.clone()),
+                    _ => None,
+                };
+                if let Some(n) = named_member {
+                    return Err(format!(
+                        "union in fn '{fn_name}' ({label}) contains named type '{n}': unions over struct/enum/class types are not supported in v1 (union '{name}')"
+                    ));
+                }
+            }
 
             let mut members: Vec<TemplateUnionMember> = vec![];
             for mt in member_types {
@@ -115,8 +145,9 @@ fn collect_from_type(
             {
                 out.push(cand);
             }
+            Ok(())
         }
-        _ => {}
+        _ => Ok(()),
     }
 }
 
