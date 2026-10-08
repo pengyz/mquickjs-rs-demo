@@ -513,7 +513,7 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
         let name = CString::new("{{ f.name }}").unwrap_or_else(|_| CString::new("invalid").unwrap());
 
         {%- if f.field_type == crate::parser::ast::Type::String %}
-        let value_cstr = CString::new("{{ f.init_literal }}").unwrap_or_else(|_| CString::new("").unwrap());
+        let value_cstr = CString::new("{{ f.init_literal|escape_rust_string }}").unwrap_or_else(|_| CString::new("").unwrap());
         let value = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, value_cstr.as_ptr()) };
         {%- else if f.field_type == crate::parser::ast::Type::I32 %}
         let value = unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, {{ f.init_literal }}) };

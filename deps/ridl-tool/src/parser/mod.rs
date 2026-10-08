@@ -348,6 +348,7 @@ fn parse_definition_content(
 fn parse_interface(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<Interface, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let mut interface_pairs = pair.into_inner();
 
     // 获取接口名
@@ -373,6 +374,7 @@ fn parse_interface(
 
     Ok(Interface {
         name,
+        pos,
         methods,
         properties,
         module: None,
@@ -932,6 +934,7 @@ fn parse_param(pair: pest::iterators::Pair<Rule>) -> Result<Param, Box<dyn std::
 }
 
 fn parse_enum(pair: pest::iterators::Pair<Rule>) -> Result<Enum, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let mut inner_pairs = pair.into_inner();
 
     // enum name
@@ -952,6 +955,7 @@ fn parse_enum(pair: pest::iterators::Pair<Rule>) -> Result<Enum, Box<dyn std::er
 
     Ok(Enum {
         name,
+        pos,
         values,
         module: None,
     })
@@ -980,6 +984,7 @@ fn parse_enum_value(
 fn parse_struct_def(
     pair: pest::iterators::Pair<Rule>,
 ) -> Result<StructDef, Box<dyn std::error::Error>> {
+    let pos = Some(pair_pos(&pair));
     let inner_pairs = pair.into_inner();
 
     // Check if this is a format-specified struct (json, msgpack, protobuf)
@@ -1020,6 +1025,7 @@ fn parse_struct_def(
 
     Ok(StructDef {
         name,
+        pos,
         fields,
         serialization_format,
         module: None,

@@ -117,8 +117,9 @@ impl SemanticValidator {
             for method in &class.methods {
                 for d in &method.decorators {
                     if d.name == "nonCancellable" || d.name == "timeout" {
-                        // Decorator/Method 在 AST 中未携带位置信息，
-                        // 位置信息补全见本文件其他校验的同类 TODO。
+                        // Decorator/Method 在 AST 中尚未携带位置信息
+                        //（定义节点 interface/class/enum/struct/singleton 已有 pos，
+                        // 但方法/装饰器仍缺失），报错位置维持 (0, 0)。
                         self.errors.push(RIDLError::new(
                             format!(
                                 "Invalid decorator '@{}' on class method '{}.{}': \
@@ -416,35 +417,35 @@ impl SemanticValidator {
     fn validate_identifiers(&mut self, idl: &IDL) {
         // 检查接口定义
         for interface in &idl.interfaces {
-            self.check_for_keyword_usage(&interface.name, "interface name");
+            self.check_for_keyword_usage(&interface.name, "interface name", interface.pos.as_ref());
         }
 
         // 检查类定义
         for class in &idl.classes {
-            self.check_for_keyword_usage(&class.name, "class name");
+            self.check_for_keyword_usage(&class.name, "class name", class.pos.as_ref());
         }
 
         // 检查枚举定义
         for enum_def in &idl.enums {
-            self.check_for_keyword_usage(&enum_def.name, "enum name");
+            self.check_for_keyword_usage(&enum_def.name, "enum name", enum_def.pos.as_ref());
         }
 
         // 检查结构体定义
         for struct_def in &idl.structs {
-            self.check_for_keyword_usage(&struct_def.name, "struct name");
+            self.check_for_keyword_usage(&struct_def.name, "struct name", struct_def.pos.as_ref());
         }
 
         // 检查类型别名
         for using in &idl.using {
-            self.check_for_keyword_usage(&using.name, "using alias");
+            self.check_for_keyword_usage(&using.name, "using alias", None);
         }
 
         // 检查接口中的方法和参数
         for interface in &idl.interfaces {
             for method in &interface.methods {
-                self.check_for_keyword_usage(&method.name, "method name");
+                self.check_for_keyword_usage(&method.name, "method name", None);
                 for param in &method.params {
-                    self.check_for_keyword_usage(&param.name, "parameter name");
+                    self.check_for_keyword_usage(&param.name, "parameter name", None);
                 }
             }
         }
@@ -452,20 +453,20 @@ impl SemanticValidator {
         // 检查类中的方法、属性、JS-only 字段和构造函数
         for class in &idl.classes {
             for method in &class.methods {
-                self.check_for_keyword_usage(&method.name, "method name");
+                self.check_for_keyword_usage(&method.name, "method name", None);
                 for param in &method.params {
-                    self.check_for_keyword_usage(&param.name, "parameter name");
+                    self.check_for_keyword_usage(&param.name, "parameter name", None);
                 }
             }
             for property in &class.properties {
-                self.check_for_keyword_usage(&property.name, "property name");
+                self.check_for_keyword_usage(&property.name, "property name", None);
             }
             for f in &class.js_fields {
-                self.check_for_keyword_usage(&f.name, "js field name");
+                self.check_for_keyword_usage(&f.name, "js field name", None);
             }
             if let Some(ref constructor) = class.constructor {
                 for param in &constructor.params {
-                    self.check_for_keyword_usage(&param.name, "constructor parameter name");
+                    self.check_for_keyword_usage(&param.name, "constructor parameter name", None);
                 }
             }
         }
@@ -473,41 +474,41 @@ impl SemanticValidator {
         // 检查结构体字段
         for struct_def in &idl.structs {
             for field in &struct_def.fields {
-                self.check_for_keyword_usage(&field.name, "field name");
+                self.check_for_keyword_usage(&field.name, "field name", None);
             }
         }
 
         // 检查枚举值
         for enum_def in &idl.enums {
             for value in &enum_def.values {
-                self.check_for_keyword_usage(&value.name, "enum value name");
+                self.check_for_keyword_usage(&value.name, "enum value name", None);
             }
         }
 
         // 检查单例定义
         for singleton in &idl.singletons {
-            self.check_for_keyword_usage(&singleton.name, "singleton name");
+            self.check_for_keyword_usage(&singleton.name, "singleton name", singleton.pos.as_ref());
             for method in &singleton.methods {
-                self.check_for_keyword_usage(&method.name, "method name");
+                self.check_for_keyword_usage(&method.name, "method name", None);
                 for param in &method.params {
-                    self.check_for_keyword_usage(&param.name, "parameter name");
+                    self.check_for_keyword_usage(&param.name, "parameter name", None);
                 }
             }
         }
 
         // 检查全局函数
         for function in &idl.functions {
-            self.check_for_keyword_usage(&function.name, "function name");
+            self.check_for_keyword_usage(&function.name, "function name", None);
             for param in &function.params {
-                self.check_for_keyword_usage(&param.name, "parameter name");
+                self.check_for_keyword_usage(&param.name, "parameter name", None);
             }
         }
 
         // 检查回调
         for callback in &idl.callbacks {
-            self.check_for_keyword_usage(&callback.name, "callback name");
+            self.check_for_keyword_usage(&callback.name, "callback name", None);
             for param in &callback.params {
-                self.check_for_keyword_usage(&param.name, "parameter name");
+                self.check_for_keyword_usage(&param.name, "parameter name", None);
             }
         }
     }
@@ -557,53 +558,29 @@ impl SemanticValidator {
                     ));
                 }
 
-                // MVP literal/type constraints.
-                // - Only primitive + null are supported for now.
-                // - Custom types may only be initialized with null.
+                // Literal/type constraints. The supported set is exactly what the
+                // generated constructor can install end to end: {i32, bool, string,
+                // null}. Anything accepted here but unhandled by the glue emitter
+                // would panic (unreachable!) at class construction, so reject it
+                // here with the supported set spelled out.
                 match &f.field_type {
-                    Type::Bool
-                    | Type::I32
-                    | Type::I64
+                    Type::Bool | Type::I32 | Type::String | Type::Null => {}
+                    Type::I64
                     | Type::F32
                     | Type::F64
-                    | Type::String
-                    | Type::Null => {}
-                    Type::Any => {
-                        // any is allowed to be initialized with null (and other literals in the future).
-                    }
-                    Type::Optional(inner) => {
-                        // For nullable fields, only null init is guaranteed to be valid in MVP.
-                        // Non-null literal validation is handled by the underlying type.
-                        if f.init_literal == "null" {
-                            // ok
-                        } else if matches!(**inner, Type::String) {
-                            // ok: string literal already decoded in parser
-                        } else {
-                            self.errors.push(RIDLError::new(
-                                format!(
-                                    "Invalid js field '{}': only null or string literal init is supported for nullable fields in MVP",
-                                    f.name
-                                ),
-                                line,
-                                col,
-                                self.file_path.clone(),
-                                RIDLErrorType::SemanticError,
-                            ));
-                        }
-                    }
-                    Type::Custom(_) => {
-                        if f.init_literal != "null" {
-                            self.errors.push(RIDLError::new(
-                                format!(
-                                    "Invalid js field '{}': custom type can only be initialized with null in MVP",
-                                    f.name
-                                ),
-                                line,
-                                col,
-                                self.file_path.clone(),
-                                RIDLErrorType::SemanticError,
-                            ));
-                        }
+                    | Type::Any
+                    | Type::Optional(_)
+                    | Type::Custom(_) => {
+                        self.errors.push(RIDLError::new(
+                            format!(
+                                "Invalid js field '{}': field type {:?} is not supported; supported types are i32, bool, string, null",
+                                f.name, f.field_type
+                            ),
+                            line,
+                            col,
+                            self.file_path.clone(),
+                            RIDLErrorType::SemanticError,
+                        ));
                     }
                     _ => {
                         self.errors.push(RIDLError::new(
@@ -813,7 +790,11 @@ impl SemanticValidator {
     }
 
     /// 检查标识符是否使用了关键字
-    fn check_for_keyword_usage(&mut self, identifier: &str, context: &str) {
+    ///
+    /// `pos` 为所在定义节点在源码中的位置（interface/class/enum/struct/
+    /// singleton 定义均携带）；方法、参数、字段等成员 AST 节点尚未携带
+    /// 位置信息，传 `None` 时报错位置维持 (0, 0)。
+    fn check_for_keyword_usage(&mut self, identifier: &str, context: &str, pos: Option<&SourcePos>) {
         // RIDL关键字列表
         let keywords = [
             "interface",
@@ -838,13 +819,17 @@ impl SemanticValidator {
         ];
 
         if keywords.contains(&identifier) {
+            let (line, column) = match pos {
+                Some(p) => (p.line, p.column),
+                None => (0, 0),
+            };
             self.errors.push(RIDLError::new(
                 format!(
                     "Invalid identifier '{}', '{}' is a reserved keyword and cannot be used as {}",
                     identifier, identifier, context
                 ),
-                0, // TODO: 添加实际位置信息
-                0, // TODO: 添加实际位置信息
+                line,
+                column,
                 self.file_path.clone(),
                 RIDLErrorType::SemanticError,
             ));

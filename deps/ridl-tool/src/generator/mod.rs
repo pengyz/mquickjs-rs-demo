@@ -718,7 +718,11 @@ trait RustGlueLikeTemplate {
 }
 
 #[derive(Template)]
-#[template(path = "rust_glue.rs.j2")]
+// escape = "none": every interpolation in this template is generated code
+// (identifiers, numeric literals, pre-escaped string literals via the
+// escape_rust_string filter). Askama's default HTML escaping would silently
+// corrupt emitted string literals (`"` -> `&quot;`) while still compiling.
+#[template(path = "rust_glue.rs.j2", escape = "none")]
 struct RustGlueTemplate {
     #[allow(dead_code)]
     module_name: String,

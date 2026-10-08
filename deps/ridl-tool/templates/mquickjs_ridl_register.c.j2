@@ -33,7 +33,7 @@ static JSValue ridl_make_null(JSContext *ctx) {
 }
 {%- else if pv.field_type == crate::parser::ast::Type::String %}
 static JSValue ridl_make_str_{{ loop.index0 }}(JSContext *ctx) {
-    return JS_NewString(ctx, "{{ pv.init_literal }}");
+    return JS_NewString(ctx, "{{ pv.init_literal|escape_c_string }}");
 }
 {%- else %}
 {#- proto var literal currently limited to int/bool/null/string by RIDL rules -#}

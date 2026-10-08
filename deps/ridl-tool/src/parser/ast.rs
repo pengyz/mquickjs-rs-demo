@@ -44,6 +44,8 @@ pub enum IDLItem {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Interface {
     pub name: String,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
     pub methods: Vec<Method>,
     pub properties: Vec<Property>,
     pub module: Option<ModuleDeclaration>,
@@ -66,6 +68,8 @@ pub struct Class {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Enum {
     pub name: String,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
     pub values: Vec<EnumValue>,
     pub module: Option<ModuleDeclaration>,
 }
@@ -73,6 +77,8 @@ pub struct Enum {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct StructDef {
     pub name: String,
+    #[serde(default)]
+    pub pos: Option<SourcePos>,
     pub fields: Vec<Field>,
     pub serialization_format: SerializationFormat,
     pub module: Option<ModuleDeclaration>,
