@@ -1,0 +1,7 @@
+# MQJS_ENGINE_LINK=external：openvela 镜像以源码级集成提供引擎对象，
+# 本 crate 的 staticlib 不得 bundle 引擎对象（U7 回归守卫，见
+# docs/planning/2026/2026-10-08-openvela-port.md）。
+# 放在 crate 目录 .cargo/config.toml 里，使 `cargo build --release`
+# 无需记忆额外环境变量即处于 external 模式；宿主侧其他消费者不受影响。
+[env]
+MQJS_ENGINE_LINK = "external"

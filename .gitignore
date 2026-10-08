@@ -16,3 +16,4 @@ ports/openvela/app/*.o
 ports/openvela/app/*.gcno
 ports/openvela/app/framework.cmake
 ports/openvela/cases/_*
+ports/openvela/rust/target/

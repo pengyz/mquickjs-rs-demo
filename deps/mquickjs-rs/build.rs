@@ -14,6 +14,16 @@ fn main() {
         .expect("variant root has parent")
         .to_path_buf(); // <mode>
 
+    // MQJS_ENGINE_LINK=external：最终镜像由消费者以**源码级集成**方式提供
+    // 引擎对象（如 openvela app 自行编译 mquickjs C 源码）。此时只输出搜索
+    // 路径，不输出任何 link-lib/link-arg 指令 —— 否则 native 静态库默认以
+    // `+bundle` 修饰被打进下游 staticlib，与镜像内同一批 C 对象形成双重
+    // 符号，链接顺序会静默决定用哪份（Phase 1 U7 回归守卫）。
+    println!("cargo:rerun-if-env-changed=MQJS_ENGINE_LINK");
+    let engine_link_external = env::var("MQJS_ENGINE_LINK")
+        .map(|v| v == "external")
+        .unwrap_or(false);
+
     // 1) 链接**变体无关**的引擎对象。
     //
     // mquickjs_core.a 只含 mquickjs.o / dtoa.o / libm.o / cutils.o，
@@ -28,7 +38,9 @@ fn main() {
         "cargo:rustc-link-search=native={}",
         variant_root.join("lib").display()
     );
-    println!("cargo:rustc-link-lib=static=mquickjs_core");
+    if !engine_link_external {
+        println!("cargo:rustc-link-lib=static=mquickjs_core");
+    }
 
     // 2) 本 crate **自身的 test 目标**固定使用 base 变体的 stdlib。
     //
@@ -51,8 +63,10 @@ fn main() {
         // 传播是必要的：trybuild 等会发起**嵌套 cargo 构建**，那些 crate 不是本包的
         // target，只能通过 rlib 元数据里的链接指令获得 stdlib。
         println!("cargo:rustc-link-search=native={}", base_lib_dir.display());
-        println!("cargo:rustc-link-lib=static=mquickjs_stdlib_base");
-        println!("cargo:rustc-link-arg=-lmquickjs_stdlib_base");
+        if !engine_link_external {
+            println!("cargo:rustc-link-lib=static=mquickjs_stdlib_base");
+            println!("cargo:rustc-link-arg=-lmquickjs_stdlib_base");
+        }
     }
 
     let include_dir = mquickjs_sys::include_dir();

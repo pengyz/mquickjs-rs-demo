@@ -1,0 +1,18 @@
+[package]
+name = "mqjs-openvela-adapter"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+crate-type = ["staticlib"]
+
+[dependencies]
+mquickjs-rs = { path = "../../../deps/mquickjs-rs", default-features = false, features = ["no-std"] }
+
+[profile.dev]
+panic = "abort"
+[profile.release]
+panic = "abort"
+
+# 独立于仓库 root workspace（ports/ 不在 root members 中）
+[workspace]
