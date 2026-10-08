@@ -206,6 +206,41 @@ static JSValue js_clearTimeout(JSContext *ctx, JSValue *this_val, int argc,
     return JS_UNDEFINED;
 }
 
+/****************************************************************************
+ * Rust adapter bridge (libmqjs_openvela_adapter.a, staged into apps/staging
+ * by setup-sim.sh).
+ *
+ * mquickjs has NO QuickJS-style runtime registration API —
+ * JS_NewCFunctionParams only instantiates function objects from indices into
+ * the compile-time stdlib table (registration is compile-time; see the
+ * repo-wide engine constraint).  The two probe functions are therefore baked
+ * into the generated mqjs_stdlib.h by the staged generator overlay
+ * (setup-sim.sh step 2b) and reach the global object exactly like
+ * print/gc/load — hence these hook definitions must appear BEFORE the
+ * #include "mqjs_stdlib.h" below, same contract as the hooks above.
+ ****************************************************************************/
+
+/* Defined in the adapter staticlib (Rust no_std core + GlobalAlloc bridge). */
+
+extern const char *mqjs_rs_version(void);
+extern int mqjs_rs_self_test(void);
+
+static JSValue js_rs_version(JSContext *ctx, JSValue *this_val, int argc,
+                             JSValue *argv)
+{
+    /* Static NUL-terminated string owned by the adapter; JS_NewString copies
+     * it into the JS heap (tracing GC) — nothing to free here. */
+    return JS_NewString(ctx, mqjs_rs_version());
+}
+
+static JSValue js_rs_self_test(JSContext *ctx, JSValue *this_val, int argc,
+                               JSValue *argv)
+{
+    /* Runs a full Rust-side Context (2 MiB via GlobalAlloc -> the image's
+     * malloc), evals "1+1", drops it; 0 on success. */
+    return JS_NewInt32(ctx, mqjs_rs_self_test());
+}
+
 /* The generated stdlib def (weak js_stdlib) — its tables reference the
  * hooks above, hence the include position. */
 
