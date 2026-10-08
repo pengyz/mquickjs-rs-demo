@@ -360,7 +360,7 @@ impl MyServiceSingleton for DefaultMyService {
 ```bash
 # 运行所有测试
 cargo test --workspace           # 整个 workspace（543 个）
-cargo run -p mquickjs-demo -- tests  # JS 集成测试（26 个）
+cargo run -p mquickjs-demo  # JS 集成测试全量（无参；tests/ + ridl-modules）
 
 # 或逐包运行（便于定位失败来源，等价于 just test）
 cargo test -p ridl-tool          # RIDL 工具链测试（357 个）

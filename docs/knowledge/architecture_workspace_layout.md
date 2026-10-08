@@ -18,7 +18,7 @@ sources: [docs/planning/2026/2026-09-15-sdk-repositioning.md, README.md]
 | `ridl-modules/stdlib` | RIDL 标准库（自举：stdlib 即 RIDL 模块） |
 
 **关键约定**：
-- 命令一律从仓库根运行：`cargo run -p mquickjs-demo -- tests`、
+- 命令一律从仓库根运行：`cargo run -p mquickjs-demo`（无参=全量）、
   `cargo run -p ridl-builder -- prepare`（多应用见
   [[ridl-builder-prepare-command]] 的发现规则）
 - `deps/` 名不副实是**已知且接受**的：改名波及全部路径依赖/build.rs/hooks/文档，

@@ -38,5 +38,6 @@ members = [
     "apps/test_app",
 ]
 
-# NOTE: test RIDL modules live under tests/global/. They are workspace members but
-# are not linked into the demo app by default (to avoid exposing test APIs).
+# NOTE: test RIDL modules live under tests/global/ (and tests/module/). They are
+# workspace members; apps/demo links the full set as path dependencies so the
+# demo app exercises every test module's RIDL surface (see apps/demo/Cargo.toml).
