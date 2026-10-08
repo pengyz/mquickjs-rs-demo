@@ -1,5 +1,11 @@
 # tests/TODO
 
+> **⚠️ 已归档（2026-10-08）**：本清单所列 P0 项均已修复——v1 glue 已支持
+> optional/nullable/union（`tests/global/types` 26/26 全绿）、js_fields 与
+> literals 用例已恢复、enum/struct 端到端已落地、ridl-builder 已改名。
+> 保留本文件作为历史记录，勿据其判断现状；当前状态以 README 与
+> `cargo run -p mquickjs-demo -- tests` 为准。
+
 > 目标：把当前 JS 集成测试暴露的问题逐项修复，并在每一步保持 `cargo run -- tests` 全绿。
 
 ## P0（阻塞型 / 影响面大）

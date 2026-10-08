@@ -125,7 +125,7 @@ cargo test -p mquickjs-rs        # ✓
 cargo test -p mquickjs-rs --features ridl-extensions   # ✓（修复前 101）
 cargo test -p mquickjs-demo      # ✓
 cargo test --workspace           # ✓ 全绿（修复前全面链接失败）
-cargo run -- tests               # ✓ 26/26
+cargo run -p mquickjs-demo -- tests  # ✓ 26/26
 cargo run -p ridl-builder -- selftest-gc-mark   # ✓
 ```
 

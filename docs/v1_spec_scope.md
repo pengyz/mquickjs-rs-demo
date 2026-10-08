@@ -40,7 +40,7 @@
 
 本轮的“完成标准”是：
 - `cargo run -p ridl-builder -- prepare`
-- `cargo run -- tests`
+- `cargo run -p mquickjs-demo -- tests`
 - `cargo test`
 
 均通过，且覆盖清单中的用例均存在并稳定运行。

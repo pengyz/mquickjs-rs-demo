@@ -41,7 +41,7 @@
 - When blocked: reason first, avoid guessing. After several failed attempts, summarize the blocker clearly for user review and decide the next step together.
 - Every change requires tests. Write/review tests early and ask the user to review tests explicitly.
 - All tests must pass; if tests fail, report the reason first and wait for the user’s decision on how to proceed.
-- After finishing a feature, run JS integration cases under `tests/` (in addition to `cargo test`). Command: `cargo run -- tests`.
+- After finishing a feature, run JS integration cases under `tests/` (in addition to `cargo test`). Command: `cargo run -p mquickjs-demo -- tests` (from the repo root).
 - After completing a feature, update related docs to keep docs and code consistent. If you detect inconsistency, report it first and wait for user confirmation before making corrective doc changes.
 - Documentation requirement: in-repo documents (especially design/planning docs under `docs/planning/`) must be written in Chinese.
 - For each large module, maintain a `README.md` describing purpose; add design/implementation docs when complexity warrants.

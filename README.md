@@ -7,7 +7,18 @@
 
 ## 项目定位
 
-mquickjs-rs 是一个**生产就绪的工具链**，用于在 Rust 应用中嵌入 [mquickjs](https://github.com/bellard/mquickjs)（Micro QuickJS）JavaScript 引擎，通过 RIDL（Rust Interface Definition Language）实现类型安全的 Rust/JS 双向互操作。
+mquickjs-rs 是一个**面向嵌入式场景的 Rust JavaScript 引擎 SDK**（非 demo），包含三部分：运行时库、IDL 代码生成工具链、一致性测试套件。用于在 Rust 应用中嵌入 [mquickjs](https://github.com/bellard/mquickjs)（Micro QuickJS），通过 RIDL（Rust Interface Definition Language）实现类型安全的 Rust/JS 双向互操作。
+
+### 组成
+
+| 组成 | 位置 | 说明 |
+|------|------|------|
+| 运行时库 | `deps/mquickjs-rs`（+ `deps/mquickjs-sys`） | Context、GC 句柄（Root/Traced）、异步桥、no_std 裸机支持 |
+| 工具链 | `deps/ridl-tool` + `ridl-builder` + `deps/mquickjs-ridl-glue` | RIDL 解析与三端代码生成、构建编排 |
+| 应用与测试 | `apps/`、`tests/`、`ridl-modules/stdlib` | 参考应用（apps/demo）、RIDL 一致性测试模块、RIDL 标准库 |
+
+> 目录约定：`deps/` 下既有产品 crate（mquickjs-rs、ridl-tool 等）也有 vendored
+> 的 C 引擎（mquickjs）；工作区根是虚拟清单，应用一律放 `apps/`。
 
 ### 核心价值
 
@@ -349,7 +360,7 @@ impl MyServiceSingleton for DefaultMyService {
 ```bash
 # 运行所有测试
 cargo test --workspace           # 整个 workspace（543 个）
-cargo run -- tests               # JS 集成测试（26 个）
+cargo run -p mquickjs-demo -- tests  # JS 集成测试（26 个）
 
 # 或逐包运行（便于定位失败来源，等价于 just test）
 cargo test -p ridl-tool          # RIDL 工具链测试（357 个）

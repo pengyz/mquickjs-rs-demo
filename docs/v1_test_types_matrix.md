@@ -12,7 +12,7 @@
 ## 1. 本阶段验收命令
 
 - `cargo run -p ridl-builder -- prepare`
-- `cargo run -- tests`
+- `cargo run -p mquickjs-demo -- tests`
 - `cargo test`
 
 

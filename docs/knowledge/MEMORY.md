@@ -9,6 +9,7 @@
 - [GC Root + Traced 统一 tracing 设计](architecture_gc_root_traced_unified_tracing.md) — Root<T>/Traced<T> 统一基于引擎 JSGCRef；用户不感知 mark，也不再有 class gc_mark
 - [base vs ridl 两套 QuickJS 输出](architecture_mquickjs_base_vs_ridl_outputs.md) — 归档拆分（core / stdlib_base / stdlib_ridl）；**变体由叶子二进制选择**
 - [base/ridl 变体选择必须由叶子决定](architecture_base_vs_ridl_variant_selection.md) — js_stdlib 是唯一连接点；记录三项修复与四个构建踩坑
+- [工作区目录职责约定](architecture_workspace_layout.md) — 虚拟清单；apps/ 放应用；deps/ 混放产品与 vendored 引擎（已知且接受）
 - [核心 no_std 移植成本评估](assessment_core_nostd_port_cost.md) — PoC 实证可编译到 thumbv7em；14 文件 138 行改动；剩余阻塞项清单
 
 ## Gotchas
@@ -18,6 +19,7 @@
 - 【已作废】[mquickjs GC sweep 不调用 finalizer](gotcha_mquickjs_gc_sweep_no_finalizer.md) — 结论错误，见上一条
 - [mquickjs gc_mark 签名与 quickjs 不同](gotcha_mquickjs_gc_mark_signature.md) — 实际签名 (ctx, void *opaque, const JSMarkFunc *mf)，勿凭 quickjs 知识假设
 - [mquickjs-rs 不能编译到裸机](gotcha_mquickjs_rs_not_bare_metal.md) — E1 结论：阻塞集中在异步子系统；RIDL/GC/handles 核心是 no_std 干净的
+- [Mimosa git-gate 高危分诊](gotcha_mimosa_git_gate_triage.md) — 本地 CLI argv 路径属接受风险；测试消息勿写成命令行样式；放行须批准且最小范围
 - [mquickjs ≠ QuickJS](gotcha_mquickjs_is_not_quickjs.md) — 独立项目，共享代码渊源但架构完全不同，不要用 QuickJS 知识推断 mquickjs
 - [QuickJS ROM 机制与 RIDL 扩展关系](gotcha_quickjs_rom_ridl_mechanism.md) — 当初实现时未充分理解 ROM，需要重新审视
 - 【已作废】[cargo test --workspace 链接失败](gotcha_workspace_test_link_failure.md) — 曾误判为"架构固有"，实为变体选择放错位置
@@ -42,6 +44,7 @@
 - [Root<T> 优于 Global<T>](decision_root_over_global.md) — 跨 await 持有 JSValue 推荐用 Root<T>，Global<T> 保留兼容
 - [RIDL 异步取消语义](decision_ridl_async_cancellation.md) — 默认可取消，必须显式标记 @nonCancellable，与主流框架一致
 - [放弃 slint UI 与应用框架方向](decision_abandon_ui_app_framework.md) — 四路对抗性复核结论；含重新考虑的前置条件
+- [SDK 正名与虚拟清单](decision_sdk_repositioning.md) — demo → SDK；根包迁 apps/demo 包名不变；ridl-builder 发现规则重设计
 - 【已作废】[Context-level gc_mark 注册](decision_context_level_gc_mark_registration.md) — 该路径无法重定位，已改为 per-instance JSGCRef
 - 【已作废】[RootsRegistry 用 Vec&lt;Option&gt;](decision_roots_registry_vec_option.md) — 存放裸 JSValue + gc_mark 保活在压缩式 GC 下不安全
 

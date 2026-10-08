@@ -51,7 +51,7 @@ just test
 # 方式 2：手动执行
 cargo test -p ridl-tool
 cargo test -p mquickjs-demo
-cargo run -- tests
+cargo run -p mquickjs-demo -- tests
 ```
 
 ## 创建新应用
@@ -220,7 +220,7 @@ cargo build
 运行测试：
 
 ```bash
-cargo run -- tests/apps/my-app
+cargo run -p mquickjs-demo -- apps/my-app/tests
 ```
 
 ## 创建新 RIDL 模块
@@ -320,7 +320,7 @@ path = "tests/global/my_module/test_my_module"
 cd ../../../..  # 回到根目录
 cargo run -p ridl-builder -- prepare
 cargo build
-cargo run -- tests
+cargo run -p mquickjs-demo -- tests
 ```
 
 ## 常见问题
