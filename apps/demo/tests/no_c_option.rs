@@ -1,12 +1,17 @@
-use std::{env, path::Path, process::Command};
+use std::{env, process::Command};
 
 #[test]
 fn mquickjs_build_tool_rejects_c_option() {
     // We intentionally test the *host tool* in-tree: deps/mquickjs/mquickjs_build.c.
     // The deprecated `-c`/`mqjs_ridl_class_id.h` pipeline has been removed.
 
+    // `target/` and `deps/` live at the workspace root; the test process CWD
+    // is the package dir (apps/demo), so resolve through the workspace root.
+    let root = mquickjs_demo::test_runner::workspace_root();
+
     // Prefer the already-built host tool if it exists (e.g. after `ridl-builder prepare`).
-    let preferred = Path::new("target/mquickjs-build/framework")
+    let preferred = root
+        .join("target/mquickjs-build/framework")
         .join(env::consts::ARCH)
         .join(env::consts::OS)
         .join("debug")
@@ -29,24 +34,16 @@ fn mquickjs_build_tool_rejects_c_option() {
             .current_dir(&tmp)
             .arg("-O2")
             .arg("-D__HOST__")
-            .arg(
-                env::current_dir()
-                    .unwrap()
-                    .join("deps/mquickjs/mquickjs_build.c"),
-            )
+            .arg(root.join("deps/mquickjs/mquickjs_build.c"))
             .arg("-D")
             .arg("main=mqjs_ridl_stdlib_main")
-            .arg(
-                env::current_dir()
-                    .unwrap()
-                    .join("deps/mquickjs/mqjs_stdlib.c"),
-            )
+            .arg(root.join("deps/mquickjs/mqjs_stdlib.c"))
             .arg("-D")
             .arg("mqjs_ridl_stdlib_main=main")
             .arg("-o")
             .arg(&out)
             .arg("-I")
-            .arg(env::current_dir().unwrap().join("deps/mquickjs"))
+            .arg(root.join("deps/mquickjs"))
             .status()
             .expect("failed to run gcc");
         assert!(status.success(), "failed to build mqjs_ridl_stdlib via gcc");

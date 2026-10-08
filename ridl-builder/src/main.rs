@@ -56,7 +56,7 @@ fn usage() {
     eprintln!("");
     eprintln!("aggregate/prepare options:");
     eprintln!(
-        "  --cargo-toml <path>   App Cargo.toml (optional; default from nearest mquickjs.ridl.toml)"
+        "  --cargo-toml <path>   App Cargo.toml (optional; default: nearest mquickjs.ridl.toml walking up from cwd, else the default profile's app_manifest from mquickjs.build.toml)"
     );
     eprintln!("  --app-id <id>         Override app id (optional)");
     eprintln!(
@@ -97,7 +97,6 @@ fn aggregate_cmd(args: Vec<String>) {
     }
 }
 
-#[allow(dead_code)]
 fn find_workspace_root() -> PathBuf {
     // Walk up from crate dir until we find a Cargo.toml containing [workspace]
     let mut dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
@@ -115,6 +114,12 @@ fn find_workspace_root() -> PathBuf {
         }
     }
     panic!("Unable to locate workspace root");
+}
+
+/// Vendored engine sources, resolved against the workspace root so that
+/// subcommand CWDs (e.g. `apps/<name>/`) do not change resolution.
+fn workspace_mquickjs_dir() -> PathBuf {
+    find_workspace_root().join("deps/mquickjs")
 }
 
 fn parse_opt(args: &[String], key: &str) -> Option<String> {
@@ -179,7 +184,7 @@ struct AggregateOpts {
 fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
     let cargo_toml = parse_opt(args, "--cargo-toml")
         .map(PathBuf::from)
-        .unwrap_or_else(|| default_cargo_toml_from_nearest_ridl_toml());
+        .unwrap_or_else(default_cargo_toml_from_discovery);
 
     if !cargo_toml.is_absolute() {
         // Keep things explicit/stable across different cwd.
@@ -223,10 +228,18 @@ fn parse_aggregate_opts(args: &[String]) -> AggregateOpts {
     }
 }
 
-fn default_cargo_toml_from_nearest_ridl_toml() -> PathBuf {
-    // Default rule (no ambiguity): find the nearest `mquickjs.ridl.toml` when walking up from cwd,
-    // then use the `Cargo.toml` in the same directory. If this cannot be resolved, require users to
-    // pass `--cargo-toml` explicitly.
+/// Resolve the default app manifest when `--cargo-toml` is absent.
+///
+/// Resolution order (first match wins):
+/// 1. Nearest `mquickjs.ridl.toml` walking up from cwd, then the `Cargo.toml`
+///    in the same directory (multi-app convention: running inside
+///    `apps/<name>/` selects that app).
+/// 2. Nearest `mquickjs.build.toml` walking up from cwd: use its `default`
+///    profile's `app_manifest` (the workspace-level SoT for app selection;
+///    makes `just build` from the repo root resolve to `apps/demo`).
+///
+/// If neither can be resolved, require the user to pass `--cargo-toml`.
+fn default_cargo_toml_from_discovery() -> PathBuf {
     let cwd = env::current_dir().unwrap_or_else(|e| panic!("failed to get cwd: {e}"));
 
     let mut cur = cwd.as_path();
@@ -251,10 +264,73 @@ fn default_cargo_toml_from_nearest_ridl_toml() -> PathBuf {
         cur = parent;
     }
 
+    let mut cur = cwd.as_path();
+    loop {
+        let build_toml = cur.join("mquickjs.build.toml");
+        if build_toml.exists() {
+            return app_manifest_from_build_toml(&build_toml);
+        }
+
+        let Some(parent) = cur.parent() else {
+            break;
+        };
+        cur = parent;
+    }
+
     panic!(
-        "Unable to locate mquickjs.ridl.toml from cwd='{}'. Please pass --cargo-toml explicitly.",
+        "Unable to locate mquickjs.ridl.toml or mquickjs.build.toml from cwd='{}'. Please pass --cargo-toml explicitly.",
         cwd.display()
     );
+}
+
+#[derive(Deserialize)]
+struct BuildTomlProfiles {
+    default: Option<String>,
+    #[serde(default)]
+    profiles: std::collections::BTreeMap<String, BuildTomlProfile>,
+}
+
+#[derive(Deserialize)]
+struct BuildTomlProfile {
+    #[serde(default)]
+    app_manifest: Option<String>,
+}
+
+fn app_manifest_from_build_toml(build_toml: &Path) -> PathBuf {
+    let text = std::fs::read_to_string(build_toml)
+        .unwrap_or_else(|e| panic!("failed to read {}: {e}", build_toml.display()));
+    let cfg: BuildTomlProfiles = toml::from_str(&text)
+        .unwrap_or_else(|e| panic!("failed to parse {}: {e}", build_toml.display()));
+
+    let profile_name = cfg.default.unwrap_or_else(|| {
+        panic!(
+            "'{}' has no 'default' profile. Please pass --cargo-toml explicitly.",
+            build_toml.display()
+        )
+    });
+    let manifest_rel = cfg
+        .profiles
+        .get(&profile_name)
+        .and_then(|p| p.app_manifest.clone())
+        .unwrap_or_else(|| {
+            panic!(
+                "profile '{profile_name}' in '{}' has no app_manifest. Please pass --cargo-toml explicitly.",
+                build_toml.display()
+            )
+        });
+
+    let dir = build_toml
+        .parent()
+        .expect("mquickjs.build.toml must have a parent directory");
+    let manifest = dir.join(&manifest_rel);
+    // parse_aggregate_opts requires an absolute path; canonicalize also
+    // surfaces a missing file here rather than deeper in the pipeline.
+    manifest.canonicalize().unwrap_or_else(|e| {
+        panic!(
+            "app_manifest '{manifest_rel}' resolves to '{}', which is missing: {e}",
+            manifest.display()
+        )
+    })
 }
 
 fn split_shell_words(s: &str) -> Vec<String> {
@@ -503,7 +579,9 @@ fn build_tools() {
 }
 
 fn write_cargo_env_config(bin_dir: &str) {
-    let workspace_root = env::current_dir().unwrap_or_else(|e| panic!("failed to get cwd: {e}"));
+    // CWD may be any subdirectory (e.g. `apps/test_app`); the env config and
+    // tool binaries belong to the workspace root, not the invocation dir.
+    let workspace_root = find_workspace_root();
     let cargo_dir = workspace_root.join(".cargo");
     let config_path = cargo_dir.join("config.toml");
 
@@ -548,11 +626,12 @@ fn build_mquickjs(args: Vec<String>) {
             "debug"
         };
 
-        let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/base");
+        let out_dir = find_workspace_root()
+            .join(format!("target/mquickjs-build/framework/{target_triple}/{mode}/base"));
 
         cmd.arg("build")
             .arg("--mquickjs-dir")
-            .arg("deps/mquickjs")
+            .arg(workspace_mquickjs_dir())
             .arg("--out")
             .arg(out_dir);
     } else {
@@ -610,7 +689,7 @@ fn selftest_gc_mark_cmd() {
             .arg("--")
             .arg("build")
             .arg("--mquickjs-dir")
-            .arg("deps/mquickjs")
+            .arg(workspace_mquickjs_dir())
             .arg("--out")
             .arg(base_out);
 
@@ -709,7 +788,8 @@ fn prepare_cmd(args: Vec<String>) {
     };
 
     // TODO: this profile directory will be made app-id aware as we formalize multi-app mquickjs-build outputs.
-    let out_dir = format!("target/mquickjs-build/framework/{target_triple}/{mode}/ridl");
+    let out_dir = find_workspace_root()
+        .join(format!("target/mquickjs-build/framework/{target_triple}/{mode}/ridl"));
 
     // 4) build RIDL-enabled mquickjs using the aggregated register header
     let mut cmd = Command::new("cargo");
@@ -719,7 +799,7 @@ fn prepare_cmd(args: Vec<String>) {
         .arg("--")
         .arg("build")
         .arg("--mquickjs-dir")
-        .arg("deps/mquickjs")
+        .arg(workspace_mquickjs_dir())
         .arg("--ridl-register-h")
         .arg(&out.ridl_register_h)
         .arg("--out")

@@ -1,14 +1,17 @@
 # Workspace-level mquickjs build profiles.
 #
 # Each profile maps to an application Cargo.toml (SoT for RIDL module selection).
+# `ridl-builder` falls back to the `default` profile's `app_manifest` when no
+# `mquickjs.ridl.toml` is found walking up from the cwd (see
+# ridl-builder/src/main.rs `default_cargo_toml_from_discovery`).
 
 default = "framework"
 
 [profiles.framework]
-app_manifest = "Cargo.toml"
+app_manifest = "apps/demo/Cargo.toml"
 
 [profiles.tooling]
-app_manifest = "Cargo.toml"
+app_manifest = "apps/demo/Cargo.toml"
 
 [profiles.tests]
-app_manifest = "Cargo.toml"
+app_manifest = "apps/demo/Cargo.toml"

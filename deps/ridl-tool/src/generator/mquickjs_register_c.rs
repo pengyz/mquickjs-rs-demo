@@ -26,8 +26,17 @@ pub(super) fn generate_mquickjs_ridl_register_c(
         ridl_files.extend(m.ridl_files.iter().cloned());
     }
 
+    // ir == None means the app selected zero RIDL modules (see
+    // generate_register_h_and_symbols). register.c is unconditionally consumed
+    // by the ridl-variant stdlib build, so emit a valid empty table file
+    // instead of failing — a module-less app is a legitimate aggregate.
     let Some(ir) = ir else {
-        return Err("missing AggregateIR (class_id mapping)".into());
+        let t = MquickjsRidlRegisterCTemplate {
+            modules: Vec::new(),
+            proto_vars: Vec::new(),
+        };
+        std::fs::write(out_dir.join("mquickjs_ridl_register.c"), t.render()?)?;
+        return Ok(());
     };
 
     let modules = super::build_template_modules(&ridl_files, &ir.classes)?;

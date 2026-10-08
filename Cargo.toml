@@ -1,13 +1,17 @@
 [workspace]
+# Virtual manifest: the workspace root owns no package. The demo app (formerly
+# the root package) lives at apps/demo; product crates live under deps/.
+resolver = "2"
+
 members = [
     "deps/mquickjs-sys",
     "deps/mquickjs-rs",
     "deps/ridl-tool",
     "deps/mquickjs-ridl-glue",
     "ridl-modules/stdlib",
-    ".",
     "deps/mquickjs-build",
     "ridl-builder",
+    "apps/demo",
 
     "tests/global/types/test_types",
     "tests/global/literals/test_literals",
@@ -33,91 +37,3 @@ members = [
 
 # NOTE: test RIDL modules live under tests/global/. They are workspace members but
 # are not linked into the demo app by default (to avoid exposing test APIs).
-
-[package]
-name = "mquickjs-demo"
-version = "0.1.0"
-edition = "2024"
-
-[lib]
-name = "mquickjs_demo"
-path = "src/lib.rs"
-
-[[bin]]
-name = "mquickjs-demo"
-path = "src/main.rs"
-
-[dependencies]
-mquickjs-rs = { path = "deps/mquickjs-rs" }
-mquickjs-sys = { path = "deps/mquickjs-sys" }
-
-[build-dependencies]
-mquickjs-ridl-glue = { path = "deps/mquickjs-ridl-glue" }
-
-# RIDL modules selected for this app
-[dependencies.stdlib]
-path = "ridl-modules/stdlib"
-
-[dependencies.ridl_test_g_types]
-path = "tests/global/types/test_types"
-
-[dependencies.ridl_test_g_literals]
-path = "tests/global/literals/test_literals"
-
-[dependencies.ridl_test_g_fn]
-path = "tests/global/fn/test_fn"
-
-[dependencies.ridl_test_g_js_fields]
-path = "tests/global/js_fields/test_js_fields"
-
-[dependencies.ridl_test_g_class]
-path = "tests/global/class/test_class"
-
-[dependencies.ridl_test_g_singleton]
-path = "tests/global/singleton/test_singleton"
-
-[dependencies.ridl_test_g_import_using]
-path = "tests/global/import_using/test_import_using"
-
-[dependencies.ridl_test_g_diagnostics]
-path = "tests/global/diagnostics/test_diagnostics"
-
-[dependencies.ridl_test_g_require]
-path = "tests/global/require/test_require"
-
-[dependencies.ridl_test_g_rust_ident]
-path = "tests/global/rust_ident/test_rust_ident"
-
-[dependencies.ridl_test_g_gc_root_cycle]
-path = "tests/global/gc_root_cycle/test_gc_root_cycle"
-
-[dependencies.ridl_test_g_gc_traced]
-path = "tests/global/gc_traced/test_gc_traced"
-
-[dependencies.test_async_cancellation]
-path = "tests/global/async_test/test_async_cancellation"
-
-[dependencies.test_properties]
-path = "tests/global/properties/test_properties"
-
-[dependencies.test_constants]
-path = "tests/global/constants/test_constants"
-
-[dependencies.test_interface]
-path = "tests/global/interface/test_interface"
-
-[dependencies.ridl_test_m_basic]
-path = "tests/module/basic/test_module_basic"
-
-[dependencies.ridl_test_m_exports_single_class]
-path = "tests/module/exports/test_module_single_class"
-
-[dependencies.test_app]
-path = "apps/test_app"
-
-[features]
-# Demo app defaults to having RIDL stdlib extensions enabled.
-default = ["ridl-extensions"]
-
-# App opt-in for RIDL stdlib extensions.
-ridl-extensions = ["mquickjs-rs/ridl-extensions"]

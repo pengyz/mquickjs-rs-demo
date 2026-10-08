@@ -15,6 +15,10 @@ fn mquickjs_build_base_does_not_emit_ridl_headers() {
         std::fs::remove_dir_all(&out_dir).expect("clean previous out dir");
     }
 
+    // `target/` and `deps/` live at the workspace root; the test process CWD
+    // is the package dir (apps/demo), so resolve through the workspace root.
+    let root = mquickjs_demo::test_runner::workspace_root();
+
     let mquickjs_build_exe = {
         // Prefer Cargo-provided path (available when the binary is a test target dependency).
         // Otherwise fall back to `target/<profile>/mquickjs-build` and ensure it's built.
@@ -34,18 +38,14 @@ fn mquickjs_build_base_does_not_emit_ridl_headers() {
             } else {
                 "release"
             };
-            env::current_dir()
-                .unwrap()
-                .join("target")
-                .join(profile)
-                .join("mquickjs-build")
+            root.join("target").join(profile).join("mquickjs-build")
         }
     };
 
     let status = Command::new(&mquickjs_build_exe)
         .arg("build")
         .arg("--mquickjs-dir")
-        .arg(env::current_dir().unwrap().join("deps/mquickjs"))
+        .arg(root.join("deps/mquickjs"))
         .arg("--out")
         .arg(&out_dir)
         .status()

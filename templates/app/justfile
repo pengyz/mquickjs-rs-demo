@@ -9,9 +9,9 @@ build:
     cd ../.. && cargo run -p ridl-builder -- prepare
     cd ../.. && cargo build -p {{project-name | snake_case}}
 
-# 运行测试
+# 运行测试（本应用目录下的 JS 用例，由 demo runner 执行）
 test:
-    cd ../.. && cargo run -- tests/apps/{{project-name}}
+    cd ../.. && cargo run -p mquickjs-demo -- apps/{{project-name}}/tests
 
 # 清理
 clean:

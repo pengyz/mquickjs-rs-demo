@@ -54,7 +54,7 @@ test-demo:
 
 # 运行 JS 集成测试
 test-js:
-    cargo run -- tests
+    cargo run -p mquickjs-demo -- tests
 
 # 运行特定测试
 test-async:
@@ -73,7 +73,7 @@ rebuild: clean build
 
 # 运行 demo 应用
 run:
-    cargo run --bin mquickjs-demo
+    cargo run -p mquickjs-demo --bin mquickjs-demo
 
 # 生成 RIDL 聚合
 aggregate:

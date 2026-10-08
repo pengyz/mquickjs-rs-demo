@@ -14,8 +14,8 @@ assert(typeof m1 === 'object' && m1 !== null)
 // Keep this test as a guard: explicitly document that these names are rejected.
 var threw = false
 try { require('test-module.single@1.0') } catch (_e1) { threw = true }
-assert(threw, 'expected require(test-module.single@1.0) to throw')
+assert(threw, 'non-normalized module id (dot/dash, versioned) must be rejected')
 
 threw = false
 try { require('test-module.single') } catch (_e2) { threw = true }
-assert(threw, 'expected require(test-module.single) to throw')
+assert(threw, 'non-normalized module id (dot/dash, unversioned) must be rejected')

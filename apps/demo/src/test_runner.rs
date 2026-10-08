@@ -4,6 +4,20 @@ use std::{
     path::{Path, PathBuf},
 };
 
+/// Locate the workspace root (the directory containing `mquickjs.build.toml`)
+/// by walking up from this crate's manifest directory.
+///
+/// Integration tests and `cargo run` inherit the *package* root as CWD, but
+/// workspace-level resources (`target/`, `deps/`, JS corpora under `tests/`
+/// and `ridl-modules/`) live at the repo root — resolve them through here.
+pub fn workspace_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .ancestors()
+        .find(|p| p.join("mquickjs.build.toml").is_file())
+        .expect("workspace root (mquickjs.build.toml) not found above manifest dir")
+        .to_path_buf()
+}
+
 pub fn collect_js_files(path: &Path) -> Result<Vec<PathBuf>, String> {
     if !path.exists() {
         return Err(format!("path does not exist: {}", path.display()));

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 /// Collect `*.js` files under `tests/` (non-recursive) and run them via the
 /// in-crate JS runner.
@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 /// Keeping this as a Rust integration test means `cargo test` can act as CI.
 #[test]
 fn js_smoke_tests() {
-    let test_dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
+    // The JS corpora live at the workspace root, not under the package dir.
+    let test_dir = mquickjs_demo::test_runner::workspace_root().join("tests");
     let files = mquickjs_demo::test_runner::collect_js_files(&test_dir)
         .expect("collect_js_files(tests/) should succeed");
 
