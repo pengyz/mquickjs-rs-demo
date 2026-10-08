@@ -1,10 +1,19 @@
 # tests/TODO
 
-> **⚠️ 已归档（2026-10-08）**：本清单所列 P0 项均已修复——v1 glue 已支持
-> optional/nullable/union（`tests/global/types` 26/26 全绿）、js_fields 与
-> literals 用例已恢复、enum/struct 端到端已落地、ridl-builder 已改名。
-> 保留本文件作为历史记录，勿据其判断现状；当前状态以 README 与
-> `cargo run -p mquickjs-demo -- tests` 为准。
+> **✅ 全部处置完毕（2026-10-08）**：逐项核实 + 对抗复核 + TDD 修复，
+> 处置记录见 `docs/planning/2026/2026-10-08-todo-items-resolution.md`。
+>
+> | 项 | 处置 |
+> |----|------|
+> | 1 optional/nullable/union | 早已修复；本轮补 `bool?` 用例 |
+> | 2 singleton var/proto var | **本轮实现** plain var（proto var 维持拒绝：singleton 无 proto，见知识库 gotcha_quickjs_rom_ridl_mechanism）|
+> | 3 enum/struct/msgpack | **本轮实现**命名类型端到端（msgpack 序列化另立特性）|
+> | 4 union/nullable/string | 主路径早已修复；本轮修 string varargs 悬垂指针 + 诊断升级 |
+> | 5 class glue argc/ctor | 早已修复；本轮补带参 constructor 用例 |
+> | 6 runner 兼容层 | 早已修复（f17a769）；本轮补 `_` 前缀跳过 + workspace_root |
+>
+> 本文件保留为历史记录，勿据其判断现状；当前状态以 README 与
+> 无参 `cargo run -p mquickjs-demo` 为准。
 
 > 目标：把当前 JS 集成测试暴露的问题逐项修复，并在每一步保持 `cargo run -- tests` 全绿。
 

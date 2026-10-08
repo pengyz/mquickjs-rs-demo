@@ -2,4 +2,4 @@
 Cargo.lock
 target/
 .vscode/
-.cargo/config.toml
+.cargo/config.toml.mimosa/

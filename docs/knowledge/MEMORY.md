@@ -21,6 +21,7 @@
 - [mquickjs-rs 不能编译到裸机](gotcha_mquickjs_rs_not_bare_metal.md) — E1 结论：阻塞集中在异步子系统；RIDL/GC/handles 核心是 no_std 干净的
 - [Mimosa git-gate 高危分诊](gotcha_mimosa_git_gate_triage.md) — 本地 CLI argv 路径属接受风险；测试消息勿写成命令行样式；放行须批准且最小范围
 - [mquickjs ≠ QuickJS](gotcha_mquickjs_is_not_quickjs.md) — 独立项目，共享代码渊源但架构完全不同，不要用 QuickJS 知识推断 mquickjs
+- [RIDL 生成器静默退化](gotcha_ridl_silent_generation_degradation.md) — union 丢成员/struct 回退 JSValue 曾不报错；兜底产物被使用即错 → 硬错误
 - [QuickJS ROM 机制与 RIDL 扩展关系](gotcha_quickjs_rom_ridl_mechanism.md) — 当初实现时未充分理解 ROM，需要重新审视
 - 【已作废】[cargo test --workspace 链接失败](gotcha_workspace_test_link_failure.md) — 曾误判为"架构固有"，实为变体选择放错位置
 
@@ -32,6 +33,7 @@
 - [RIDL PEG 语法设计原则](pattern_ridl_grammar_design.md) — 关键字优先、左递归规避、类型优先级
 - [RIDL 解析器测试策略](pattern_ridl_parser_testing.md) — 三层测试架构：语法单元→集成→端到端
 - [RIDL 代码生成器测试策略](pattern_ridl_codegen_testing.md) — 类型映射、模板渲染、端到端编译
+- [named-type override pass 范式](pattern_named_type_override_pass.md) — 聚合级命名类型走渲染前覆写（union 先行），不改无状态 filter
 - [RIDL 全局函数架构](pattern_ridl_global_function_architecture.md) — glue 生成 C FFI，用户在 impls 提供实现，api.rs 不生成
 - 【已作废】[RIDL 自动生成 gc_mark](pattern_ridl_gc_mark_auto_gen.md) — 有致命 ABI 缺陷且已冗余，机制整体移除
 
