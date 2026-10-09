@@ -195,6 +195,55 @@ NXlongjmp 的 `jmp *JB_RIP`，RIP 为垃圾）。 曾尝试 objcopy 重定向
   验收：RIDL console 在 no-std 配置下可用；现网全量测试无回归。
   对照臂 (c) 仅用于铺量与符号探针，不作为验收。
 
+### Phase 2a+2b 实施记录【✅ 2a 完成（b531dd7）；2b/M1-R+ 完成 2026-10-09】
+
+**形态裁定演进**：2a 实施时 sim 确认为宿主 Linux 进程（动态链 glibc），
+no_std 变体（GlobalAlloc 桥/panic_handler）整体让位 **std 模式**
+（变体保留在 git 历史 d945524）；2b 相应不再是"去 std 三件套"，而是
+**把 RIDL stdlib（console singleton）经既有聚合管线接入 sim 镜像**。
+
+**2b 集成设计（M1-R+）**：
+- **镜像 stdlib 切换为 ridl 变体**：运行时 TU 换成 deps/mquickjs-rs 的
+  `mqjs_stdlib_impl.c`（strong `js_stdlib`，Date 自带）+ `require.c` +
+  sim 聚合的 `mquickjs_ridl_register.c`（`JS_RIDL_StdlibInit` + require
+  表）；宿主工具改从 `mqjs_stdlib_template.c` 构建（模板契约：宿主层
+  对象 console/print/timers/load 全部由 RIDL 扩展提供，模板不保留 C 残面）。
+  base `mqjs_stdlib.c` 退出镜像。
+- **sim 应用 = 独立 RIDL 叶子**：`ports/openvela/rust` 挂
+  `mquickjs.ridl.toml`，模块选择仅 `[dependencies.stdlib]`（console），
+  `ridl-builder aggregate --cargo-toml ... --intent build` 出迷你聚合
+  （slot 0 = console，无 user 类，无 module 模式模块 → 无 romclass 映射
+  依赖）。**不复用 mquickjs_demo 聚合**——那会把全部测试模块（19 crate、
+  ~150 js_* 符号）拖进 sim 镜像并与测试语料目录耦合；聚合是生成物而非
+  "基础设施"，为 sim 重建只需一条命令。
+- **Context 创建在 Rust 侧（关键约束实证）**：RIDL 胶水经 `JSContext`
+  user_data（`Arc<ContextInner>`）分派，而 user_data 只由
+  `mquickjs_rs::Context::new` 安装——C 侧 `JS_NewContext` 建的 context
+  必然抛 "missing ctx user_data"，且 deps/mquickjs 不可改。故 js_main.c
+  改用 adapter 三件套 `mqjs_rs_ridl_context_new / mqjs_rs_ridl_eval /
+  mqjs_rs_ridl_context_free`（engine 堆块移交 Rust 持有，C 侧不再
+  malloc JS 堆）；进程级 `ridl_bootstrap!`（模块/符号 keepalive）在
+  adapter 内 Once 化。原设计倾向中的 "C API + ridl_context_init 导出"
+  被该约束否决，"Rust 侧封装 eval" 成为唯一可行路径。
+- **rs 探针保留**：overlay 从 base stdlib 搬到 staged 模板
+  （锚点 `JS_PROP_NULL_DEF("globalThis", 0 ),`）；生成表跨 TU 引用钩子，
+  `js_rs_version/js_rs_self_test` 改非 static，声明经生成的
+  `gen/mqjs_rs_hooks.h` 强制包含进每个 app TU。
+- 符号审计扩展：镜像级新增 `js_global_singleton_console_log` 落地检查；
+  镜像检查在镜像落后于 adapter 归档时自动跳过（build 序 = stage →
+  make → audit）。
+
+**验收记录（2026-10-09，sim Make 轨）**：
+- `ridl_console.js`：输出 "ridl console in openvela sim"（Rust
+  `println!` 通路），CASE PASS ✅
+- 无回归：demo_pass PASS、rs_probe PASS（其 console.log 亦改走 RIDL）、
+  tiny_err / demo_syntax_error → SyntaxError 文本不崩 ✅
+- audit-symbols PASS（分配对 OK；malloc/free/calloc/realloc 绑定一致
+  host；`js_stdlib` 与 `js_global_singleton_console_log` 均在镜像落地）✅
+- 镜像内 `js_print` 0 命中（C print 钩子确已移除，console 归属 RIDL）✅
+- 本仓库 demo 语料 31/31 PASS（root workspace 未触碰，环境无回归）✅
+
+
 ### Phase 1.5：CMake 轨集成【✅ 已完成 2026-10-09】（原计划 M2 时补，用户裁定提前）
 
 - app 补 `CMakeLists.txt`（`nuttx_add_application` 注册 + INCLUDE_DIRECTORIES +

@@ -37,17 +37,32 @@ if(CONFIG_MQJS_JS)
       engine_src/cutils.c
       engine_src/dtoa.c
       engine_src/libm.c
-      engine_src/mqjs_stdlib.c
+      # RIDL-variant stdlib runtime TUs (M1-R+): mqjs_stdlib_impl.c defines
+      # the strong js_stdlib (RIDL tables incl. console), the register TU
+      # comes from the app aggregate, require.c implements require().
+      # NOTE: CMake track is deferred to M2 (user decision) — kept in sync
+      # with the Makefile but not re-validated until then.
+      engine_src/mqjs_stdlib_impl.c
+      engine_src/mqjs_require.c
+      engine_src/mqjs_ridl_register.c
     STACKSIZE
       ${CONFIG_MQJS_JS_STACKSIZE}
     PRIORITY
       ${CONFIG_MQJS_JS_PRIORITY}
     INCLUDE_DIRECTORIES
       ${MQJS_GEN_DIR}
+      ${MQJS_AGG_DIR}
       ${MQJS_ENGINE_SRC}
       ${CMAKE_CURRENT_SOURCE_DIR}/engine_src
     COMPILE_FLAGS
       -fno-math-errno
-      -fno-trapping-math)
+      -fno-trapping-math
+      -DMQUICKJS_ENABLE_RIDL_EXTENSIONS
+      # RIDL api declarations + rs hook declarations, force-included into
+      # every app TU (mirrors the Makefile CFLAGS).
+      -include
+      mquickjs_ridl_api.h
+      -include
+      mqjs_rs_hooks.h)
 
 endif()

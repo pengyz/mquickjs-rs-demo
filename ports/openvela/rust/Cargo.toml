@@ -1,6 +1,6 @@
 [package]
 name = "mqjs-openvela-adapter"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 
 [lib]
@@ -11,6 +11,14 @@ crate-type = ["staticlib"]
 # RIDL stdlib（console 等）依赖 std I/O，在此模式下原生工作。
 # no_std 变体（裸机 MCU 用）保留在 git 历史中，未来真机部署时恢复。
 mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
+
+# 本 crate 是 openvela sim 的 RIDL 叶子应用：唯一选择的 RIDL 模块是
+# stdlib（console singleton）。聚合产物经 ridl-builder 生成（见 build.rs）。
+[dependencies.stdlib]
+path = "../../../ridl-modules/stdlib"
+
+[build-dependencies]
+mquickjs-ridl-glue = { path = "../../../deps/mquickjs-ridl-glue" }
 
 # 独立于仓库 root workspace（ports/ 不在 root members 中）
 [workspace]
