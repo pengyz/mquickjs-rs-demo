@@ -244,20 +244,34 @@ no_std 变体（GlobalAlloc 桥/panic_handler）整体让位 **std 模式**
 - 本仓库 demo 语料 31/31 PASS（root workspace 未触碰，环境无回归）✅
 
 
-### Phase 1.5：CMake 轨集成【✅ 已完成 2026-10-09】（原计划 M2 时补，用户裁定提前）
+### Phase 1.5：CMake 轨集成【✅ 真实验收通过 2026-10-09 下午】（原计划 M2 时补，用户裁定提前）
 
-- app 补 `CMakeLists.txt`（`nuttx_add_application` 注册 + INCLUDE_DIRECTORIES +
-  COMPILE_FLAGS，机器本地路径经 `framework.cmake` 注入；setup 脚本双写
-  framework.mk/framework.cmake）
-- 排障实录：① `_do_cmake_generator` 仅在产物目录不存在时 configure，
-  失败残缓存导致后续全部 "build.ninja: No such file" → build-cmake 每次
-  强制清 `cmake_out`；② 部分同步树缺 `apps/external/optee/TA*.cmake`
-  （CMake 自定义模块无条件 include），经 `apps/external` 符号链接写入
-  空 stub（真实位置 `external/optee/`，链接目标未同步）；③ Make/CMake
-  双轨互斥使用同一 nuttx 树，切换需 distclean——配置片段移入 board
-  defconfig 后两轨共享、重构不丢
-- 验收：`build-cmake` 产出 `cmake_out/sim_nsh/nuttx`，三案例哨兵结果
-  与 Make 轨完全一致（PASS / SyntaxError×2 不崩）
+> 更正：本节此前一次"已完成"记录为假阳性——镜像能产出但 `js` builtin
+> 并未注册（CMake GLOB 不穿透符号链接），当日复核予以推翻并重做。
+
+- app `CMakeLists.txt`：`nuttx_add_application` 注册；force-include 用调用后
+  `target_compile_options(... "SHELL:-include x.h")`（COMPILE_FLAGS 列表
+  逐元素为一个 argv，多词 flag 会被引号合并成"含空格文件名"）；adapter
+  归档经 `nuttx_add_extra_library()` 进链接（extras 排在 apps 库之后，
+  sim 链接整体包 `--start-group`，交叉引用自动闭合）
+- setup 脚本：① app 接入点由符号链接改为 `cp -a` 真实目录拷贝（staging
+  与头生成之后同步；GLOB 不穿透符号链接而 Make wildcard 可穿透）；
+  ② 合成 defconfig 落**树内** `boards/sim/sim/sim/configs/mqjs`（纯新增），
+  树外绝对路径会打断 `NUTTX_BOARD_ABS_DIR/../..` 板级回溯（etc romfs
+  规则消失）；③ `VELA_BUILD_BOARD_CONFIG` 必须在 **lunch 之后**导出
+  （lunch 无条件用原始参数覆盖它）；④ 构建走官方 `lunch → m`（configure
+  在 `_build_board` 内，不在 lunch 里）
+- 引擎/生成器清理（Vela cmake 全局 `-Werror` 暴露）：mquickjs.c 11 处
+  shadow/unused 局部重命名（`JS_PUSH_VALUE` 宏 token 拼接 `v##_ref`，
+  外层 JSGCRef 槽位是承重的，内层重复声明才可删）；libm.c 删无效
+  `#define NDEBUG`（命令行已定义且文件无 assert）；ridl-tool 空表门控
+  （proto_vars 为 0 不再生成未引用的 `ridl_proto_var_entries`，TDD：
+  proto_var_empty_table_test，424→426）
+- 验收（cmake_out/sim_nsh 镜像实机）：`js` 命令存在；demo_pass PASS、
+  rs_probe PASS（rust-bridge ok）、ridl_console PASS（Rust 控制台全链路）、
+  tiny_err SyntaxError 文本上报不崩——与 Make 轨哨兵一致；回归：workspace
+  616/0、JS 语料 31/31、ridl-tool 426/0
+- 细节坑已沉淀 `docs/knowledge/gotcha_vela_cmake_track.md`
 
 ### Phase 3：QEMU aarch64 → M2（2-4 天）
 - 按 U3 选型迁移；Rust 侧换 `aarch64-unknown-nuttx` + `-Z build-std`；

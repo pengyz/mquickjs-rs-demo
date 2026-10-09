@@ -28,6 +28,18 @@ if(CONFIG_MQJS_JS)
   if(NOT DEFINED MQJS_GEN_DIR)
     message(FATAL_ERROR "MQJS_GEN_DIR not set: run ports/openvela/setup-sim.sh first")
   endif()
+  if(NOT DEFINED MQJS_ADAPTER_A)
+    message(FATAL_ERROR "MQJS_ADAPTER_A not set: run ports/openvela/setup-sim.sh first")
+  endif()
+
+  # Rust adapter archive: defines mqjs_rs_ridl_* consumed by js_main.c and
+  # the RIDL console glue referenced by the generated stdlib table. Its own
+  # undefined JS_*/js_stdlib symbols resolve from the apps libs, and extra
+  # libraries link AFTER the apps libs in the final image, so one pass
+  # suffices (js_main.o pulls the engine TUs from libapps, then the adapter
+  # satisfies js_main.o's remaining undefineds). Mirrors the Make track's
+  # apps/staging/*.a consumption (EXTRA_LIBS wildcard).
+  nuttx_add_extra_library("${MQJS_ADAPTER_A}")
 
   nuttx_add_application(
     NAME ${CONFIG_MQJS_JS_PROGNAME}
@@ -40,8 +52,6 @@ if(CONFIG_MQJS_JS)
       # RIDL-variant stdlib runtime TUs (M1-R+): mqjs_stdlib_impl.c defines
       # the strong js_stdlib (RIDL tables incl. console), the register TU
       # comes from the app aggregate, require.c implements require().
-      # NOTE: CMake track is deferred to M2 (user decision) — kept in sync
-      # with the Makefile but not re-validated until then.
       engine_src/mqjs_stdlib_impl.c
       engine_src/mqjs_require.c
       engine_src/mqjs_ridl_register.c
@@ -57,12 +67,16 @@ if(CONFIG_MQJS_JS)
     COMPILE_FLAGS
       -fno-math-errno
       -fno-trapping-math
-      -DMQUICKJS_ENABLE_RIDL_EXTENSIONS
-      # RIDL api declarations + rs hook declarations, force-included into
-      # every app TU (mirrors the Makefile CFLAGS).
-      -include
-      mquickjs_ridl_api.h
-      -include
-      mqjs_rs_hooks.h)
+      -DMQUICKJS_ENABLE_RIDL_EXTENSIONS)
+
+  # RIDL api declarations + rs hook declarations, force-included into every
+  # app TU (mirrors the Makefile CFLAGS). Done OUTSIDE nuttx_add_application:
+  # its COMPILE_FLAGS list is forwarded to target_compile_options where each
+  # element is ONE argv — a multi-word "-include x.h" gets shell-quoted into
+  # a single filename-with-space, and unquoted pairs lose the second -include.
+  # SHELL: keeps each pair as two real argv items without re-grouping.
+  target_compile_options(apps_${CONFIG_MQJS_JS_PROGNAME} PRIVATE
+    "SHELL:-include mquickjs_ridl_api.h"
+    "SHELL:-include mqjs_rs_hooks.h")
 
 endif()

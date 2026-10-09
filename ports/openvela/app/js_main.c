@@ -32,7 +32,7 @@
  *   there is no C-side malloc for the JS heap anymore.
  * - The rs probe functions (rsVersion/rsSelfTest) are baked into the
  *   generated stdlib table by the staged generator overlay (setup-sim.sh
- *   step 2b, now on mqjs_stdlib_template.c). Their definitions live HERE
+ *   step 1b, now on mqjs_stdlib_template.c). Their definitions live HERE
  *   and are non-static: the generated table references them from
  *   mqjs_stdlib_impl.o (a different TU).
  ****************************************************************************/
@@ -79,7 +79,7 @@ extern int mqjs_rs_ridl_eval(void *ctx, const unsigned char *script,
                              unsigned long err_cap);
 
 /* The generated stdlib table (in mqjs_stdlib_impl.o) references these —
- * the compile-time registration overlay in setup-sim.sh step 2b. */
+ * the compile-time registration overlay in setup-sim.sh step 1b. */
 
 extern const char *mqjs_rs_version(void);
 extern int mqjs_rs_self_test(void);

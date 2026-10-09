@@ -48,7 +48,7 @@ CFLAGS += -I$(MQJS_ENGINE_SRC) -Iengine_src
 # and RIDL code paths; the force-included api header declares the RIDL
 # js_* entry points that the generated stdlib table references from
 # mqjs_stdlib_impl.o, and the hooks header declares the rs probe overlay
-# hooks baked into the same table (setup-sim.sh steps 2b/3a).
+# hooks baked into the same table (setup-sim.sh steps 1b/2a).
 CFLAGS += -DMQUICKJS_ENABLE_RIDL_EXTENSIONS
 CFLAGS += -include mquickjs_ridl_api.h
 CFLAGS += -include mqjs_rs_hooks.h

@@ -12,7 +12,10 @@
 # 非侵入原则（2026-10-09 用户裁定）：移植适配不得修改 openvela 树的公共基础
 # 设施（defconfig / Kconfig / 构建脚本 / external 内容）。对 openvela 树的
 # 全部写入仅限两类：
-#   1. apps/system/mqjs 符号链接（apps 树的标准应用接入点，纯新增）
+#   1. apps/system/mqjs 应用目录（apps 树的标准应用接入点，纯新增；真实
+#      目录拷贝而非符号链接 —— Make 轨 $(wildcard) 能穿透符号链接，CMake
+#      轨 nuttx_add_subdirectory() 用 file(GLOB */CMakeLists.txt) 发现应用，
+#      不匹配符号链接目录，js builtin 会静默失联）
 #   2. 构建产物目录（nuttx/ 的 .config 与目标文件、cmake_out/、apps/staging/
 #      的适配器归档——均为可再生成的构建状态，非受跟踪内容）
 # 其余一切适配物（合成 defconfig、CUSTOM_MODULE_PATH 覆盖目录、atom 头、
@@ -43,7 +46,6 @@ APP_DIR="$REPO_ROOT/ports/openvela/app"
 GEN_DIR="$APP_DIR/gen"
 ENGINE_STAGE="$APP_DIR/engine_src"
 CMAKE_OVERRIDE_DIR="$REPO_ROOT/ports/openvela/cmake"
-COMPOSITE_DEFCONFIG_DIR="$GEN_DIR/nsh"
 RUST_DIR="$REPO_ROOT/ports/openvela/rust"
 RUST_TARGET="x86_64-unknown-linux-gnu"
 ADAPTER_A="$RUST_DIR/target/$RUST_TARGET/release/libmqjs_openvela_adapter.a"
@@ -249,10 +251,7 @@ build_rust_adapter() {
     audit_symbols "$STAGING_DIR/$(basename "$ADAPTER_A")"
 }
 
-# 1) app dir symlink（apps 树标准接入点，纯新增）
-ln -sfn "$APP_DIR" "$OPENVELA/apps/system/mqjs"
-
-# 2) stage engine + ridl-stdlib runtime sources + headers for the apps build.
+# 1) stage engine + ridl-stdlib runtime sources + headers for the apps build.
 #    - core: deps/mquickjs (unchanged Phase 1 set, minus base mqjs_stdlib.c)
 #    - ridl stdlib runtime: deps/mquickjs-rs (mqjs_stdlib_impl.c defines the
 #      strong js_stdlib; require.c implements require())
@@ -269,7 +268,7 @@ for f in mqjs_stdlib_impl.c mqjs_stdlib_template.c; do
 done
 cp -f "$RS_SRC/require.c" "$ENGINE_STAGE/mqjs_require.c"
 
-# 2b) stdlib overlay — compile-time registration of the rs probe functions,
+# 1b) stdlib overlay — compile-time registration of the rs probe functions,
 #     applied to the STAGED TEMPLATE copy (the ridl variant's host tool
 #     source; the template's js_global_object[] ends at the globalThis entry
 #     followed by the JS_RIDL_EXTENSIONS injection point).
@@ -294,7 +293,7 @@ update the overlay in setup-sim.sh" >&2
     echo "stdlib overlay applied: rsVersion/rsSelfTest -> $MQJS_TEMPLATE_STAGED"
 fi
 
-# 3) engine-native host toolchain, RIDL variant: build the mqjs_stdlib host
+# 2) engine-native host toolchain, RIDL variant: build the mqjs_stdlib host
 #    tool from the OVERLAID staged template + mquickjs_build.c (both with
 #    -DMQUICKJS_ENABLE_RIDL_EXTENSIONS so the generated js_stdlib is a
 #    strong definition and the RIDL extensions are expanded into
@@ -323,7 +322,7 @@ if ! grep -q 'js_global_singleton_console_log' "$GEN_DIR/mqjs_ridl_stdlib.h"; th
     exit 1
 fi
 
-# 3a) rs hook declarations. The generated stdlib table references the
+# 2a) rs hook declarations. The generated stdlib table references the
 #     overlay hooks (js_rs_version/js_rs_self_test) by address from
 #     mqjs_stdlib_impl.o WITHOUT declaring them (they are not RIDL
 #     exports, so mquickjs_ridl_api.h doesn't know them). Every app TU
@@ -339,24 +338,27 @@ JSValue js_rs_self_test(JSContext *ctx, JSValue *this_val, int argc, JSValue *ar
 #endif
 EOF
 
-# 3b) stage the aggregate's runtime register TU (JS_RIDL_StdlibInit + module
+# 2b) stage the aggregate's runtime register TU (JS_RIDL_StdlibInit + module
 #     require table) for the apps build, next to the other staged TUs.
 cp -f "$AGG_DIR/mquickjs_ridl_register.c" "$ENGINE_STAGE/mqjs_ridl_register.c"
 cp -f "$AGG_DIR/mquickjs_ridl_api.h" "$ENGINE_STAGE/mquickjs_ridl_api.h"
 cp -f "$AGG_DIR/mquickjs_ridl_register.h" "$ENGINE_STAGE/mquickjs_ridl_register.h"
 
-# 4) composite defconfig（合成：openvela sim:nsh defconfig + 本移植片段）
-#    目录形态必须为 <config>/defconfig（NuttX cmake 按
-#    NUTTX_DEFCONFIG = <BOARD_CONFIG>/defconfig 解析），生成到本仓库
-#    gen/，不动 openvela 的 defconfig。
+# 3) composite defconfig（合成：openvela sim:nsh defconfig + 本移植片段）
+#    落点必须是树内 configs/mqjs（纯新增目录，不碰任何受跟踪文件）：
+#    Vela cmake 用 NUTTX_BOARD_ABS_DIR/../.. 回溯板级目录——树外绝对路径
+#    会让板级解析链断裂（etc romfs 生成规则丢失、board 目录被链接成
+#    boards/exclude_board）；树内 configs/mqjs 的父链就是真实 sim 板，
+#    EXISTS 分支与 pair 形式等价解析。
+COMPOSITE_DEFCONFIG_DIR="$OPENVELA/nuttx/boards/sim/sim/sim/configs/mqjs"
 BASE_DEFCONFIG="$OPENVELA/nuttx/boards/sim/sim/sim/configs/nsh/defconfig"
 if [ ! -f "$BASE_DEFCONFIG" ]; then
     echo "ERROR: base defconfig not found at $BASE_DEFCONFIG" >&2
     exit 1
 fi
-mkdir -p "$GEN_DIR/nsh"
-cp "$BASE_DEFCONFIG" "$GEN_DIR/nsh/defconfig"
-cat >> "$GEN_DIR/nsh/defconfig" <<'EOF'
+mkdir -p "$COMPOSITE_DEFCONFIG_DIR"
+cp "$BASE_DEFCONFIG" "$COMPOSITE_DEFCONFIG_DIR/defconfig"
+cat >> "$COMPOSITE_DEFCONFIG_DIR/defconfig" <<'EOF'
 
 # mquickjs js builtin (ports/openvela) — composite defconfig, not in-tree
 CONFIG_MQJS_JS=y
@@ -364,14 +366,30 @@ CONFIG_FS_HOSTFS=y
 CONFIG_BOARDCTL=y
 EOF
 
-# 5) framework.mk（Make 轨消费的机器本地路径；CMake 轨直接用 gen/ 合成
-#    defconfig，无需单独文件）
+# 4) framework.mk / framework.cmake（两轨各自消费的机器本地路径；CMake 轨
+#    的合成 defconfig 走 VELA_BUILD_BOARD_CONFIG 环境变量，无需单独文件）
 cat > "$APP_DIR/framework.mk" <<EOF
 # Generated by ports/openvela/setup-sim.sh — do not commit.
 MQJS_GEN_DIR := $GEN_DIR
 MQJS_ENGINE_SRC := $ENGINE_SRC
 MQJS_AGG_DIR := $AGG_DIR
 EOF
+cat > "$APP_DIR/framework.cmake" <<EOF
+# Generated by ports/openvela/setup-sim.sh — do not commit.
+set(MQJS_GEN_DIR "$GEN_DIR")
+set(MQJS_ENGINE_SRC "$ENGINE_SRC")
+set(MQJS_AGG_DIR "$AGG_DIR")
+set(MQJS_ADAPTER_A "$ADAPTER_A")
+EOF
+
+# 5) app dir 同步（apps 树标准接入点，纯新增）。真实目录拷贝而非符号链接：
+#    CMake 轨 nuttx_add_subdirectory() 用 file(GLOB */CMakeLists.txt) 发现
+#    应用，不匹配符号链接目录。必须在全部内容（engine_src staging、gen/
+#    头、framework.*）就绪之后执行；app 内容变更后重跑本脚本即可同步。
+#    cp -a 保留 mtime，未变更文件不触发 Make/CMake 重建。
+rm -rf "$OPENVELA/apps/system/mqjs"
+cp -a "$APP_DIR" "$OPENVELA/apps/system/mqjs"
+echo "app dir synced: $OPENVELA/apps/system/mqjs (real copy, CMake-glob compatible)"
 
 # 6) build
 MODE="${1:-}"
@@ -400,26 +418,29 @@ EOF
     # adapter 构建与轨道无关（产物进 apps/staging；CMake 轨的 .a 链接消费
     # 属 M2 范围，这里仅保证 release 变体可自动生成、staging 就绪不报错）
     build_rust_adapter
-    # 与已验证成功的官方序列一致（distclean → rm cmake_out → lunch 静默
-    # 完成全部 cmake configure → cmake --build），唯一差异是 lunch 前导出
-    # VELA_BUILD_BOARD_CONFIG 指向本仓库的合成 defconfig 目录
-    # （envsetup.sh:231 会采用该值），从而零改动 openvela 树。
-    # 注意：gen/nsh/defconfig 的目录形态是 NuttX cmake 的解析契约
-    # （NUTTX_DEFCONFIG = <BOARD_CONFIG>/defconfig）。
+    # 与官方序列一致（distclean → lunch → m）。注意 configure 不在 lunch
+    # 里，而在 _build_board 内部的 _do_cmake_generator（cmake -B，仅当
+    # 构建目录缺失时执行——因此 rm -rf 保证全新 configure）；直接
+    # `cmake --build` 会因 configure 从未执行而报 "is not a directory"。
     if [ -f "$OPENVELA/nuttx/Makefile" ] || [ -f "$OPENVELA/nuttx/.config" ]; then
         echo "NOTE: switching tracks — distclean (build artifacts only)"
         make -C "$OPENVELA/nuttx" distclean >/dev/null 2>&1 || true
     fi
     rm -rf "$OPENVELA/cmake_out"
 
-    export VELA_BUILD_BOARD_CONFIG="$COMPOSITE_DEFCONFIG_DIR"
-    # envsetup 不兼容 nounset：在子 shell 中关闭后执行 lunch/构建
+    # envsetup 不兼容 nounset：在子 shell 中关闭后执行 lunch/构建。
+    # VELA_BUILD_BOARD_CONFIG 必须在 lunch 之**后**导出：lunch 无论哪种
+    # config 形式都会无条件把它覆盖为原始参数（sim:nsh）；它被 _wrap_build
+    # 采纳为 cmake -DBOARD_CONFIG（绝对路径，nuttx/CMakeLists.txt 的
+    # EXISTS 分支原生支持），从而指向本仓库的合成 defconfig 目录，
+    # 零改动 openvela 树。
     (
         set +eu
         cd "$OPENVELA"
         source build/envsetup.sh
         lunch sim:nsh cmake_out/sim_nsh >/dev/null
-        cmake --build cmake_out/sim_nsh -j"$(nproc)"
+        export VELA_BUILD_BOARD_CONFIG="$COMPOSITE_DEFCONFIG_DIR"
+        m
     )
     echo "OK: $OPENVELA/cmake_out/sim_nsh/nuttx"
     ;;

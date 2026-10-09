@@ -21,6 +21,7 @@
 - [mquickjs-rs 不能编译到裸机](gotcha_mquickjs_rs_not_bare_metal.md) — E1 结论：阻塞集中在异步子系统；RIDL/GC/handles 核心是 no_std 干净的
 - [Mimosa git-gate 高危分诊](gotcha_mimosa_git_gate_triage.md) — 本地 CLI argv 路径属接受风险；测试消息勿写成命令行样式；放行须批准且最小范围
 - [Rust no_std 符号绑定清单（NuttX sim）](gotcha_rust_nostd_symbols_nuttx_sim.md) — malloc/free 落宿主 glibc、mem 落 NuttX libc.a；staging 消费点在 arch/sim Makefile:330
+- [OpenVela CMake 轨适配五连坑](gotcha_vela_cmake_track.md) — lunch 覆盖 env/configure 在 m 里/树外 defconfig 断板级链/COMPILE_FLAGS 多词 flag/GLOB 不穿透符号链接
 - [mquickjs ≠ QuickJS](gotcha_mquickjs_is_not_quickjs.md) — 独立项目，共享代码渊源但架构完全不同，不要用 QuickJS 知识推断 mquickjs
 - [RIDL 生成器静默退化](gotcha_ridl_silent_generation_degradation.md) — union 丢成员/struct 回退 JSValue 曾不报错；兜底产物被使用即错 → 硬错误
 - [QuickJS ROM 机制与 RIDL 扩展关系](gotcha_quickjs_rom_ridl_mechanism.md) — 当初实现时未充分理解 ROM，需要重新审视
