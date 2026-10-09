@@ -36,7 +36,11 @@
 
 ## 遗留指针
 
-`test_async_value_object` 预存 flaky SIGSEGV（~10-17%，GC 生命周期嫌疑）：
-`docs/planning/2026/2026-10-09-async-value-flaky-sigsegv.md`（P1 专项）。
+`test_async_value_object` 预存 flaky SIGSEGV——**已解决（2026-10-09）**：根因
+是 `AsyncValue::to_js` Json 路径 `JS_Call(ctx, 0)` 零推参（栈残留被当函数帧
+解释），非 GC 问题；修复 + 确定性往返断言 + 50 轮压测零崩溃。
+`docs/planning/2026/2026-10-09-async-value-flaky-sigsegv.md`。
+教训：**C 调用约定类 flaky 会被误诊为 GC 问题**——先审计推参/帧纪律再怀疑
+生命周期。
 
 **关联**：[[gotcha_vela_cmake_track]]、[[nuttx-prebuilt-archive-mixed-binding]]

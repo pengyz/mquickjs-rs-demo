@@ -1,9 +1,29 @@
 # 专项调查：test_async_value_object 间歇性 SIGSEGV（P1）
 
-> 状态：待排期（Phase 3.5 收尾时由对抗复核发现，**预存问题、非 QEMU 工作引入**）
-> 日期：2026-10-09
+> 状态：**已解决 2026-10-09**（根因不是 GC——见下" Resolution"；修复压测
+> 50/50 零崩溃，达到本计划验收标准）
 
-## 现象
+## Resolution（2026-10-09）
+
+**根因**：`AsyncValue::to_js` 的 Json 路径调用 `JS_Call(ctx, 0)`——**零推参**。
+JS_Call 从 ctx->sp 读完整调用帧（func_obj/this/args），栈上残留垃圾被当函数
+帧解释：看似"GC 生命周期问题"实为**残缺的 C 调用约定**。崩与不崩取决于栈
+残留内容（故 flaky、且孤立跑单测时垃圾恰好无害而通过）。创建的 JSON 参数
+字符串也从未入栈（`let _js_json_str` 弃用）。
+
+**修复**（async_value.rs to_js Json 路径）：
+1. 按调用约定逆序推参：arg → func → this，`JS_Call(ctx, 1)`
+2. 顺序调整：`JS_NewString`（分配可触发 GC）提前到属性取回之前——推上
+   ctx 栈（被栈扫描保护）之前的裸值不可跨 GC，这是修复中顺带消除的真实
+   GC 隐患
+3. 测试从"只要不 panic"强化为**确定性往返断言**（to_js → from_js 等价），
+   object 与 nested 两用例
+
+**验收**：单测 13/13；全套件 50 轮零崩溃（原 ~10-17% 崩溃率）；workspace
+618/0；JS 语料 31/31。全库 JS_Call 调用点审计：仅此一处损坏（array.rs 与
+from_js stringify 均为正确约定）。
+
+## 原现象（存档）
 
 `cargo test --workspace` 间歇性 SIGSEGV（rc=139），锁定崩溃用例：
 

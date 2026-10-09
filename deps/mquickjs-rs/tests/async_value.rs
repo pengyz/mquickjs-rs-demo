@@ -154,9 +154,17 @@ fn test_async_value_object() {
         _ => panic!("Expected Json"),
     }
     
-    // 还原回 JS
-    let _js_result = async_val.to_js(&scope);
-    // 简化验证：只要不 panic 即可
+    // 还原回 JS：必须是真实对象（曾因 JS_Call 零推参把栈残留当函数帧
+    // 解释而间歇性 SIGSEGV——修复后做确定性往返断言）
+    let js_result = async_val.to_js(&scope);
+    let round_trip = AsyncValue::from_js(&scope, js_result);
+    match round_trip {
+        AsyncValue::Json(ref json_str) => {
+            assert!(json_str.contains("\"name\":\"test\""));
+            assert!(json_str.contains("\"value\":42"));
+        }
+        _ => panic!("Expected Json round-trip"),
+    }
 }
 
 #[test]
@@ -177,6 +185,16 @@ fn test_async_value_nested() {
             assert!(json_str.contains("\"obj\":{\"key\":\"val\"}"));
         }
         _ => panic!("Expected Json"),
+    }
+
+    // 往返：嵌套 Json → to_js（JSON.parse）→ from_js（stringify）应等价
+    let round_trip = AsyncValue::from_js(&scope, async_val.to_js(&scope));
+    match round_trip {
+        AsyncValue::Json(ref json_str) => {
+            assert!(json_str.contains("\"arr\":[1,2]"));
+            assert!(json_str.contains("\"obj\":{\"key\":\"val\"}"));
+        }
+        _ => panic!("Expected Json round-trip"),
     }
 }
 

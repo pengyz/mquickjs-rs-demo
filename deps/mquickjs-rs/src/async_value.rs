@@ -341,20 +341,29 @@ impl AsyncValue {
                 }
             }
             AsyncValue::Json(json_str) => {
-                // JSON.parse
+                // JSON.parse(text)
+                //
+                // 顺序要点：先 JS_NewString 再取 JSON/parse——JS_NewString
+                // 分配内存可能触发 GC（压缩会移动对象），而属性取回的裸值
+                // 要到推上 ctx 栈（被栈扫描保护）后才安全跨 GC。
+                //
+                // 推参顺序（同 function.rs 约定）：参数 → 函数 → this。
+                // JS_Call 从栈上读完整帧；不推参会把栈残留当函数帧解释
+                // ——这正是 test_async_value_object 间歇性 SIGSEGV 的根因。
                 unsafe {
-                    let global = mquickjs_ffi::JS_GetGlobalObject(ctx);
+                    let c_json = alloc::ffi::CString::new(json_str.as_str()).unwrap();
+                    let js_json_str = mquickjs_ffi::JS_NewString(ctx, c_json.as_ptr());
                     let json_key = alloc::ffi::CString::new("JSON").unwrap();
                     let parse_key = alloc::ffi::CString::new("parse").unwrap();
+                    let global = mquickjs_ffi::JS_GetGlobalObject(ctx);
                     let json_obj = mquickjs_ffi::JS_GetPropertyStr(ctx, global, json_key.as_ptr());
                     let parse_fn = mquickjs_ffi::JS_GetPropertyStr(ctx, json_obj, parse_key.as_ptr());
 
                     if mquickjs_ffi::JS_IsFunction(ctx, parse_fn) != 0 {
-                        let c_json = alloc::ffi::CString::new(json_str.as_str()).unwrap();
-                        let _js_json_str = mquickjs_ffi::JS_NewString(ctx, c_json.as_ptr());
-                        // 调用 JSON.parse
-                        let result = mquickjs_ffi::JS_Call(ctx, 0); // 简化调用
-                        result
+                        mquickjs_ffi::JS_PushArg(ctx, js_json_str); // 参数
+                        mquickjs_ffi::JS_PushArg(ctx, parse_fn); // 函数
+                        mquickjs_ffi::JS_PushArg(ctx, json_obj); // this
+                        mquickjs_ffi::JS_Call(ctx, 1)
                     } else {
                         mquickjs_ffi::JS_NULL
                     }
