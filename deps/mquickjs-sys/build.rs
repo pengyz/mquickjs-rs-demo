@@ -87,10 +87,35 @@ fn main() {
         );
     }
 
+    // The build output json may carry workspace-root-relative paths (e.g.
+    // when the framework artifacts are checked into an integrating tree for
+    // portability). Resolve them against the mquickjs.build.toml directory
+    // and canonicalize before emitting: downstream build scripts (e.g.
+    // mquickjs-rs bindgen) run with their OWN package root as cwd, so the
+    // emitted paths must be absolute.
+    fn resolve(p: &Path, root: &Path) -> PathBuf {
+        let joined = if p.is_absolute() {
+            p.to_path_buf()
+        } else {
+            root.join(p)
+        };
+        joined.canonicalize().unwrap_or_else(|e| {
+            // A relative escape here would be silently mis-consumed by any
+            // downstream reader that runs from a different cwd — surface it
+            // (e.g. MQUICKJS_LIB_DIR when lib/ is not checked in).
+            println!(
+                "cargo:warning=mquickjs-sys build: cannot canonicalize {} ({}); emitting as-is",
+                joined.display(),
+                e
+            );
+            joined
+        })
+    }
+
     println!("cargo:rerun-if-changed={}", cfg_path.display());
 
     for inp in &build_output.inputs {
-        println!("cargo:rerun-if-changed={}", inp.display());
+        println!("cargo:rerun-if-changed={}", resolve(inp, &workspace_root).display());
     }
 
     // Expose include dir for downstream bindgen consumers.
@@ -98,13 +123,13 @@ fn main() {
     // focused on native build orchestration and linking.
     println!(
         "cargo:rustc-env=MQUICKJS_INCLUDE_DIR={}",
-        build_output.include_dir.display()
+        resolve(&build_output.include_dir, &workspace_root).display()
     );
 
     // Expose native artifact locations for downstream crates to decide how to link.
     println!(
         "cargo:rustc-env=MQUICKJS_LIB_DIR={}",
-        build_output.lib_dir.display()
+        resolve(&build_output.lib_dir, &workspace_root).display()
     );
 
     // Do not emit any link directives from this sys crate.
