@@ -4,6 +4,13 @@
 当前阶段：**Phase 1（M1-C）+ Phase 2a（M1-R Rust std adapter）+ Phase 2b
 （M1-R+ RIDL stdlib console）已完成**（2026-10-09）。
 
+> ⚠️ **DEPRECATED（2026-10-09 起）**：本目录的脚本式适配已由**树内一等公民
+> app** 取代——OpenVela 树 `apps/system/mqjs/` + `boards/sim/sim/sim/configs/mqjs`
+> （构建与哨兵说明见树内 `apps/system/mqjs/SYNC.md`）。**勿再运行
+> setup-sim.sh**：它会覆盖树内 app 与 defconfig 并产生双适配器归档冲突。
+> 本目录保留为历史验收路径与上游 master 副本（js_main.c 等的上游 source
+> of truth），供树内 vendored 快照对账（SYNC.md 自检命令引用）。
+
 ## 集成模型：源码级（source-level）
 
 引擎 `.c` 文件**由 openvela apps 构建用 NuttX 工具链编译**（参照

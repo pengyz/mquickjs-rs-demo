@@ -4,8 +4,28 @@ version = "0.1.0"
 edition = "2024"
 
 [lib]
-crate-type = ["rlib", "staticlib"]
+# rlib only：模块 crate 由叶子应用（adapter）以 rlib 消费并在那里最终链接
+# （leaf 提供 #[global_allocator]/#[panic_handler]）。staticlib 类型在
+# no_std 下会作为最终产物触发 allocator/panic_handler 要求，而本 crate
+# 从未有该形态的消费方（历史实验残留），故收敛为 rlib。
+crate-type = ["rlib"]
 
 [dependencies]
-mquickjs-rs = { path = "../../deps/mquickjs-rs", features = ["ridl-extensions"] }
+# 运行模式（std/no-std）由本 crate 的同名 feature 转发；mquickjs-rs 的
+# default（std）必须在此关闭——否则 `--no-default-features --features
+# no-std` 会经 feature unification 同时拉起 std 与 no-std（互斥守卫报错）。
+mquickjs-rs = { path = "../../deps/mquickjs-rs", default-features = false, features = ["ridl-extensions"] }
 libc = "0.2"
+
+[features]
+default = ["std"]
+
+# hosted 模式：std 可用（宿主、NuttX sim 等 POSIX 环境）。
+# console 输出走 print!/eprint!（stdout/stderr）。
+std = ["mquickjs-rs/std"]
+
+# 裸机模式：no_std + alloc（openvela QEMU aarch64，计划
+# docs/planning/2026/2026-10-09-openvela-qemu-arm64.md §4 3.4）。
+# console 输出走 FFI printf 桥（镜像侧 libc，stdout=NSH 控制台）。
+# 用法：--no-default-features --features no-std
+no-std = ["mquickjs-rs/no-std"]

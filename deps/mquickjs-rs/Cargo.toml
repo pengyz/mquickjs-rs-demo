@@ -22,8 +22,13 @@ std = ["dep:futures", "dep:libc", "mquickjs-sys/std"]
 no-std = []
 
 # Enable RIDL stdlib extensions. This must be enabled by the application crate.
-# RIDL 是应用层能力，隐含 hosted 模式。
-ridl-extensions = ["mquickjs-sys/ridl-extensions", "std"]
+# RIDL 是应用层能力，与运行模式（std / no-std）正交：宿主应用以默认
+# features（std）使用，裸机应用以 `--no-default-features --features
+# no-std,ridl-extensions` 使用（openvela QEMU aarch64 集成，计划
+# 2026-10-09-openvela-qemu-arm64 §4 3.4）。本 feature 不再隐含 std——
+# ridl-extensions 自身的代码路径（ridl_runtime / ridl_ext_access /
+# ridl_include 及生成的 glue，经 glue_prelude）只依赖 core + alloc。
+ridl-extensions = ["mquickjs-sys/ridl-extensions"]
 
 [build-dependencies]
 bindgen = "0.72"

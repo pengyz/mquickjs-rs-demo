@@ -14,8 +14,6 @@
 //! 背景与成本评估见 `docs/knowledge/assessment_core_nostd_port_cost.md`。
 #![cfg_attr(feature = "no-std", no_std)]
 
-#[cfg(feature = "no-std")]
-use alloc::{format, string::String, vec};
 // `std` 与 `no-std` 互斥：同时开启会让异步子系统在无 std 的环境下被编译。
 #[cfg(all(feature = "std", feature = "no-std"))]
 compile_error!("features `std` and `no-std` are mutually exclusive");
@@ -154,6 +152,28 @@ pub mod ridl_runtime;
 
 #[cfg(feature = "ridl-extensions")]
 pub mod ridl_ext_access;
+
+/// 生成式 RIDL glue（ridl-tool 的 `rust_glue.rs.j2` / `rust_api.rs.j2`）
+/// 的公共导入前导，供生成代码以
+/// `use mquickjs_rs::glue_prelude::*;` 引入。
+///
+/// 为什么存在：生成的 glue 会用到 `CString` / `c_int` / `Vec` / `Box`。
+/// std prelude 只在 std 模式提供其中一部分；`no_std` 模式下 prelude 为空。
+/// 本模块统一从 `alloc` / `core` 再导出——两种模式下 `mquickjs-rs` 都持有
+/// `extern crate alloc`（见文件头），因此生成代码无需感知运行模式。
+/// 裸机 RIDL 的 feature 卫生见
+/// docs/planning/2026/2026-10-09-openvela-qemu-arm64.md §4（3.4）。
+///
+/// 注意：map 类型参数的 glue 模板仍会发出 `std::collections::HashMap`
+/// （`std::ffi::CString` 已由本前导覆盖）；裸机模块在使用 map 能力前
+/// 需先完成对应的 no_std 化（当前 stdlib 模块未用 map，不受影响）。
+#[cfg(feature = "ridl-extensions")]
+pub mod glue_prelude {
+    pub use alloc::boxed::Box;
+    pub use alloc::ffi::CString;
+    pub use alloc::vec::Vec;
+    pub use core::ffi::c_int;
+}
 
 #[cfg(feature = "std")]
 pub mod async_task;

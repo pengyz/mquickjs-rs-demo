@@ -1,21 +1,40 @@
 [package]
 name = "mqjs-openvela-adapter"
-version = "0.3.0"
+version = "0.4.0"
 edition = "2024"
 
 [lib]
 crate-type = ["staticlib"]
 
+# 运行模式随构建目标切换（Phase 3.4，见
+# docs/planning/2026/2026-10-09-openvela-qemu-arm64.md §4）：
+#
+# - `target_os = "linux"`（openvela sim：宿主 Linux 进程，glibc 动态链接）
+#   → std 模式。RIDL stdlib（console）的 std I/O 原生工作。
+# - 其他目标（QEMU aarch64 裸机 `aarch64-unknown-none`，-C panic=abort）
+#   → no-std 模式。本 crate 的 no_std 分支提供 `#[global_allocator]`
+#   （NuttX malloc/free 桥）、`#[panic_handler]` 与 eh_personality 桩，
+#   console 输出由 stdlib 的 no_std 模式经 FFI printf 落到 NuttX 控制台。
+#
+# 模式 feature 经 target-specific dependencies 注入：cargo 只合并匹配
+# 目标的表，因此同一份源码在 sim（host target）与 aarch64 上各自解析出
+# 恰好一种模式（std 与 no-std 互斥由下游 crate 的 compile_error 兜底）。
 [dependencies]
-# std 模式：openvela sim 是宿主 Linux 进程（glibc 动态链接），std 完全可用。
-# RIDL stdlib（console 等）依赖 std I/O，在此模式下原生工作。
-# no_std 变体（裸机 MCU 用）保留在 git 历史中，未来真机部署时恢复。
-mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
+mquickjs-rs = { path = "../../../deps/mquickjs-rs", default-features = false, features = ["ridl-extensions"] }
 
-# 本 crate 是 openvela sim 的 RIDL 叶子应用：唯一选择的 RIDL 模块是
-# stdlib（console singleton）。聚合产物经 ridl-builder 生成（见 build.rs）。
 [dependencies.stdlib]
 path = "../../../ridl-modules/stdlib"
+default-features = false
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# default-features 必须显式关：多表声明的依赖会按目标合并，
+# 任何适用表漏关都会把 mquickjs-rs/stdlib 的 default（std）拉回图里。
+mquickjs-rs = { path = "../../../deps/mquickjs-rs", default-features = false, features = ["std"] }
+stdlib = { path = "../../../ridl-modules/stdlib", default-features = false, features = ["std"] }
+
+[target.'cfg(not(target_os = "linux"))'.dependencies]
+mquickjs-rs = { path = "../../../deps/mquickjs-rs", default-features = false, features = ["no-std"] }
+stdlib = { path = "../../../ridl-modules/stdlib", default-features = false, features = ["no-std"] }
 
 [build-dependencies]
 mquickjs-ridl-glue = { path = "../../../deps/mquickjs-ridl-glue" }

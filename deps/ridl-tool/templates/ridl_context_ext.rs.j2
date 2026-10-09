@@ -7,6 +7,9 @@
 
 use core::ffi::c_void;
 
+// Mode-agnostic prelude (std and no_std consumers), see mquickjs-rs::glue_prelude.
+use mquickjs_rs::glue_prelude::*;
+
 use mquickjs_rs::context::ContextToken;
 use mquickjs_rs::mquickjs_ffi;
 use mquickjs_rs::ridl_runtime::RidlSlotWriter as _;

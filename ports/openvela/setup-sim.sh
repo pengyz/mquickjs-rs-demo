@@ -2,6 +2,16 @@
 # ports/openvela/setup-sim.sh — idempotent setup of the mquickjs `js` builtin
 # in an OpenVela/NuttX sim tree, then build.
 #
+################################################################################
+# ⚠️  DEPRECATED（2026-10-09，Phase 3.1 起）：本脚本的集成职责已由树内      #
+#  一等公民 app 取代：openvela 树 apps/system/mqjs/ + nuttx boards sim:mqjs  #
+#  配置（构建/哨兵说明见树内 apps/system/mqjs/SYNC.md）。                   #
+#  **不要在树内方案落地后再运行本脚本**：它会 rm -rf apps/system/mqjs 并用   #
+#  旧布局（仓库绝对路径符号布局 + libmqjs_openvela_adapter.a）覆盖之，与    #
+#  树内版（libmqjs.a）产生双适配器归档/defconfig 冲突。保留仅作历史验收路径 #
+#  与对照参考。                                                             #
+################################################################################
+#
 # Usage:
 #   ports/openvela/setup-sim.sh build          # Make 轨（含 rust adapter 构建与 staging）
 #   ports/openvela/setup-sim.sh build-cmake    # CMake 轨
