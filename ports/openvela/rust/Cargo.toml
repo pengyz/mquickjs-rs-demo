@@ -1,18 +1,16 @@
 [package]
 name = "mqjs-openvela-adapter"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 
 [lib]
 crate-type = ["staticlib"]
 
 [dependencies]
-mquickjs-rs = { path = "../../../deps/mquickjs-rs", default-features = false, features = ["no-std"] }
-
-[profile.dev]
-panic = "abort"
-[profile.release]
-panic = "abort"
+# std 模式：openvela sim 是宿主 Linux 进程（glibc 动态链接），std 完全可用。
+# RIDL stdlib（console 等）依赖 std I/O，在此模式下原生工作。
+# no_std 变体（裸机 MCU 用）保留在 git 历史中，未来真机部署时恢复。
+mquickjs-rs = { path = "../../../deps/mquickjs-rs" }
 
 # 独立于仓库 root workspace（ports/ 不在 root members 中）
 [workspace]
