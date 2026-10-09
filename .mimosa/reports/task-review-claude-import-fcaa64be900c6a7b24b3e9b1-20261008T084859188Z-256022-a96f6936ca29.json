@@ -1,0 +1,565 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20261008T084859188Z-256022-a96f6936ca29",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "candidate-select",
+      "target": "apps/demo/tests/gc_root_cycle.rs",
+      "reason": "candidate_limit_exceeded: 6 changed reviewable file(s) were not scanned because the limit is 20"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "apps/demo/tests/async_cancellation.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "apps/demo/tests/async_stream_integration.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 330,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 14
+    },
+    "change_tracking": {
+      "touched_observed": 12,
+      "touched_retained": 12,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 26,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 26,
+      "selected_files": 20,
+      "limit": 20,
+      "truncated": true
+    },
+    "scanning": {
+      "required_files": 15,
+      "scanned_files": 15,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 2,
+      "project_checks_completed": 2
+    },
+    "notification": {
+      "eligible_findings": 0,
+      "detailed_findings": 0,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "candidate_limit_exceeded": 1,
+      "baseline_snapshot_unreadable": 6,
+      "project_check_failed": 7
+    },
+    "reasons": [
+      {
+        "code": "candidate_limit_exceeded",
+        "stage": "candidate-select",
+        "target": "apps/demo/tests/gc_root_cycle.rs",
+        "detail": "6 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_cancellation.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_stream_integration.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "candidate-select",
+        "target": "apps/demo/tests/gc_root_cycle.rs",
+        "detail": "candidate_limit_exceeded: 6 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_cancellation.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_stream_integration.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-10-08T08:48:59.188Z",
+  "session_id": "claude-import-fcaa64be900c6a7b24b3e9b1",
+  "target": ".",
+  "revision": "03aeddcd07c6db140811410d1d90353ffed0b9a8",
+  "rules_version": "unavailable",
+  "diff_hash": "a7c8ed3c3d9df7d506fbaac0d53f4824780625a9032be59ac28d334bb440eb0f",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 20,
+    "changed_files": [
+      {
+        "file": "AGENTS.md",
+        "ranges": [
+          {
+            "start": 44,
+            "end": 44
+          }
+        ],
+        "before_hash": "84434f843dab2e404accabc6007fcef8e024ad904fc497ae86fb1d20c2a320c2",
+        "after_hash": "5074bc8484da83f31bf0d932027b8e30721d1454a6e7fbbc3f437a6ad9678e28"
+      },
+      {
+        "file": "apps/demo/build.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 9
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "2e9685cf32d6b1ea3245c315fe5d823a63b76fc6ad92c630c7713c0c0dc35a96"
+      },
+      {
+        "file": "apps/demo/Cargo.toml",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 87
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "52de606d784e96b376d2011db3f92297300ccc2e08863f8be0cf0fe827a5077a"
+      },
+      {
+        "file": "apps/demo/src/test_runner.rs",
+        "ranges": [
+          {
+            "start": 7,
+            "end": 20
+          }
+        ],
+        "before_hash": "d482492cd5cc22226a6c5733fd1db1f971a956d734283c7f277ddb4655f24233",
+        "after_hash": "6f2e0ebc39efd5d2ce3d9dee305ed1e884a1b86954af47ee342c077da310e595"
+      },
+      {
+        "file": "apps/demo/tests/async_cancellation.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 523
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "8729eeee4a18396ecbbf3f4001f946e14d2476d3965b47c6769c5945fcbddf52"
+      },
+      {
+        "file": "apps/demo/tests/async_stream_integration.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 258
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "c9d68b2eeb23c64e850e4a0241c3cb908274eb8c1c3404c7b791c5f0dcc5a66c"
+      },
+      {
+        "file": "apps/demo/tests/base_build_no_ridl_headers.rs",
+        "ranges": [
+          {
+            "start": 18,
+            "end": 21
+          },
+          {
+            "start": 41,
+            "end": 41
+          },
+          {
+            "start": 48,
+            "end": 48
+          }
+        ],
+        "before_hash": "93ac06627b7bda8af9a99d7415cca0881ac86e73da616317d0051dcbdaf68d36",
+        "after_hash": "e053dea0db24cef6c4ff01a0b5e2312d7da25f87621db2653309118db885304c"
+      },
+      {
+        "file": "apps/demo/tests/js_smoke.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 1
+          },
+          {
+            "start": 9,
+            "end": 10
+          }
+        ],
+        "before_hash": "fa8c2283029a2e3728220906c5578cfca3935dc80d52649177023fe3c5f5ffbd",
+        "after_hash": "66a5c306d6648a8fb3ea857f38bf1f12c2198606b29100688ea30d71f993132a"
+      },
+      {
+        "file": "apps/demo/tests/no_c_option.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 1
+          },
+          {
+            "start": 8,
+            "end": 11
+          },
+          {
+            "start": 13,
+            "end": 14
+          },
+          {
+            "start": 37,
+            "end": 37
+          },
+          {
+            "start": 40,
+            "end": 40
+          },
+          {
+            "start": 46,
+            "end": 46
+          }
+        ],
+        "before_hash": "3afaace929d080169aa329d8b55c071a2fa2b9b75bbc269c297c2406dbbcb6c2",
+        "after_hash": "4174f6a9855fbd0ac7a68dcbceef6cf54e2ac6fd363e4dc90bb208e157c4e471"
+      },
+      {
+        "file": "Cargo.lock",
+        "ranges": [
+          {
+            "start": 643,
+            "end": 643
+          }
+        ],
+        "before_hash": "5c8a91ee89093aa4ab278200b09b18b64923a6bce413bf340cee30ddd98c247d",
+        "after_hash": "768d7a77ff93fe9f9cc5438b474ead16a835c84837a916cfb45910b95ad4ebc0"
+      },
+      {
+        "file": "Cargo.toml",
+        "ranges": [
+          {
+            "start": 2,
+            "end": 5
+          },
+          {
+            "start": 14,
+            "end": 14
+          }
+        ],
+        "before_hash": "4c271b9a4e1345458eae64f261c43ced967308d0c468da8272a80e2f3e2469f8",
+        "after_hash": "c1b35d945b7949143235dd6623900957e39d3ffa087430aab309d5da2bfdf0e0"
+      },
+      {
+        "file": "deps/ridl-tool/src/generator/mod.rs",
+        "ranges": [
+          {
+            "start": 276,
+            "end": 279
+          },
+          {
+            "start": 287,
+            "end": 303
+          }
+        ],
+        "before_hash": "10a6cb43cf81a821d5947217a57f9a2eb417d1e643fa5295485ae3a1d36d3f00",
+        "after_hash": "e9383510f911998a23ddd5c3b5aeb3e1f0df638619bb2b42e99daf503bc3d5ef"
+      },
+      {
+        "file": "deps/ridl-tool/src/generator/mquickjs_register_c.rs",
+        "ranges": [
+          {
+            "start": 29,
+            "end": 32
+          },
+          {
+            "start": 34,
+            "end": 39
+          }
+        ],
+        "before_hash": "4808595b7f7efbddb09009011927d51a2b0f624bb359f34c977ff733685cc418",
+        "after_hash": "4e494c3394b1087aaa57d1d6b25aab43740c8c432b75eb01544018cc2fcf89ab"
+      },
+      {
+        "file": "ridl-builder/Cargo.toml",
+        "ranges": [
+          {
+            "start": 10,
+            "end": 10
+          }
+        ],
+        "before_hash": "ced873df316d47a98ff999c7aa278866ef0ab7a79ab507cf2bbfa9b0b2a0ca80",
+        "after_hash": "d39d02eeec78da2de0ede0eb37dfa2e61ca35cd8a0c980a7a0b3c9bacb973acc"
+      },
+      {
+        "file": "ridl-builder/src/main.rs",
+        "ranges": [
+          {
+            "start": 59,
+            "end": 59
+          },
+          {
+            "start": 119,
+            "end": 124
+          },
+          {
+            "start": 187,
+            "end": 187
+          },
+          {
+            "start": 231,
+            "end": 242
+          },
+          {
+            "start": 267,
+            "end": 279
+          },
+          {
+            "start": 281,
+            "end": 281
+          },
+          {
+            "start": 286,
+            "end": 335
+          },
+          {
+            "start": 582,
+            "end": 584
+          },
+          {
+            "start": 629,
+            "end": 630
+          },
+          {
+            "start": 634,
+            "end": 634
+          },
+          {
+            "start": 692,
+            "end": 692
+          },
+          {
+            "start": 791,
+            "end": 792
+          },
+          {
+            "start": 802,
+            "end": 802
+          }
+        ],
+        "before_hash": "43a6acd549a80105b1210868c808a066c60f688e3e4d551649fbdea9579deb60",
+        "after_hash": "98d3f38edb823b0b02a1120c018785db5fbf752d7b799b91eaf89c5255c1d43c"
+      },
+      {
+        "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 25
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "9937aa5d926cf977c92e0f7b4041f04b462641d47abc1fcc26c0ac552004904c"
+      },
+      {
+        "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 7
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "aa5cab7abb91ddc76eeaee3f7708ce4dded7b7f3aa202e4b786470b408e4e0fa"
+      },
+      {
+        "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 68
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "f3395dd9e351e63c7715905e6bd1ae031bbd70e10428e50449d7e233ac6e8998"
+      },
+      {
+        "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.h",
+        "ranges": [
+          {
+            "start": 5,
+            "end": 9
+          }
+        ],
+        "before_hash": "733558e998dbc97ad77b026e79136574011578c4dcee674b5cd8906bc2e4706c",
+        "after_hash": "039ce1837170c5f3d945b9845d3a75d18b40f4c64226386a01c3789eec8ad00c"
+      },
+      {
+        "file": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 24
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "fdf8f3bdeea4257912f4d226f26e380ac3b0aec2bd6c5f3f43de574e8e5eb910"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-10-08T08:48:57.540Z",
+    "completed_at": "2026-10-08T08:48:59.188Z",
+    "duration_ms": 1648,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 1648,
+    "peakMemoryBytes": 186404864,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 15,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 0,
+  "rewake_finding_count": 0,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [],
+  "findings": [],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1-20261008T084859188Z-256022-a96f6936ca29.json",
+    "latest_report": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1.json",
+    "history_summary": ".mimosa/history/run-20261008T084859188Z-256022-a96f6936ca29.json"
+  }
+}

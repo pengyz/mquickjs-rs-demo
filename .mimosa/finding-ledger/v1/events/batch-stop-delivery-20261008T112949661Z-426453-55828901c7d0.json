@@ -1,0 +1,96 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-delivery-20261008T112949661Z-426453-55828901c7d0",
+  "runId": "20261008T112949661Z-426453-55828901c7d0",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "StopDelivery"
+  },
+  "revision": "6f84c5d41a1abdc4dcecc8891790170ce0e8fe3b",
+  "diffHash": "535cc9900caf7b8431f6d9594cfa556827dd58a74f4dc3284c25614e06ec810f",
+  "rulesVersion": "unavailable",
+  "sessionHash": "26c5c039fb8bb96f609d11d00dd79df208d77760f4cdb0f750ec85ecd9f6027b",
+  "reportRef": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1-20261008T112949661Z-426453-55828901c7d0.json",
+  "events": [
+    {
+      "eventId": "hook-397578c1619a567f1f8d52817d51b064",
+      "findingId": "mimosa-range-62fb1f70284024f890e5a9de",
+      "type": "finding_blocked",
+      "at": "2026-10-08T11:29:49.999Z",
+      "identity": {
+        "projectRelativeFile": "tests/global/varargs/test_varargs/build.rs",
+        "ruleId": "security",
+        "codeEvidenceHash": null,
+        "confidence": "range_only"
+      },
+      "scope": "direct",
+      "line": 11,
+      "endLine": 11,
+      "reasonCode": "stop_rewake",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "range_only",
+        "producer": "deterministic",
+        "evidenceHash": null
+      },
+      "sequence": 0
+    },
+    {
+      "eventId": "hook-8282ba22df1727720cdc214be5ab1db9",
+      "findingId": "mimosa-range-adca6d8f47156c6bcc090470",
+      "type": "finding_blocked",
+      "at": "2026-10-08T11:29:49.999Z",
+      "identity": {
+        "projectRelativeFile": "tests/global/struct_enum/test_struct_enum/build.rs",
+        "ruleId": "security",
+        "codeEvidenceHash": null,
+        "confidence": "range_only"
+      },
+      "scope": "direct",
+      "line": 11,
+      "endLine": 11,
+      "reasonCode": "stop_rewake",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "range_only",
+        "producer": "deterministic",
+        "evidenceHash": null
+      },
+      "sequence": 1
+    },
+    {
+      "eventId": "hook-8439d721e3e4046e071d27ef4e1c7e14",
+      "findingId": "mimosa-range-2d36bac9d5820a62ae854c9f",
+      "type": "finding_blocked",
+      "at": "2026-10-08T11:29:49.999Z",
+      "identity": {
+        "projectRelativeFile": "tests/global/singleton_var/test_singleton_var/build.rs",
+        "ruleId": "security",
+        "codeEvidenceHash": null,
+        "confidence": "range_only"
+      },
+      "scope": "direct",
+      "line": 11,
+      "endLine": 11,
+      "reasonCode": "stop_rewake",
+      "reportedToAgent": true,
+      "evidence": {
+        "kind": "source",
+        "boundary": "range_only",
+        "producer": "deterministic",
+        "evidenceHash": null
+      },
+      "sequence": 2
+    }
+  ],
+  "observedFindingIds": [],
+  "verifiedFiles": [],
+  "recordedAt": "2026-10-08T11:29:50.293Z"
+}

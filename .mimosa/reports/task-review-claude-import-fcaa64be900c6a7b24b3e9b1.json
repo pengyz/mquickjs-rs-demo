@@ -1,0 +1,798 @@
+{
+  "schema_version": "mimosa-task-review/v2",
+  "run_id": "20261008T112949661Z-426453-55828901c7d0",
+  "run_status": "inconclusive",
+  "errors": [
+    {
+      "stage": "candidate-select",
+      "target": "tests/global/class/test_class/src/lib.rs",
+      "reason": "candidate_limit_exceeded: 31 changed reviewable file(s) were not scanned because the limit is 20"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/varargs/test_varargs/Cargo.toml",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/varargs/test_varargs/build.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/varargs/test_varargs/tests/basic.js",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/varargs/test_varargs/src/lib.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/varargs/test_varargs/src/varargs_impl.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/struct_enum/test_struct_enum/Cargo.toml",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/struct_enum/test_struct_enum/build.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/struct_enum/test_struct_enum/tests/basic.js",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/struct_enum/test_struct_enum/src/lib.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/struct_enum/test_struct_enum/src/struct_enum_impl.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/singleton_var/singleton_var.js",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/singleton_var/test_singleton_var/Cargo.toml",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/singleton_var/test_singleton_var/build.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/singleton_var/test_singleton_var/src/lib.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    },
+    {
+      "stage": "baseline-read",
+      "target": "tests/global/singleton_var/test_singleton_var/src/singleton_var_impl.rs",
+      "reason": "baseline_snapshot_unreadable: file is missing from task baseline"
+    }
+  ],
+  "coverage": {
+    "schema_version": "mimosa-hook-coverage/v1",
+    "status": "partial",
+    "scope": "hook_observed_diff",
+    "baseline": {
+      "complete": true,
+      "captured_files": 328,
+      "candidate_limit": 5000,
+      "truncated": false,
+      "enumeration_error_count": 0,
+      "snapshot_error_count": 0,
+      "compensated_target_count": 28
+    },
+    "change_tracking": {
+      "touched_observed": 0,
+      "touched_retained": 0,
+      "truncated": false,
+      "bash_mutation": true,
+      "bash_discovered": 51,
+      "bash_discovery_limit": 80,
+      "bash_discovery_truncated": false
+    },
+    "candidates": {
+      "eligible_files": 51,
+      "selected_files": 20,
+      "limit": 20,
+      "truncated": true
+    },
+    "scanning": {
+      "required_files": 15,
+      "scanned_files": 15,
+      "skipped_files": 0,
+      "failed_files": 0,
+      "project_checks_required": 1,
+      "project_checks_completed": 1
+    },
+    "notification": {
+      "eligible_findings": 3,
+      "detailed_findings": 3,
+      "detail_limit": 3,
+      "truncated": false
+    },
+    "reason_counts": {
+      "candidate_limit_exceeded": 1,
+      "baseline_snapshot_unreadable": 15,
+      "project_check_failed": 16
+    },
+    "reasons": [
+      {
+        "code": "candidate_limit_exceeded",
+        "stage": "candidate-select",
+        "target": "tests/global/class/test_class/src/lib.rs",
+        "detail": "31 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/Cargo.toml",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/build.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/tests/basic.js",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/src/lib.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/src/varargs_impl.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/Cargo.toml",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/build.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/tests/basic.js",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/src/lib.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/src/struct_enum_impl.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/singleton_var.js",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/Cargo.toml",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/build.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/src/lib.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/src/singleton_var_impl.rs",
+        "detail": "file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "candidate-select",
+        "target": "tests/global/class/test_class/src/lib.rs",
+        "detail": "candidate_limit_exceeded: 31 changed reviewable file(s) were not scanned because the limit is 20",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/Cargo.toml",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/build.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/tests/basic.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/src/lib.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/varargs/test_varargs/src/varargs_impl.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/Cargo.toml",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/build.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/tests/basic.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/src/lib.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/struct_enum/test_struct_enum/src/struct_enum_impl.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/singleton_var.js",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/Cargo.toml",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/build.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/src/lib.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "tests/global/singleton_var/test_singleton_var/src/singleton_var_impl.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affects_completion": true
+      }
+    ],
+    "reasons_truncated": false
+  },
+  "generated_at": "2026-10-08T11:29:49.661Z",
+  "session_id": "claude-import-fcaa64be900c6a7b24b3e9b1",
+  "target": ".",
+  "revision": "6f84c5d41a1abdc4dcecc8891790170ce0e8fe3b",
+  "rules_version": "unavailable",
+  "diff_hash": "535cc9900caf7b8431f6d9594cfa556827dd58a74f4dc3284c25614e06ec810f",
+  "diff": {
+    "algorithm": "sha256",
+    "changed_file_count": 20,
+    "changed_files": [
+      {
+        "file": "Cargo.lock",
+        "ranges": [
+          {
+            "start": 451,
+            "end": 452
+          },
+          {
+            "start": 454,
+            "end": 454
+          },
+          {
+            "start": 458,
+            "end": 458
+          },
+          {
+            "start": 751,
+            "end": 766
+          },
+          {
+            "start": 775,
+            "end": 782
+          }
+        ],
+        "before_hash": "768d7a77ff93fe9f9cc5438b474ead16a835c84837a916cfb45910b95ad4ebc0",
+        "after_hash": "9b13ce82a19db55d098f2b11045fd9e0e328539e4f3909cfd59164b37edf4081"
+      },
+      {
+        "file": "Cargo.toml",
+        "ranges": [
+          {
+            "start": 17,
+            "end": 18
+          },
+          {
+            "start": 24,
+            "end": 24
+          }
+        ],
+        "before_hash": "c1b35d945b7949143235dd6623900957e39d3ffa087430aab309d5da2bfdf0e0",
+        "after_hash": "86ec2d3dad316e509981e1c636f359bda26cb05484cce162c5675145af7cf3fb"
+      },
+      {
+        "file": "tests/global/class/test_class/tests/basic.js",
+        "ranges": [
+          {
+            "start": 18,
+            "end": 27
+          }
+        ],
+        "before_hash": "7ee06f19abf23734f7498c9be7e67b7bcdb872a41f6de19f58bba49cf0775fff",
+        "after_hash": "ce908f8bac8eb5246e0c82d6e08ecd9c80dd79d757e81afb24e9d194de0514db"
+      },
+      {
+        "file": "tests/global/singleton_var/singleton_var.js",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 46
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "3bf2a1b04a72668d540f5771a4b6ca10ac4edaaa0d3a0a2994257faa58869b73"
+      },
+      {
+        "file": "tests/global/singleton_var/test_singleton_var/build.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 30
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "453b400e968bc4f1b0b8ead41e76fdc6cdbaaa2a8fabbed3b30233a5711d7022"
+      },
+      {
+        "file": "tests/global/singleton_var/test_singleton_var/Cargo.toml",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 11
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "22d54f553a184aef8fd8d51e9cfc1058de2b77039bc2a3871cf9a630f5d122c1"
+      },
+      {
+        "file": "tests/global/singleton_var/test_singleton_var/src/lib.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 10
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "1d52bcac9d05bd25e915e4aee9a0704999919511d59cdf0fe3dc8a4dcb7ffc2e"
+      },
+      {
+        "file": "tests/global/singleton_var/test_singleton_var/src/singleton_var_impl.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 15
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "6a1d4570dd227265c9ffa0bd641e3b9b6e952507d7504416fe1806d0d08cc83b"
+      },
+      {
+        "file": "tests/global/struct_enum/test_struct_enum/build.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 30
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "3ce013bc5e4d31444648b4715010346cbb6f82fcb32fefd254171058babce6fe"
+      },
+      {
+        "file": "tests/global/struct_enum/test_struct_enum/Cargo.toml",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 11
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "442a94660397ac9cef92e351d480be4491da1e4982b5919ee3729b6826d305ca"
+      },
+      {
+        "file": "tests/global/struct_enum/test_struct_enum/src/lib.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 10
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "1f562cf94c0bbe6e27971c23d0ee7c652e1f7543b7a6154ccc9a4bc9d4be1632"
+      },
+      {
+        "file": "tests/global/struct_enum/test_struct_enum/src/struct_enum_impl.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 36
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "5c522a1a18b790ac58b154f8d26167f7101711cde2eaff0739e5fa46de02b42d"
+      },
+      {
+        "file": "tests/global/struct_enum/test_struct_enum/tests/basic.js",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 195
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "bd2d8943f8587e22eb0335f009de22ce5ba9d91ec70f3e7d51a98c35bc907dc9"
+      },
+      {
+        "file": "tests/global/types/test_types/src/types_impl.rs",
+        "ranges": [
+          {
+            "start": 38,
+            "end": 41
+          }
+        ],
+        "before_hash": "fa72b81ed6184aecc9e875c82683d8937a0b53df5635622e05a02ab71d278744",
+        "after_hash": "8e54784fd0e5a65f343636c40bc983171c1c13b6a67d2e2726cf30d222f89d65"
+      },
+      {
+        "file": "tests/global/types/test_types/tests/basic.js",
+        "ranges": [
+          {
+            "start": 83,
+            "end": 96
+          }
+        ],
+        "before_hash": "5af6c8c5b4b2213a7ecabca0f035ef81eb4f0c206a83a1d231cd767711442a00",
+        "after_hash": "98b8fc4ff56d9e53971f9a8f8e7f4762886d7abf921342ebace597c56f432056"
+      },
+      {
+        "file": "tests/global/varargs/test_varargs/build.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 30
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "d640bbdc5b926604ad1367e19fece3ae9a1cf51885b80022b94e30a331bc3d5a"
+      },
+      {
+        "file": "tests/global/varargs/test_varargs/Cargo.toml",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 11
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "667c67efd7052e70d9a98b977e60917bed22fc71cfb921680682d60405d2d2c3"
+      },
+      {
+        "file": "tests/global/varargs/test_varargs/src/lib.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 10
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "a5a5c25312b6c715a2637b43b0bed0ab8084b90351ffd76ca95ddbf2092720d6"
+      },
+      {
+        "file": "tests/global/varargs/test_varargs/src/varargs_impl.rs",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 14
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "b3ea96eae91d47f9b8f5b93ab7c05c4ecde9ef167cbd895b217d3434ded94718"
+      },
+      {
+        "file": "tests/global/varargs/test_varargs/tests/basic.js",
+        "ranges": [
+          {
+            "start": 1,
+            "end": 83
+          }
+        ],
+        "before_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "after_hash": "e87c448b8d8663ace7cddb8ff093698c43928f63f4c5416d0f3f40ebd709c29f"
+      }
+    ]
+  },
+  "timing": {
+    "started_at": "2026-10-08T11:29:48.295Z",
+    "completed_at": "2026-10-08T11:29:49.661Z",
+    "duration_ms": 1366,
+    "measurement": "hook_wall_clock"
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "model_calls": 0,
+    "measurement": "known-zero"
+  },
+  "telemetry": {
+    "schemaVersion": "mimosa-gate-telemetry/v1",
+    "profile": "gate",
+    "operation": "Stop",
+    "outcome": "partial/INCONCLUSIVE",
+    "latencyMs": 1366,
+    "peakMemoryBytes": 172363776,
+    "memoryMeasurement": "max-observed-process-rss",
+    "scannedFiles": 15,
+    "cache": {
+      "hits": 0,
+      "misses": 0,
+      "measurement": "not-applicable"
+    },
+    "denyCount": 0,
+    "tokens": {
+      "input": 0,
+      "output": 0,
+      "total": 0,
+      "modelCalls": 0,
+      "measurement": "known-zero"
+    }
+  },
+  "finding_count": 3,
+  "rewake_finding_count": 3,
+  "evidence_boundary": {
+    "scan": "candidate",
+    "static_fix_verification": "observed_static_only",
+    "runtime_verification": "not_performed"
+  },
+  "finding_events": [
+    {
+      "finding_id": "mimosa-2e04e093f618b69a0fd567e0",
+      "file": "tests/global/varargs/test_varargs/build.rs",
+      "line": 11,
+      "severity": "high",
+      "category": "命令注入",
+      "status": "blocked",
+      "decision": "stop_rewake",
+      "at": "2026-10-08T11:29:49.661Z",
+      "evidence": {
+        "kind": "static_scan",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "source": "semgrep",
+        "evidence_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runtime_oracle": false
+      }
+    },
+    {
+      "finding_id": "mimosa-cd218e8be0a3422aa6966d4a",
+      "file": "tests/global/struct_enum/test_struct_enum/build.rs",
+      "line": 11,
+      "severity": "high",
+      "category": "命令注入",
+      "status": "blocked",
+      "decision": "stop_rewake",
+      "at": "2026-10-08T11:29:49.661Z",
+      "evidence": {
+        "kind": "static_scan",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "source": "semgrep",
+        "evidence_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runtime_oracle": false
+      }
+    },
+    {
+      "finding_id": "mimosa-0fa6c5f4a63fb4574245e809",
+      "file": "tests/global/singleton_var/test_singleton_var/build.rs",
+      "line": 11,
+      "severity": "high",
+      "category": "命令注入",
+      "status": "blocked",
+      "decision": "stop_rewake",
+      "at": "2026-10-08T11:29:49.661Z",
+      "evidence": {
+        "kind": "static_scan",
+        "boundary": "candidate",
+        "producer": "deterministic",
+        "source": "semgrep",
+        "evidence_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "runtime_oracle": false
+      }
+    }
+  ],
+  "findings": [
+    {
+      "finding_id": "mimosa-2e04e093f618b69a0fd567e0",
+      "file": "tests/global/varargs/test_varargs/build.rs",
+      "line": 11,
+      "end_line": 11,
+      "severity": "high",
+      "category": "命令注入",
+      "kind": "semgrep",
+      "advisory": false,
+      "status": "blocked",
+      "evidence_boundary": "candidate",
+      "evidence": [
+        {
+          "kind": "static_scan",
+          "boundary": "candidate",
+          "producer": "deterministic",
+          "source": "semgrep",
+          "file": "tests/global/varargs/test_varargs/build.rs",
+          "line": 11,
+          "evidence_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "runtime_oracle": false
+        }
+      ],
+      "already_reported_to_agent": false,
+      "selected_for_rewake": true
+    },
+    {
+      "finding_id": "mimosa-cd218e8be0a3422aa6966d4a",
+      "file": "tests/global/struct_enum/test_struct_enum/build.rs",
+      "line": 11,
+      "end_line": 11,
+      "severity": "high",
+      "category": "命令注入",
+      "kind": "semgrep",
+      "advisory": false,
+      "status": "blocked",
+      "evidence_boundary": "candidate",
+      "evidence": [
+        {
+          "kind": "static_scan",
+          "boundary": "candidate",
+          "producer": "deterministic",
+          "source": "semgrep",
+          "file": "tests/global/struct_enum/test_struct_enum/build.rs",
+          "line": 11,
+          "evidence_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "runtime_oracle": false
+        }
+      ],
+      "already_reported_to_agent": false,
+      "selected_for_rewake": true
+    },
+    {
+      "finding_id": "mimosa-0fa6c5f4a63fb4574245e809",
+      "file": "tests/global/singleton_var/test_singleton_var/build.rs",
+      "line": 11,
+      "end_line": 11,
+      "severity": "high",
+      "category": "命令注入",
+      "kind": "semgrep",
+      "advisory": false,
+      "status": "blocked",
+      "evidence_boundary": "candidate",
+      "evidence": [
+        {
+          "kind": "static_scan",
+          "boundary": "candidate",
+          "producer": "deterministic",
+          "source": "semgrep",
+          "file": "tests/global/singleton_var/test_singleton_var/build.rs",
+          "line": 11,
+          "evidence_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "runtime_oracle": false
+        }
+      ],
+      "already_reported_to_agent": false,
+      "selected_for_rewake": true
+    }
+  ],
+  "artifacts": {
+    "immutable_report": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1-20261008T112949661Z-426453-55828901c7d0.json",
+    "latest_report": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1.json",
+    "history_summary": ".mimosa/history/run-20261008T112949661Z-426453-55828901c7d0.json"
+  }
+}

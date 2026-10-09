@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "mimosa-finding-history/v1",
+  "runId": "20261008T112949661Z-426453-55828901c7d0",
+  "runStatus": "inconclusive",
+  "errors": [
+    "candidate-select:tests/global/class/test_class/src/lib.rs: candidate_limit_exceeded: 31 changed reviewable file(s) were not scanned because the limit is 20",
+    "baseline-read:tests/global/varargs/test_varargs/Cargo.toml: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/varargs/test_varargs/build.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/varargs/test_varargs/tests/basic.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/varargs/test_varargs/src/lib.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/varargs/test_varargs/src/varargs_impl.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/struct_enum/test_struct_enum/Cargo.toml: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/struct_enum/test_struct_enum/build.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/struct_enum/test_struct_enum/tests/basic.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/struct_enum/test_struct_enum/src/lib.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/struct_enum/test_struct_enum/src/struct_enum_impl.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/singleton_var/singleton_var.js: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/singleton_var/test_singleton_var/Cargo.toml: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/singleton_var/test_singleton_var/build.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/singleton_var/test_singleton_var/src/lib.rs: baseline_snapshot_unreadable: file is missing from task baseline",
+    "baseline-read:tests/global/singleton_var/test_singleton_var/src/singleton_var_impl.rs: baseline_snapshot_unreadable: file is missing from task baseline"
+  ],
+  "target": ".",
+  "revision": "6f84c5d41a1abdc4dcecc8891790170ce0e8fe3b",
+  "diffHash": "535cc9900caf7b8431f6d9594cfa556827dd58a74f4dc3284c25614e06ec810f",
+  "rulesVersion": "unavailable",
+  "recordedAt": "2026-10-08T11:29:49.661Z",
+  "timing": {
+    "startedAt": "2026-10-08T11:29:48.295Z",
+    "completedAt": "2026-10-08T11:29:49.661Z",
+    "durationMs": 1366
+  },
+  "tokens": {
+    "input": 0,
+    "output": 0,
+    "total": 0,
+    "modelCalls": 0,
+    "measurement": "known-zero"
+  },
+  "findings": {
+    "total": 3,
+    "bySeverity": {
+      "high": 3
+    },
+    "byStatus": {
+      "blocked": 3
+    }
+  },
+  "coverage": {
+    "status": "partial",
+    "reasonCounts": {
+      "candidate_limit_exceeded": 1,
+      "baseline_snapshot_unreadable": 15,
+      "project_check_failed": 16
+    }
+  },
+  "evidenceBoundary": "static_only",
+  "immutableReport": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1-20261008T112949661Z-426453-55828901c7d0.json"
+}

@@ -1,0 +1,29 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20261008T085807732Z-266326-9aa5cbf4f645",
+  "runId": "20261008T085807732Z-266326-9aa5cbf4f645",
+  "runStatus": "completed",
+  "coverage": {
+    "status": "complete",
+    "reasons": []
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "03aeddcd07c6db140811410d1d90353ffed0b9a8",
+  "diffHash": "98d2c6bde565714444405d044195beaa9641f7d51e51f0a6e7734a389394a7b1",
+  "rulesVersion": "unavailable",
+  "sessionHash": "26c5c039fb8bb96f609d11d00dd79df208d77760f4cdb0f750ec85ecd9f6027b",
+  "reportRef": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1-20261008T085807732Z-266326-9aa5cbf4f645.json",
+  "events": [],
+  "observedFindingIds": [],
+  "verifiedFiles": [
+    {
+      "file": "tests/module/exports/test_module_single_class/tests/naming_ids.js",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-10-08T08:58:08.020Z"
+}

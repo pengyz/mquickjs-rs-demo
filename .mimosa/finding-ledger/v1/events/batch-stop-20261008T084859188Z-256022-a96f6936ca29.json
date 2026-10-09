@@ -1,0 +1,198 @@
+{
+  "schemaVersion": "mimosa-finding-ledger-batch/v1",
+  "batchId": "stop-20261008T084859188Z-256022-a96f6936ca29",
+  "runId": "20261008T084859188Z-256022-a96f6936ca29",
+  "runStatus": "inconclusive",
+  "coverage": {
+    "status": "partial",
+    "reasons": [
+      {
+        "code": "candidate_limit_exceeded",
+        "stage": "candidate-select",
+        "target": "apps/demo/tests/gc_root_cycle.rs",
+        "detail": "6 changed reviewable file(s) were not scanned because the limit is 20",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_cancellation.rs",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "baseline_snapshot_unreadable",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_stream_integration.rs",
+        "detail": "file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "candidate-select",
+        "target": "apps/demo/tests/gc_root_cycle.rs",
+        "detail": "candidate_limit_exceeded: 6 changed reviewable file(s) were not scanned because the limit is 20",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_cancellation.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      },
+      {
+        "code": "project_check_failed",
+        "stage": "baseline-read",
+        "target": "apps/demo/tests/async_stream_integration.rs",
+        "detail": "baseline_snapshot_unreadable: file is missing from task baseline",
+        "affectsCompletion": true
+      }
+    ]
+  },
+  "source": {
+    "component": "zcode-hook",
+    "operationId": "Stop"
+  },
+  "revision": "03aeddcd07c6db140811410d1d90353ffed0b9a8",
+  "diffHash": "a7c8ed3c3d9df7d506fbaac0d53f4824780625a9032be59ac28d334bb440eb0f",
+  "rulesVersion": "unavailable",
+  "sessionHash": "26c5c039fb8bb96f609d11d00dd79df208d77760f4cdb0f750ec85ecd9f6027b",
+  "reportRef": ".mimosa/reports/task-review-claude-import-fcaa64be900c6a7b24b3e9b1-20261008T084859188Z-256022-a96f6936ca29.json",
+  "events": [],
+  "observedFindingIds": [
+    "mimosa-de80368d353e42852a9eee27",
+    "mimosa-7f144cc61094d0b3122ed7ad",
+    "mimosa-289c0e95f3d250dcf137d7e5",
+    "mimosa-38b1d02bbc6b74475806de24"
+  ],
+  "verifiedFiles": [
+    {
+      "file": "apps/demo/build.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "apps/demo/src/test_runner.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "apps/demo/tests/js_smoke.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "apps/demo/tests/no_c_option.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "apps/demo/tests/base_build_no_ridl_headers.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "deps/ridl-tool/src/generator/mquickjs_register_c.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "deps/ridl-tool/src/generator/mod.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_api.h",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_module_class_ids.h",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.c",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "target/ridl/apps/test_app/aggregate/mquickjs_ridl_register.h",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "target/ridl/apps/test_app/aggregate/ridl_bootstrap.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "apps/demo/tests/async_cancellation.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    },
+    {
+      "file": "apps/demo/tests/async_stream_integration.rs",
+      "direct": "complete",
+      "projectContext": "partial"
+    }
+  ],
+  "recordedAt": "2026-10-08T08:48:59.484Z"
+}
