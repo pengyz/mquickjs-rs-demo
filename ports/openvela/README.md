@@ -1,7 +1,7 @@
 # ports/openvela — mquickjs 的 OpenVela/NuttX 适配层
 
 将 mquickjs 引擎以 **NSH builtin**（`js` 命令）形态集成进 OpenVela（NuttX 系）。
-当前阶段：**Phase 1（M1-C，纯 C 层）已完成** —— Rust 层见计划文档 Phase 2。
+当前阶段：**Phase 1（M1-C）+ Phase 2a（M1-R Rust no_std）已完成**（2026-10-09）。
 
 ## 集成模型：源码级（source-level）
 
@@ -31,6 +31,8 @@ timers/load）由嵌入方实现——`app/js_main.c` 按 `mqjs.c`（引擎 REPL
 | `app/Makefile` | CSRCS 引擎源文件 + js_main.c；CFLAGS 指向 gen/ 与引擎源 |
 | `app/Make.defs` | CONFIGURED_APPS 注册（缺失则 builtin 永不构建） |
 | `setup-sim.sh` | 幂等装配：符号链接进 apps/system/mqjs、Kconfig source 行、引擎源 staging、host 工具链生成头、configure + 构建 |
+| `rust/` | Rust no_std adapter crate（GlobalAlloc 桥 + panic handler + C 导出面） |
+| `cases/rs_probe.js` | M1-R 验收语料（JS→C→Rust 全链路） |
 | `cases/` | M1-C 语料：demo_pass（assert 全绿）、tiny_err / demo_syntax_error（语法错误 → 必须转 SyntaxError 异常而非崩溃） |
 
 `gen/`、`engine_src/`、`framework.mk` 为机器本地生成物，已 gitignore。
@@ -39,7 +41,7 @@ timers/load）由嵌入方实现——`app/js_main.c` 按 `mqjs.c`（引擎 REPL
 
 ```bash
 # 前置：openvela 树已 repo init+sync（见 docs/planning/2026/2026-10-08-openvela-port.md）
-OPENVELA_DIR=~/workspace/openvela ports/openvela/setup-sim.sh build        # Make 轨
+OPENVELA_DIR=~/workspace/openvela ports/openvela/setup-sim.sh build        # Make 轨（含 Rust adapter 构建 + 符号审计）
 OPENVELA_DIR=~/workspace/openvela ports/openvela/setup-sim.sh build-cmake  # CMake 轨
 
 # 运行（NSH 内；hostfs 的 fs= 前缀是 NuttX hostfs 协议要求）

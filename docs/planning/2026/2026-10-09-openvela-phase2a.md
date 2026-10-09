@@ -1,6 +1,6 @@
 # OpenVela Phase 2a：Rust no_std 核心进 sim（M1-R）实施计划
 
-> 状态：✅ 已独立复核（2026-10-09，判定"修订后通过"，前置条件已吸收；复核含 /tmp 探针端到端实证：stable 1.94 + x86_64-linux-gnu 下 Context::new(2MB)→eval 全链路走通）  
+> 状态：✅ 已实施完成（M1-R 验收通过 2026-10-09；已独立复核（2026-10-09，判定"修订后通过"，前置条件已吸收；复核含 /tmp 探针端到端实证：stable 1.94 + x86_64-linux-gnu 下 Context::new(2MB)→eval 全链路走通）  
 > 复核前置条件（已并入 D1/D2/D4）：① panic="abort" profile（缺失则 no_std 编译直接报错）② rust_eh_personality 空桩（hosted 目标预编译 alloc 按 unwind 构建，DW.ref 必现，rust#56152/#106864 标准 workaround）③ 禁止写 alloc_error_handler（1.68+ 有默认）④ adapter Cargo.toml 加空 [workspace]（仓库树内非 member 会报 workspace 错误）⑤ MQJS_ENGINE_LINK=external 必须恢复（build.rs:31,54 无条件 bundle 引擎对象进 staticlib，链接顺序静默选择副本——Phase 1 混绑教训的回归形态；可用 static:-bundle 修饰符替代）⑥ 符号审计升级为双层（中间 .a + 最终镜像 -Wl,-Map；新增 js_stdlib 弱符号绑定检查）⑦ --release 需先跑 ridl-builder build-mquickjs 的 release 变体 ⑧ D4 链接接入点需实做（ar 合并对象进 libapps.a 或 external/ 机制）⑨ CMake 轨在 2a 降级单轨（用户已裁定推迟到 M2）  
 > 日期：2026-10-09  
 > 前置：Phase 1（M1-C）已完成（94170f9）；本阶段目标为计划文档中的 **M1-R** 里程碑  
@@ -92,8 +92,10 @@ js_main.c                      libmqjs_rs.a (staticlib)
 ```
 
 - `js_main.c` 新增 `rsVersion`/`rsSelfTest` 两个 C 函数注册进 js_stdlib 的
-  c_function_table？——**不行**，js_stdlib 表由引擎工具生成，不宜手改。
-  改为：`js_main.c` 里用 `JS_SetPropertyStr(global, "rsVersion", JS_NewCFunction(...))`
+  **实际实现（复核后修正）**：mquickjs 无 QuickJS 式运行时注册 API（核心约束），
+  采用**编译期 stdlib overlay**——setup-sim.sh 将 rsVersion/rsSelfTest 条目 sed
+  注入 staged 的 mqjs_stdlib.c 副本（锚点校验），引擎生成器据此生成含两函数的
+  mqjs_stdlib.h；js_main.c 提供钩子实现桥接 extern。原 D5 的运行时注入方案作废。
   在 **Context 创建后注入**（不碰生成物）。
 - Context 的 2MB 内存块：malloc 自 NuttX 堆（与 Phase 1 相同方式）。
 
@@ -136,9 +138,9 @@ js_main.c                      libmqjs_rs.a (staticlib)
 
 ## 验收清单
 
-- [ ] `cargo build --release` adapter 通过
-- [ ] 镜像链接成功，符号审计无分配对拆绑
-- [ ] NSH 启动正常，既有 3 案例 PASS（无回归）
-- [ ] rsSelfTest() === 0（Rust Context 全链路）
-- [ ] rsVersion() 输出正确（Rust→C→JS 字符串通路）
-- [ ] 知识条目落地
+- [x] `cargo build --release` adapter 通过
+- [x] 镜像链接成功，符号审计无分配对拆绑
+- [x] NSH 启动正常，既有 3 案例 PASS（无回归）
+- [x] rsSelfTest() === 0（Rust Context 全链路）
+- [x] rsVersion() 输出正确（Rust→C→JS 字符串通路）
+- [x] 知识条目落地

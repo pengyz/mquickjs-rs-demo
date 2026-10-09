@@ -556,16 +556,22 @@ fn resolve_target_triple() -> String {
 }
 
 fn build_tools() {
+    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
+
     // Build tool binaries in one cargo invocation to avoid repeated locking.
+    // PROFILE=release 时必须 --release，否则二进制落在 target/debug 而下方
+    // bin_dir 逻辑按 release 找 → canonicalize panic（openvela 移植实测）。
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("-p")
         .arg("ridl-tool")
         .arg("-p")
         .arg("mquickjs-build");
+    if profile == "release" {
+        cmd.arg("--release");
+    }
     run(cmd);
 
-    let profile = std::env::var("PROFILE").unwrap_or_else(|_| "debug".to_string());
     let bin_dir = if profile == "release" {
         "target/release"
     } else {
