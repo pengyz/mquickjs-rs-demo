@@ -1,0 +1,13 @@
+mode strict;
+
+// 回调桥端到端测试（docs/superpowers/specs/2026-10-10-callback-bridge-design.md 切片 3）：
+// JS 注册函数 → glue 提取为 CallbackHandle（JSGCRef 持有）→ fire 模拟 C
+// 事件点同步调用（many-shot、异常受控）。
+class Button {
+    // 注册点击回调：JS 传入函数，glue 提取为 CallbackHandle（注册进
+    // CallbackRegistry，JSGCRef 持有，GC 压缩安全）。
+    fn setOnClick(cb: callback(code: i32)) -> void;
+
+    // 模拟 C 事件触发：Rust impl 经 CallbackRegistry 同步调用已注册回调。
+    fn fire(code: i32) -> void;
+}

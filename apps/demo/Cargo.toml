@@ -67,6 +67,9 @@ path = "../../tests/global/rust_ident/test_rust_ident"
 [dependencies.ridl_test_g_gc_root_cycle]
 path = "../../tests/global/gc_root_cycle/test_gc_root_cycle"
 
+[dependencies.ridl_test_g_callback_bridge]
+path = "../../tests/global/callback_bridge/test_callback_bridge"
+
 [dependencies.ridl_test_g_gc_traced]
 path = "../../tests/global/gc_traced/test_gc_traced"
 

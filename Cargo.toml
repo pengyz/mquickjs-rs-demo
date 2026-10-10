@@ -28,6 +28,7 @@ members = [
     "tests/global/rust_ident/test_rust_ident",
     "tests/global/gc_root_cycle/test_gc_root_cycle",
     "tests/global/gc_traced/test_gc_traced",
+    "tests/global/callback_bridge/test_callback_bridge",
     "tests/global/async_test/test_async_cancellation",
     "tests/global/properties/test_properties",
     "tests/global/constants/test_constants",
