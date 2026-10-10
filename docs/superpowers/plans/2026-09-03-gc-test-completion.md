@@ -1,5 +1,19 @@
 # GC 功能测试完善实现计划
 
+> **状态：✅ 已完成（2026-10-09，以设计演进形态）**
+>
+> 本计划的目标（RIDL opaque 字段的 GC 安全引用）已达成，但**实现路线演进**：
+> per-class gc_mark 自动生成方案（本计划的 Phase 0 内容）存在致命缺陷——
+> mquickjs 每次 JS_GC 都压缩堆，gc_mark 只能标记不能重定位，opaque 内裸
+> JSValue 压缩后悬垂。最终方案：**Traced<T> 基于引擎 JSGCRef**（标记+重定位
+> 均由引擎自动处理），经 55a765b / d57d6e3 落地。
+>
+> 因此：本计划的 Phase 0 产出被取代；Task 0.6 的 api.h 声明修复随 gc_mark
+> 机制废弃而失去对象；Task 0.7 的集成测试以 JSGCRef 形态存在
+> （deps/mquickjs-rs/tests/{gc_compaction,gc_root_cycle}.rs）。
+> 设计演进记录：docs/knowledge/architecture_gc_root_traced_unified_tracing.md、
+> gotcha_mquickjs_gc_compaction_and_finalizer.md。
+>
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** 完成 mquickjs-rs 的 GC Root 体系，通过扩展 RIDL 语法支持 opaque 字段声明，实现 Traced<T> 类型，并建立完善的测试覆盖。
