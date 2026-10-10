@@ -1,7 +1,39 @@
-# OpenVela 生态集成三阶段方案（测试回馈 → JS-LVGL → ai_agent）
+# OpenVela 生态集成方案（v2，对抗复核后修订）
 
-> 状态：草案 → 对抗复核 → 执行
+> 状态：v1 经对抗复核判定"修改后通过"（3 Critical / 4 Important），本 v2 按复核意见重排。
 > 日期：2026-10-10
+
+## v2 修订摘要（对抗复核吸收）
+
+复核发现的三个 Critical 及处置：
+
+- **C1 上游落树形态是隐含的最大决策**：mqjs 在 openvela apps 仓**未跟踪**
+  （本地嵌套 clone）、`external/mquickjs-rs-sdk` **不在上游 manifest**、构建强依赖
+  cargo+libclang——tests PR 若先行，在上游是不可编译启用的死代码。
+  → 新增 **阶段 0：落树形态决策**（推荐：C-only vendored 进
+  `apps/interpreters/mquickjs`，完全镜像 apps/interpreters/quickjs 官方先例，
+  js_main_c.c 已存在即 C-only 入口；Rust 适配器作为后续增量 PR 带 CI 证据再上）。
+- **C2 阶段 B 与本仓知识库决策冲突**：`docs/knowledge/decision_abandon_ui_app_framework.md`
+  （2026-09-04）四路复核否决过 JS-UI 方向并留下重新考虑前置条件（具名需求方、
+  应用分发机制、一日 spike、事件循环设计先行）。v1 通篇未引用——违反本仓知识纪律。
+  → 阶段 B **降级为门槛触发**：须先逐条回应旧决策前置条件（绑定模块 ≠ 框架的
+  反驳是否成立由用户裁定），未触发前不启动。
+- **C3 RIDL 回调支持是 no-op stub**：filters.rs 把 Callback 映射为空闭包
+  （"callback will be invoked by async bridge"），异步桥是 fire-and-forget 形状，
+  不符合 LVGL 事件需要的同步 many-shot 回调；且每个 LVGL C 函数仍需手写 Rust
+  FFI shim（"自动生成"言过其实）；LVGL 对象 **lifetime 失效**（C 侧删除后 JS
+  句柄悬空）是缺口清单漏掉的第四项。
+  → 若 B 启动：手写最小绑定先行，RIDL 扩展以工作实现为参照事后回填。
+
+Important 吸收：tests 驱动模型改"进程内直调 js_main（无 exit）+ pytest 控制台
+断言"（system() 拿不到子进程 stdout 且回传值不可靠）；lvgldemo_test 不是
+cmocka（全 testcases 仅 media_test 用 cmocka），mqjs-citest 需补
+SYSTEM_SYSTEM/SCHED_HAVE_PARENT 等；ai_agent 的 `tool_registry_register_provider`
+**已是运行时动态注册**（两个消费者 + MCP 远程工具先例）——C0 机制问题已有答案，
+改问价值差异化；贡献对象修正为独立上游仓 `open-vela/packages_ai_agent`；
+树内 quickjs 实为 2021-03-27；lvgl_fb 无 libuv（手动 while 循环）→ 事件桥
+定案方向"LVGL 回调只入队、主循环统一 drain"（与 completion-queue 同构，B0
+难度下调）。
 > 背景：mquickjs SDK（pengyz/mquickjs-rs-sdk）+ 适配层（pengyz/mquickjs-openvela）
 > 已完成 openvela 接入（sim/QEMU aarch64 双目标、Make/CMake 双构建、四哨兵全绿）。
 > 生态调研结论：openvela 的既定 JS 格局 = quickapp 闭源 UI 运行时（16MB heap 门槛）
