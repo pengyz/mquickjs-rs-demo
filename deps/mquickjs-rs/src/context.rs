@@ -17,6 +17,14 @@ pub struct ContextInner {
 
     pub(crate) roots: crate::roots::RootsRegistry,
 
+    /// 同步 many-shot 回调桥的槽位表（设计切片 1，
+    /// docs/superpowers/specs/2026-10-10-callback-bridge-design.md）。
+    ///
+    /// 与 `roots` 同一装配方式（ContextInner 持有、内部可变、ctx 由 façade
+    /// 传入）；Context 销毁时随本结构静默 drop（只释放 `Box<JSGCRef>`，
+    /// 绝不调用引擎 API —— 引擎的 gc_ref 链已随 context 内存消失）。
+    pub(crate) callback_slots: crate::callbacks::CallbackSlots,
+
     pub(crate) alive: core::sync::atomic::AtomicBool,
     
     /// Async task manager for RIDL async cancellation semantics.
@@ -34,6 +42,7 @@ impl ContextInner {
             ridl_ext_ptr: core::cell::UnsafeCell::new(core::ptr::null_mut()),
             ridl_ext_drop: core::cell::UnsafeCell::new(None),
             roots: crate::roots::RootsRegistry::new(),
+            callback_slots: crate::callbacks::CallbackSlots::new(),
             alive: core::sync::atomic::AtomicBool::new(true),
             #[cfg(feature = "std")]
             async_task_manager: Arc::new(crate::async_task::AsyncTaskManager::new()),
@@ -187,6 +196,16 @@ impl ContextToken {
             })
         })
     }
+
+    /// 访问回调注册表（同步 many-shot 回调桥，设计切片 1）。
+    ///
+    /// 这是切片 2 C trampoline 的预期入口：
+    /// `ContextToken::from_js_ctx(raw_ctx)?.callbacks().invoke(handle, args)`。
+    /// token 存活得比 Context 久时，各方法经 `inner.alive` 护栏返回
+    /// `ContextDropped` / `false` / panic（register），绝不触碰悬垂 ctx。
+    pub fn callbacks(&self) -> crate::callbacks::CallbackRegistry<'_> {
+        crate::callbacks::CallbackRegistry::new(self.ctx, &self.inner)
+    }
 }
 
 impl Context {
@@ -206,6 +225,15 @@ impl Context {
     #[cfg(feature = "std")]
     pub fn async_task_manager(&self) -> Arc<crate::async_task::AsyncTaskManager> {
         self.inner.async_task_manager.clone()
+    }
+
+    /// 访问 context 级回调注册表（同步 many-shot 回调桥，设计切片 1）。
+    ///
+    /// 返回借用 façade，API 面与设计文档 §2 一致：
+    /// `register` / `invoke` / `unregister`。
+    /// 详细语义见 [`crate::callbacks::CallbackRegistry`]。
+    pub fn callbacks(&self) -> crate::callbacks::CallbackRegistry<'_> {
+        crate::callbacks::CallbackRegistry::new(self.ctx, &self.inner)
     }
 
     pub fn new(memory_capacity: usize) -> Result<Self, Box<dyn core::error::Error>> {

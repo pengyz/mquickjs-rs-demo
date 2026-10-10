@@ -109,6 +109,14 @@ pub use roots::Root;
 mod traced;
 pub use traced::Traced;
 
+/// 同步 many-shot 回调桥（设计切片 1，
+/// docs/superpowers/specs/2026-10-10-callback-bridge-design.md）。
+///
+/// 公共 API 面在 [`CallbackRegistry`]（`ctx.callbacks()`）；
+/// `CallbackSlots` 为 ContextInner 内部机械层。
+mod callbacks;
+pub use callbacks::{CallbackError, CallbackHandle, CallbackRegistry};
+
 /// 返回本 crate 自身 test 目标所需的 native stdlib 链接参数（base 变体）。
 ///
 /// # 为什么需要它
