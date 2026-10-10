@@ -106,6 +106,12 @@ pub struct Function {
     pub return_type: Type,
     pub is_async: bool,
     pub module: Option<ModuleDeclaration>,
+    /// 该 Function 是否来自具名 `callback Foo(...);` 定义（而非 `fn` 全局函数）。
+    ///
+    /// parser 把 callback_def 也建模为 Function（历史原因）；生成期据此把它
+    /// 路由成 C trampoline（切片 2），而不是全局函数 glue。
+    #[serde(default)]
+    pub is_callback_def: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

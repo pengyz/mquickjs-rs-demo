@@ -33,10 +33,17 @@ pub(super) fn build_template_modules(
         let mut functions: Vec<TemplateFunction> = Vec::new();
         let mut singletons: Vec<TemplateSingleton> = Vec::new();
         let mut local_classes: Vec<TemplateClass> = Vec::new();
+        let mut callbacks: Vec<super::TemplateCallbackDef> = Vec::new();
 
         for item in &parsed.items {
             match item {
                 parser::ast::IDLItem::Function(f) => {
+                    if f.is_callback_def {
+                        // 具名 callback_def → trampoline 声明（切片 2）。
+                        callbacks.push(super::TemplateCallbackDef::from_function(f)
+                            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?);
+                        continue;
+                    }
                     functions.push(TemplateFunction::from_with_mode(
                         f.clone(),
                         parsed.mode,
@@ -105,6 +112,7 @@ pub(super) fn build_template_modules(
             interfaces,
             functions,
             singletons,
+            callbacks,
             classes: local_classes,
         });
     }

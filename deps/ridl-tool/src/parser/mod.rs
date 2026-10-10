@@ -708,6 +708,7 @@ fn parse_class_constructor(
         return_type: Type::Void,
         is_async: false,
         module: None,
+        is_callback_def: false,
     })
 }
 
@@ -854,6 +855,7 @@ fn parse_function(
         return_type,
         is_async,
         module: None,
+        is_callback_def: false,
     })
 }
 
@@ -1094,6 +1096,21 @@ fn parse_type(pair: pest::iterators::Pair<Rule>) -> Result<Type, Box<dyn std::er
             }
         }
         return Err("Traced has no inner type".into());
+    }
+
+    // 检查是否是Callback类型（可能作为独立pair直接传入，例如来自parse_nullable_type）
+    if pair.as_rule() == Rule::callback_type {
+        let mut params = Vec::new();
+        for p in pair.into_inner() {
+            match p.as_rule() {
+                Rule::param_list => {
+                    params = parse_param_list(p)?;
+                }
+                Rule::WS => { /* 跳过空白 */ }
+                _ => { /* 忽略其他规则 */ }
+            }
+        }
+        return Ok(Type::CallbackWithParams(params));
     }
 
     // 检查是否有子规则，优先处理子规则
@@ -1523,6 +1540,8 @@ fn parse_callback(
         return_type: Type::Void, // 回调函数没有返回值
         is_async: false,
         module: None,
+        // 标记来源：生成期据此路由为 C trampoline 而非全局函数 glue。
+        is_callback_def: true,
     };
 
     Ok(IDLItem::Function(callback_func))

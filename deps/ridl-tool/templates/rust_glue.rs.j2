@@ -158,6 +158,14 @@ pub unsafe extern "C" fn js_{{ function.name|lower }}(ctx: *mut JSContext, this_
     let _ = this_val;
     let _ = argc;
     let _ = argv;
+    {%- if function.needs_scope %}
+    // any/callback 参数提取需要 JS 上下文（切片 2 回调桥：callback 经
+    // `h.callbacks().register(&scope, ..)` 注册）。
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextToken::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+    let scope = h.enter_scope();
+    {%- endif %}
     {%- for p in function.params %}
     {{ p|emit_param_extract(loop.index0, loop.index, function.module_name_normalized)|safe }}
     {%- endfor %}
@@ -408,6 +416,13 @@ pub unsafe extern "C" fn js_{{ s.module_name|normalize_ident|to_snake_case }}_si
 {%- for method in interface.methods %}
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn js_{{ interface.name|lower }}_{{ method.name|to_snake_case }}(ctx: *mut JSContext, this_val: *mut JSValue, argc: c_int, argv: *mut JSValue) -> JSValue {
+    {%- if method.needs_scope %}
+    // any/callback 参数提取需要 JS 上下文（切片 2 回调桥）。
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextToken::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+    let scope = h.enter_scope();
+    {%- endif %}
     {%- for p in method.params %}
     {{ p|emit_param_extract(loop.index0, loop.index, interface.module_name_normalized)|safe }}
     {%- endfor %}
@@ -471,6 +486,13 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
     let _ = this_val;
 
     {%- if class.constructor.is_some() %}
+    {%- if class.constructor.as_ref().unwrap().needs_scope %}
+    // any/callback 参数提取需要 JS 上下文（切片 2 回调桥）。
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextToken::from_js_ctx(ctx) }) else {
+        return js_throw_type_error(ctx, "missing ctx user_data (call ridl_context_init)");
+    };
+    let scope = h.enter_scope();
+    {%- endif %}
     {%- for p in class.constructor.as_ref().unwrap().params %}
     {{ p|emit_param_extract(loop.index0, loop.index, class.module_name_normalized)|safe }}
     {%- endfor %}
@@ -807,4 +829,105 @@ pub unsafe extern "C" fn js_{{ class.module_name|normalize_ident|lower }}_class_
 {%- endif %}
 {%- endfor %}
 
+{%- endfor %}
+
+// -----------------------------------------------------------------------------
+// RIDL named callback trampolines（切片 2 同步回调桥的 C 事件入口）
+//
+// 每个具名 `callback <name>(<params>);` 生成一个 C 可调用入口：
+//     void mqjs_cb_<name>_invoke(JSContext *ctx, uint32_t handle, <c params>);
+//
+// - C 声明只放 mquickjs_ridl_api.h（运行时 C TU 的唯一公共入口）；
+//   register.h 供 ROM host tool，不声明 —— 吸取 gc_mark 双头声明教训。
+// - `handle` 是 Rust impl 从 RIDL 方法收到的 CallbackHandle
+//   （经 `.raw()` 存入 C user_data 后原样传回）。
+// - v1 无回调返回值（设计非目标），trampoline 返回 void；
+//   JS 异常不穿透 C（长跳禁令）：invoke 已清扫 pending exception。
+//
+// 【异常/失败可见性策略（切片 1 审查遗留的落位）】
+// - std 构建：`eprintln!` 输出到 stderr —— 与 async_bridge、Context::drop
+//   的既有日志惯例一致；
+// - no_std 构建：生成 glue 层无日志设施（引擎 printf 桥属 stdlib 模块的
+//   impl 层，不是 glue 的依赖面），失败静默。invoke 保证返回 Err 时 ctx
+//   无残留异常、可继续工作，引擎状态不受影响；裸机集成方如需可观测性，
+//   应在 impl 层自持句柄并直接调用 registry（可拿到 Result）。
+// -----------------------------------------------------------------------------
+{%- for cb in callbacks %}
+
+/// C trampoline for RIDL callback `{{ cb.name }}`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn mqjs_cb_{{ cb.snake }}_invoke(
+    ctx: *mut JSContext,
+    handle: u32,
+    {%- for p in cb.params %}
+    {{ p.ident }}: {{ p.rust_ffi_ty() }},
+    {%- endfor %}
+) {
+    // C 事件点直接跑 JS（同步语义）：从 ctx user_data 还原 ContextToken
+    // （与 singleton glue 同款护栏）。
+    let Some(h) = (unsafe { mquickjs_rs::context::ContextToken::from_js_ctx(ctx) }) else {
+        #[cfg(feature = "std")]
+        eprintln!("ridl callback '{{ cb.name }}': context not initialized (call ridl_context_init)");
+        return;
+    };
+    let cb_handle = mquickjs_rs::CallbackHandle::from_raw(handle);
+
+    {%- if cb.has_heap_params() %}
+    // 含堆值参数（string / 非短整型 f64）：JS_NewString / JS_NewFloat64 在
+    // 引擎堆上分配，且 invoke 内部的 JS_StackCheck 可能触发 GC 压缩 ——
+    // 每个参数值立即经 Root（JSGCRef）持有；invoke_rooted 在 StackCheck
+    // 之后重读重定位后的地址再压栈（GC 安全，见 mquickjs-rs::callbacks）。
+    let scope = h.enter_scope();
+    {%- for p in cb.params %}
+    {%- if p.is_string_like() %}
+    // C 侧约定：NULL 字符串按 JS null 传递（Optional(String) 的 None 同样
+    // 落为 null —— error-first 回调约定）。
+    let {{ p.ident }}_raw = if {{ p.ident }}.is_null() {
+        mquickjs_rs::mquickjs_ffi::JS_NULL
+    } else {
+        unsafe { mquickjs_rs::mquickjs_ffi::JS_NewString(ctx, {{ p.ident }}) }
+    };
+    let {{ p.ident }}_root = mquickjs_rs::Root::new(&scope, scope.value({{ p.ident }}_raw));
+    {%- else if p.ty == crate::parser::ast::Type::F64 %}
+    let {{ p.ident }}_root = mquickjs_rs::Root::new(&scope, scope.value(unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_NewFloat64(ctx, {{ p.ident }})
+    }));
+    {%- else if p.ty == crate::parser::ast::Type::Bool %}
+    let {{ p.ident }}_root = mquickjs_rs::Root::new(&scope, scope.value(mquickjs_rs::mquickjs_ffi::js_mkbool({{ p.ident }} != 0)));
+    {%- else %}
+    let {{ p.ident }}_root = mquickjs_rs::Root::new(&scope, scope.value(unsafe {
+        mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, {{ p.ident }})
+    }));
+    {%- endif %}
+    {%- endfor %}
+
+    let invoke_result = h.callbacks().invoke_rooted(cb_handle, &[
+        {%- for p in cb.params %}&{{ p.ident }}_root{%- if !loop.last %}, {% endif %}{%- endfor %}
+    ]);
+    {%- else %}
+    // 纯立即值参数（i32/bool）：每次调用现场从 C 值转换（不缓存 JSValue ——
+    // 切片 1 invoke 的 args 契约），立即值天然 GC 安全。
+    let cb_args: [JSValue; {{ cb.params|length }}] = [
+        {%- for p in cb.params %}
+        {%- if p.ty == crate::parser::ast::Type::I32 %}
+        unsafe { mquickjs_rs::mquickjs_ffi::JS_NewInt32(ctx, {{ p.ident }}) },
+        {%- else %}
+        mquickjs_rs::mquickjs_ffi::js_mkbool({{ p.ident }} != 0),
+        {%- endif %}
+        {%- endfor %}
+    ];
+    let invoke_result = h.callbacks().invoke(cb_handle, &cb_args);
+    {%- endif %}
+
+    match invoke_result {
+        Ok(()) => {}
+        Err(err) => {
+            // 可见性策略见上：std → stderr；no_std → 静默。
+            #[cfg(feature = "std")]
+            eprintln!("ridl callback '{{ cb.name }}' failed: {err}");
+            #[cfg(not(feature = "std"))]
+            let _ = err;
+        }
+    }
+}
 {%- endfor %}

@@ -502,11 +502,18 @@ fn generate_register_h_and_symbols(
         let mut interfaces: Vec<TemplateInterface> = Vec::new();
         let mut classes: Vec<TemplateClass> = Vec::new();
         let mut singletons: Vec<TemplateSingleton> = Vec::new();
+        let mut callbacks: Vec<TemplateCallbackDef> = Vec::new();
 
         for item in parsed.items {
             match item {
                 crate::parser::ast::IDLItem::Function(mut f) => {
                     f.module = parsed.module.clone();
+                    if f.is_callback_def {
+                        // 具名 callback_def → trampoline 声明（切片 2）。
+                        callbacks.push(TemplateCallbackDef::from_function(&f)
+                            .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?);
+                        continue;
+                    }
                     let ridl_module_name = f
                         .module
                         .as_ref()
@@ -594,6 +601,7 @@ fn generate_register_h_and_symbols(
             interfaces,
             functions,
             singletons,
+            callbacks,
             classes,
         });
     }
@@ -732,6 +740,8 @@ struct RustGlueTemplate {
     functions: Vec<TemplateFunction>,
     singletons: Vec<TemplateSingleton>,
     classes: Vec<TemplateClass>,
+    /// 具名 callback_def → C trampoline 实现体（切片 2）。
+    callbacks: Vec<TemplateCallbackDef>,
 }
 
 impl RustGlueLikeTemplate for RustGlueTemplate {
@@ -834,6 +844,8 @@ pub(super) struct TemplateModule {
     interfaces: Vec<TemplateInterface>,
     functions: Vec<TemplateFunction>,
     singletons: Vec<TemplateSingleton>,
+    /// 具名 callback_def（切片 2）：C 头文件按此声明 trampoline。
+    callbacks: Vec<TemplateCallbackDef>,
     pub(super) classes: Vec<TemplateClass>,
 }
 
@@ -1045,6 +1057,10 @@ struct TemplateFunction {
     return_rust_ty: String,
     /// Phase D: named-type info when the return type is a bare struct/enum ref.
     return_named: Option<NamedTypeInfo>,
+    /// 参数里出现 any/callback 时为真：这类参数的提取需要 `h`（ContextToken）
+    /// 与 `scope`（callback 注册经 `h.callbacks().register(&scope, ..)`）。
+    /// glue 据此在参数提取前创建二者（切片 2 回调桥）。
+    needs_scope: bool,
 }
 
 impl TemplateInterface {
@@ -1077,12 +1093,10 @@ impl TemplateMethod {
 
         let has_variadic = params.iter().any(|p| p.variadic);
 
-        fn is_any_like(ty: &Type) -> bool {
-            matches!(ty, Type::Any)
-                || matches!(ty, Type::Optional(inner) if matches!(inner.as_ref(), Type::Any))
-        }
-
-        let needs_scope = params.iter().any(|p| is_any_like(&p.ty))
+        // any/callback 参数需要 glue 侧创建 `h`（ContextToken）与 `scope`：
+        // any → `scope.value(v)`；callback → Local<Function> 提取 +
+        // `h.callbacks().register(&scope, ..)`（切片 2 回调桥）。
+        let needs_scope = params.iter().any(|p| param_needs_js_context(&p.ty))
             || (has_variadic && params.iter().any(|p| p.variadic && is_any_like(&p.ty)))
             || is_any_like(&method.return_type);
 
@@ -1171,6 +1185,10 @@ impl TemplateFunction {
         let return_rust_ty = crate::generator::filters::rust_type_from_idl(&return_type)
             .unwrap_or_else(|_| "()".to_string());
 
+        // 全局函数/构造器的 any/callback 参数提取需要 `h` + `scope`
+        // （返回类型不需要：函数路径无 env/pin_return）。
+        let needs_scope = params.iter().any(|p| param_needs_js_context(&p.ty));
+
         Self {
             name: function.name,
             module_name_normalized,
@@ -1178,7 +1196,159 @@ impl TemplateFunction {
             return_type,
             return_rust_ty,
             return_named: None,
+            needs_scope,
         }
+    }
+}
+
+/// 参数类型是否要求 glue 侧 JS 上下文（`h` + `scope`）。
+///
+/// - `any`：提取为 `scope.value(v)`；
+/// - callback（切片 2）：经 `scope` 提取 `Local<Function>` 并注册进
+///   `h.callbacks()`。
+fn param_needs_js_context(ty: &Type) -> bool {
+    is_any_like(ty) || is_callback_like(ty)
+}
+
+/// `any` 形态（含 `any?`）。
+fn is_any_like(ty: &Type) -> bool {
+    matches!(ty, Type::Any)
+        || matches!(ty, Type::Optional(inner) if matches!(inner.as_ref(), Type::Any))
+}
+
+/// 是否为 callback 类型（`callback` / `callback(..)`）。
+pub(super) fn is_callback_like(ty: &Type) -> bool {
+    matches!(ty, Type::Callback | Type::CallbackWithParams(_))
+}
+
+// ---------------------------------------------------------------------------
+// 切片 2：具名 callback_def（`callback MyEvent(code: i32);`）→ C trampoline。
+//
+// parser 把 callback_def 建模为 Function（`is_callback_def = true`）；生成期
+// 据此把它从全局函数 glue 中路由出来，按回调生成 C 可调用入口
+// `mqjs_cb_<name>_invoke(ctx, handle, ...)`：
+// - Rust 实现体（`extern "C"`）进模块 glue.rs；
+// - C 声明只进 mquickjs_ridl_api.h（运行时 C TU 消费；register.h 供 ROM
+//   host tool，不声明 —— 吸取 gc_mark 双头声明教训）。
+// ---------------------------------------------------------------------------
+
+/// 具名回调定义的模板节点。
+#[derive(Debug, Clone)]
+pub(super) struct TemplateCallbackDef {
+    /// RIDL 原始名（如 `myEvent`）。
+    pub(super) name: String,
+    /// snake_case 名，用于 trampoline 符号 `mqjs_cb_<snake>_invoke`。
+    pub(super) snake: String,
+    pub(super) params: Vec<TemplateCallbackParam>,
+}
+
+/// 回调的一个参数（v1 白名单：bool / i32 / f64 / string）。
+#[derive(Debug, Clone)]
+pub(super) struct TemplateCallbackParam {
+    /// RIDL 原始参数名。
+    pub(super) name: String,
+    /// C/Rust 形参名：`p_` 前缀防止与 trampoline 的 `ctx` / `handle` 冲突。
+    pub(super) ident: String,
+    /// 归一化类型（Group 解包后）。
+    pub(super) ty: Type,
+}
+
+impl TemplateCallbackParam {
+    /// C 头文件中的形参类型（api.h 声明）。
+    /// bool 用 `int`（mquickjs.h 未引入 stdbool；C ABI 上传 0/1）。
+    pub(super) fn c_ty(&self) -> &'static str {
+        match &self.ty {
+            // Trailing space by design: the trampoline template concatenates
+            // c_ty + ident directly, so pointer stars glue onto the parameter
+            // name (`const char *p_text`) while value types get the separator
+            // (`int32_t p_code`).
+            Type::String => "const char *",
+            Type::F64 => "double ",
+            Type::Bool => "int ",
+            Type::I32 => "int32_t ",
+            // Optional(String)：C 侧 NULL 表 None（error-first 约定）。
+            Type::Optional(b) if b.as_ref() == &Type::String => "const char *",
+            _ => unreachable!("callback param whitelist enforced at construction"),
+        }
+    }
+
+    /// Rust `extern "C"` 形参类型（glue 实现）。
+    pub(super) fn rust_ffi_ty(&self) -> &'static str {
+        match &self.ty {
+            Type::String => "*const core::ffi::c_char",
+            Type::F64 => "f64",
+            // C `int` 与 Rust `bool` 的 ABI 不同（4 字节 vs 1 字节），
+            // FFI 边界统一用 i32 承载，非零即真。
+            Type::Bool | Type::I32 => "i32",
+            Type::Optional(b) if b.as_ref() == &Type::String => "*const core::ffi::c_char",
+            _ => unreachable!("callback param whitelist enforced at construction"),
+        }
+    }
+
+    /// 是否堆值参数（每次 JS_NewString / 非短整型 JS_NewFloat64 都会在引擎堆
+    /// 上分配，跨 GC 点传递必须经 GC 安全持有 → invoke_rooted）。
+    /// 字符串形态（含 Optional(String)）：C 侧 const char *，NULL → JS null。
+    pub(super) fn is_string_like(&self) -> bool {
+        match &self.ty {
+            Type::String => true,
+            Type::Optional(b) => b.as_ref() == &Type::String,
+            _ => false,
+        }
+    }
+
+    pub(super) fn is_heap(&self) -> bool {
+        match &self.ty {
+            Type::String | Type::F64 => true,
+            Type::Optional(b) => b.as_ref() == &Type::String,
+            _ => false,
+        }
+    }
+}
+
+impl TemplateCallbackDef {
+    pub(super) fn has_heap_params(&self) -> bool {
+        self.params.iter().any(|p| p.is_heap())
+    }
+
+    /// 从 callback_def 的 AST 节点构造；参数类型不在 v1 白名单内即报错。
+    pub(super) fn from_function(f: &Function) -> Result<Self, String> {
+        let mut params = Vec::new();
+        for p in &f.params {
+            let ty = normalize_callback_param_ty(&p.param_type).ok_or_else(|| {
+                format!(
+                    "callback '{}': parameter '{}' of type '{}': unsupported — v1 callback \
+                     trampolines support bool/i32/f64/string only \
+                     (docs/superpowers/specs/2026-10-10-callback-bridge-design.md §2)",
+                    f.name, p.name, p.param_type
+                )
+            })?;
+            let ident_snake = crate::generator::filters::to_snake_case(&p.name)
+                .unwrap_or_else(|_| p.name.clone());
+            params.push(TemplateCallbackParam {
+                name: p.name.clone(),
+                ident: format!("p_{}", ident_snake),
+                ty,
+            });
+        }
+        Ok(Self {
+            snake: crate::generator::filters::to_snake_case(&f.name)
+                .unwrap_or_else(|_| f.name.clone()),
+            name: f.name.clone(),
+            params,
+        })
+    }
+}
+
+/// callback 参数类型白名单归一化：解包 Group，命中白名单返回归一化类型。
+fn normalize_callback_param_ty(ty: &Type) -> Option<Type> {
+    match ty {
+        Type::Group(inner) => normalize_callback_param_ty(inner),
+        t @ (Type::Bool | Type::I32 | Type::F64 | Type::String) => Some(t.clone()),
+        // Optional(String)：error-first 回调约定（NULL → JS null）。
+        Type::Optional(inner) if matches!(**inner, Type::String) => {
+            Some(Type::Optional(Box::new(Type::String)))
+        }
+        _ => None,
     }
 }
 
@@ -1304,6 +1474,7 @@ pub fn generate_module_files(
     let mut enums = Vec::new();
     let mut structs = Vec::new();
     let mut using_aliases = Vec::new();
+    let mut callbacks = Vec::new();
 
     // Phase D: pre-collect same-module named-type names so struct fields can
     // resolve nested struct references regardless of definition order.
@@ -1329,6 +1500,13 @@ pub fn generate_module_files(
                     .as_ref()
                     .map(|m| m.module_path.as_str())
                     .unwrap_or("GLOBAL");
+                if f.is_callback_def {
+                    // 具名 callback_def：路由成 trampoline（切片 2），
+                    // 不再误生成为全局函数 glue。
+                    callbacks.push(TemplateCallbackDef::from_function(f)
+                        .map_err(|e| -> Box<dyn std::error::Error> { e.into() })?);
+                    continue;
+                }
                 functions.push(TemplateFunction::from_with_mode(
                     f.clone(),
                     file_mode,
@@ -1419,6 +1597,7 @@ pub fn generate_module_files(
         functions: functions.clone(),
         singletons,
         classes: classes.clone(),
+        callbacks,
     };
 
     let union_types = collect_union_types(
@@ -1667,6 +1846,11 @@ fn struct_field_rust_ty(
         Type::Union(_) => reject(
             "union fields are not supported in v1 (allowed field set: primitives/string/nested \
              struct/array<allowed>)"
+                .to_string(),
+        ),
+        Type::Callback | Type::CallbackWithParams(_) => reject(
+            "struct fields of callback type are not supported in v1: callbacks must be direct \
+             method parameters (struct conversion has no JS context for registration)"
                 .to_string(),
         ),
         Type::Traced(_) => reject(

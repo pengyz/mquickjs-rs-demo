@@ -10,7 +10,7 @@ comment = _{ "/*" ~ (!"*/" ~ ANY)* ~ "*/" | "//" ~ (!"\n" ~ ANY)* ~ "\n" }
 keyword = _{
     ("interface" | "class" | "enum" | "struct" | "const" | "readonly" | "property" | "proto" |
     "array" | "map" | "true" | "false" | "fn" | "import" | "as" |
-    "from" | "using" | "module" | "singleton" | "opaque" | "Traced" |
+    "from" | "using" | "module" | "singleton" | "opaque" | "Traced" | "callback" |
     "nonCancellable" | "timeout" | "cancellable") ~ !(ASCII_ALPHANUMERIC | "_")
 }
 // Identifier - must not match keywords
@@ -108,7 +108,11 @@ array_type = { "array" ~ WS ~ "<" ~ WS ~ type ~ WS ~ ">" }
 map_type = { "map" ~ WS ~ "<" ~ WS ~ type ~ WS ~ "," ~ WS ~ type ~ WS ~ ">" }
 union_type = { primary_type ~ (WS ~ "|" ~ WS ~ primary_type)+ }
 // 修改nullable_type，防止嵌套，并使用负前瞻防止重复的?符号
-nullable_type = { (traced_type | basic_type | array_type | map_type | custom_type | callback_type | group_type) ~ (WS? ~ "?") ~ (!"?") }
+// NOTE: callback_type 必须排在 custom_type（identifier）之前 —— PEG 顺序
+// 选择在首个成功分支上提交、不回溯重试，identifier 会先吃掉 "callback"
+// 前缀导致 callback_type 永远不可达（切片 2 修复：`callback(..)?` 此前
+// 实际无法解析）。
+nullable_type = { (traced_type | basic_type | array_type | map_type | callback_type | group_type | custom_type) ~ (WS? ~ "?") ~ (!"?") }
 custom_type = { identifier }
 callback_type = { "callback" ~ WS ~ identifier? ~ WS ~ "(" ~ WS ~ (param_list)? ~ WS ~ ")" }
 group_type = { "(" ~ WS ~ type ~ WS ~ ")" }

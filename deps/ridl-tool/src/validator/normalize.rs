@@ -9,6 +9,7 @@ pub(crate) fn ensure_default_constructors(idl: &mut IDL) {
                 return_type: Type::Void,
                 is_async: false,
                 module: None,
+                is_callback_def: false,
             });
         }
     }

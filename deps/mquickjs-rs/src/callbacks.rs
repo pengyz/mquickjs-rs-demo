@@ -96,6 +96,24 @@ macro_rules! lock_slots {
 #[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
 pub struct CallbackHandle(u32);
 
+impl CallbackHandle {
+    /// 从原始 `u32` 构造句柄（**纯构造器，无引擎交互**）。
+    ///
+    /// 用途：生成的 C trampoline（`mqjs_cb_<name>_invoke`，切片 2 codegen）
+    /// 的 ABI 参数是 `uint32_t handle`——句柄经 Rust impl 的 [`Self::raw`]
+    /// 存入 C user_data，再在 trampoline 里还原后调用 [`CallbackRegistry::invoke`]。
+    /// 伪造的值不会触达引擎：`invoke` 时得到 `InvalidHandle`。
+    pub fn from_raw(raw: u32) -> Self {
+        Self(raw)
+    }
+
+    /// 取原始 `u32`（**纯访问器**）——Rust impl 把句柄存入/传给 C 侧
+    /// user_data 时使用（LVGL `lv_obj_add_event_cb(user_data)` 形状）。
+    pub fn raw(self) -> u32 {
+        self.0
+    }
+}
+
 /// `invoke` 的错误。
 ///
 /// 除 `JsException` 携带 JS 异常消息外，其余变体**均不产生任何引擎副作用**
@@ -302,16 +320,60 @@ impl<'a> CallbackRegistry<'a> {
     /// 可任意传。堆对象值（string / object / function）只有在**压入引擎
     /// 值栈之后**才由引擎保活并随压缩重定位；压栈之前（含可能触发 GC 的
     /// `JS_StackCheck`，见下）传入的裸副本依赖**调用方持有** —— 堆对象
-    /// 参数应先经 GC 安全句柄（`Root` / `JSGCRef`）持有再以其 `as_raw()`
-    /// 传入。调用返回后，调用方持有的裸 `JSValue` 副本一律不得再解引用。
-    /// 切片 2 codegen 的基础类型（i32/f64/bool）为立即值，天然满足；
-    /// string/object 传递须遵守上述持有规则。
+    /// 参数应先经 GC 安全句柄（`Root` / `JSGCRef`）持有，并改用
+    /// [`Self::invoke_rooted`]（本方法在 `JS_StackCheck` 之前压栈的裸副本
+    /// 可能在其触发的压缩后悬垂）。调用返回后，调用方持有的裸 `JSValue`
+    /// 副本一律不得再解引用。切片 2 codegen 的立即值参数（i32 / bool）天然
+    /// 满足；string 与一般 f64（非短整型的 double 会在引擎堆上分配
+    /// `JSFloat64`，`mquickjs.c:1009`）一律改走 [`Self::invoke_rooted`]。
     ///
     /// # 锁与再入
     ///
     /// 槽位锁在读取函数值后立即释放，**不跨 `JS_Call` 持有** —— 回调体内
     /// 再入（触发其它回调、注销自己）安全。
     pub fn invoke(&self, handle: CallbackHandle, args: &[JSValue]) -> Result<(), CallbackError> {
+        let argc = args.len() as u32;
+        self.invoke_impl(handle, argc, &mut |out| {
+            out.extend_from_slice(args);
+        })
+    }
+
+    /// [`Self::invoke`] 的 GC 安全重载：堆对象参数以 **`Root`（引擎
+    /// `JSGCRef` 持有，压缩时自动重定位）** 传入。
+    ///
+    /// 为什么需要它（切片 2 C trampoline 的 string/f64 参数）：`invoke` 的
+    /// `&[JSValue]` 是裸位拷贝，而本模块内唯一可能触发 GC/堆压缩的点是
+    /// `JS_StackCheck`（`check_free_mem` 堆不足时直接 `JS_GC`，见
+    /// `mquickjs.c:529`）——裸拷贝在压缩后即悬垂，再压栈就是 UAF。
+    /// 本重载把参数值的读取推迟到 `JS_StackCheck` **之后**、压栈之前，
+    /// 经 `Root::as_raw()` 重读引擎维护的 `JSGCRef.val`，拿到的是重定位后
+    /// 的最新地址 —— 与下方读取回调函数槽位的顺序完全一致。
+    ///
+    /// 立即值参数也可以包进 `Root`（`JSGCRef` 对非指针值是 no-op），
+    /// 因此 codegen 对"含任一堆值参数"的回调统一走本方法。
+    pub fn invoke_rooted(
+        &self,
+        handle: CallbackHandle,
+        args: &[&crate::roots::Root<crate::handles::local::Value>],
+    ) -> Result<(), CallbackError> {
+        let argc = args.len() as u32;
+        self.invoke_impl(handle, argc, &mut |out| {
+            out.extend(args.iter().map(|r| r.as_raw()));
+        })
+    }
+
+    /// `invoke` / `invoke_rooted` 的公共实现。
+    ///
+    /// `push_args` 在 `JS_StackCheck`（本方法内唯一的 GC 点）**之后**被调用，
+    /// 负责把最终参数值填进 `out` —— 这是堆对象参数压缩安全的全部依据。
+    /// `argc` 是参数个数（`JS_StackCheck` 的预留大小 = `argc + 2`，含
+    /// fn 与 this 两个隐式槽位，与原 `invoke` 一致）。
+    fn invoke_impl(
+        &self,
+        handle: CallbackHandle,
+        argc: u32,
+        push_args: &mut dyn FnMut(&mut Vec<JSValue>),
+    ) -> Result<(), CallbackError> {
         if !self.alive() {
             return Err(CallbackError::ContextDropped);
         }
@@ -324,7 +386,7 @@ impl<'a> CallbackRegistry<'a> {
         // JSGCRef 持有，check 之后重读即得压缩重定位后的新地址；若先读后
         // check，读出的 fn_val 位拷贝会在压缩后悬垂（function.rs::call 无
         // 此修复优势 —— 其 this/args 不经 JSGCRef，无法重读）。
-        if unsafe { mquickjs_ffi::JS_StackCheck(self.ctx, args.len() as u32 + 2) } != 0 {
+        if unsafe { mquickjs_ffi::JS_StackCheck(self.ctx, argc + 2) } != 0 {
             return Err(CallbackError::StackOverflow);
         }
 
@@ -336,6 +398,10 @@ impl<'a> CallbackRegistry<'a> {
             .callback_slots
             .get(handle)
             .ok_or(CallbackError::InvalidHandle)?;
+
+        // 参数在 StackCheck 之后现场产出（invoke_rooted 的压缩安全性依据）。
+        let mut args: Vec<JSValue> = Vec::new();
+        push_args(&mut args);
 
         // JS_Call 的值栈约定（与 handles/function.rs::call、
         // context.rs::drain_completions 一致）：

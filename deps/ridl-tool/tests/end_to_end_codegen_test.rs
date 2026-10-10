@@ -335,13 +335,18 @@ interface Drawable {
     assert!(api_content.contains("fn get_name"), "Should have get_name method");
 }
 
-/// 测试 v1 不生成的类型（enum/struct/callback/using/global_function）
+/// 测试类型生成范围（enum/struct/callback/using/global_function）
+///
+/// 注：callback 参数白名单化后（bool/i32/f64/string/Optional(String)），
+/// object 参数的 callback 在生成期报 unsupported 错误（不再静默跳过），
+/// 该路径由 callback_codegen_test 的 reject 用例覆盖；此处 fixture 改用
+/// 受支持的参数形态，验证具名 callback 不再进 api.rs 全局函数流。
 #[test]
 fn test_v1_types_not_generated() {
     let ridl_input = r#"
 enum Color { RED, GREEN, BLUE }
 json struct Config { name: string; }
-callback EventHandler(event: object);
+callback EventHandler(event: i32);
 using StringMap = map<string, string>;
 fn helper(x: i32) -> i32;
 "#;

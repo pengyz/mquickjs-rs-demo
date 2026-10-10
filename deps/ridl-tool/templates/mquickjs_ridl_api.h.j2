@@ -160,6 +160,27 @@ JSValue js_{{ s.module_name|normalize_ident|to_snake_case }}_singleton_{{ s.name
 {%- endfor %}
 {%- endfor %}
 
+/* ----------------------------
+ * RIDL named callback trampolines
+ * (C event entry points; implemented in each module's Rust glue)
+ *
+ * Usage: your Rust impl receives a CallbackHandle from a RIDL method, stores
+ * it (CallbackHandle::raw() -> uint32_t) in C user_data, and the C event
+ * handler fires it here. JS exceptions never unwind into C: they are
+ * captured, reported on stderr (std builds) and cleared before returning.
+ * v1 callbacks have no return value (void), matching the event semantics.
+ *
+ * NOTE: declared here ONLY (runtime C TU public entry); the ROM host-tool
+ * header mquickjs_ridl_register.h deliberately does not declare them
+ * (gc_mark dual-header lesson: declare where the symbol is consumed).
+ * ----------------------------
+ */
+{%- for module in modules %}
+{%- for cb in module.callbacks %}
+void mqjs_cb_{{ cb.snake }}_invoke(JSContext *ctx, uint32_t handle{%- for p in cb.params %}, {{ p.c_ty() }}{{ p.ident }}{%- endfor %});
+{%- endfor %}
+{%- endfor %}
+
 // RIDL module require-table (generated)
 
 typedef struct {

@@ -113,19 +113,14 @@ pub fn rust_type_from_idl(idl_type: &Type) -> Result<String, askama::Error> {
             format!("mquickjs_rs::Traced<{}>", rust_type_from_idl(inner)?)
         }
 
-        // Callback types: convert to AsyncCallback<T>
-        Type::Callback => {
-            "mquickjs_rs::async_bridge::AsyncCallback<()>".to_string()
-        }
-        Type::CallbackWithParams(params) => {
-            // For now, use the first parameter type as the callback result type
-            // TODO: support multiple parameters
-            if let Some(first_param) = params.first() {
-                let result_ty = rust_type_from_idl(&first_param.param_type)?;
-                format!("mquickjs_rs::async_bridge::AsyncCallback<{}>", result_ty)
-            } else {
-                "mquickjs_rs::async_bridge::AsyncCallback<()>".to_string()
-            }
+        // Callback 参数在 Rust 边界即句柄（切片 2 同步回调桥）：
+        // JS 函数由 glue 提取并注册进 CallbackRegistry（GC 安全持有），
+        // impl 收到可存可传的 `CallbackHandle`（LVGL user_data 形状），
+        // C 事件侧经生成的 trampoline `mqjs_cb_<name>_invoke` 触发。
+        // 注：回调**参数**的白名单（bool/i32/f64/string）在 trampoline 构造处
+        // 校验；方法参数本身只关心"是个函数"，与回调内部参数类型无关。
+        Type::Callback | Type::CallbackWithParams(_) => {
+            "mquickjs_rs::CallbackHandle".to_string()
         }
 
         // Keep explicit: fail fast for types we haven't implemented yet.
@@ -869,6 +864,28 @@ pub fn emit_param_extract(
         emit_varargs_collect(&param.rust_name, &param.ty, param.file_mode, *idx0)?
     } else if let Type::Optional(inner) = &param.ty {
         let mut w = CodeWriter::new();
+
+        // Optional(callback) v1 不支持：null ⇒ "不注册"的语义需要
+        // Option<CallbackHandle> 路径，且 JS_IsFunction 校验无法在 null 检查
+        // 之前进行。明确报错而不是生成错误代码。
+        {
+            let mut cur: &Type = inner;
+            while let Type::Group(g) = cur {
+                cur = g;
+            }
+            if crate::generator::is_callback_like(cur) {
+                return Err(askama::Error::Custom(
+                    format!(
+                        "optional callback parameter '{}' is not supported in v1: declare a \
+                         non-optional `callback(..)` parameter (a callback that is never fired \
+                         does not need to be passed as null)",
+                        param.rust_name
+                    )
+                    .into(),
+                ));
+            }
+        }
+
         emit_missing_arg(&mut w, *idx1, &param.rust_name);
         emit_argv_v_let(&mut w, *idx0);
 
@@ -1786,21 +1803,57 @@ fn emit_single_param_extract_from_jsvalue(
         }
 
         Type::Callback | Type::CallbackWithParams(_) => {
-            // Callback parameter: expect a JS function
-            // Create an AsyncCallback closure that calls the JS function
+            // v1 参数白名单（设计 §2）：bool/i32/f64/string。其余类型在生成期
+            // 给出定位明确的错误，而非生成期后才发现的 compile_error。
+            if let Type::CallbackWithParams(ps) = ty {
+                for p in ps {
+                    let supported = match &p.param_type {
+                        Type::Bool | Type::I32 | Type::F64 | Type::String => true,
+                        // Optional(String)：error-first 回调约定（NULL → JS null）。
+                        Type::Optional(b) => b.as_ref() == &Type::String,
+                        _ => false,
+                    };
+                    if !supported {
+                        return Err(askama::Error::Custom(format!(
+                            "callback parameter '{}' of type '{}': unsupported — v1 callback \
+                             trampolines support bool/i32/f64/string only \
+                             (docs/superpowers/specs/2026-10-10-callback-bridge-design.md §2)",
+                            p.name, p.param_type
+                        )
+                        .into()));
+                    }
+                }
+            }
+            // 同步回调参数（切片 2，docs/superpowers/specs/2026-10-10-callback-bridge-design.md）：
+            //
+            //   JS_IsFunction 校验 → Local<Function>（经 Scope 句柄体系）
+            //   → 注册进 CallbackRegistry（JSGCRef 持有，GC 压缩安全）
+            //   → impl 收到 `CallbackHandle`（可存可传，LVGL user_data 形状）。
+            //
+            // 契约：本分支生成的代码引用 `h`（ContextToken）与 `scope`。
+            // callback 参数已计入 needs_scope（generator::param_needs_js_context），
+            // glue 在参数提取前必然已创建二者；struct 字段/varargs/map 值等
+            // 无 ctx 上下文的入口在各自分支先行拒绝 callback 类型。
             let err = format!("invalid callback argument: {name}");
             w.push_line(format!(
                 "if unsafe {{ mquickjs_rs::mquickjs_ffi::JS_IsFunction(ctx, v) }} == 0 {{ return js_throw_type_error(ctx, \"{err}\"); }}"
             ));
-            // Capture the JS function as raw JSValue
+            // 提取为 Local<Function>（跟随仓内 Local 用法：
+            // scope.value → try_into_function；JS_IsFunction 已通过，
+            // Err 分支保持 C ABI 安全的 type error 返回，不 panic）。
             w.push_line(format!(
-                "let {name}_raw = v;"
+                "let {name}_val = scope.value(v);",
+                name = name
             ));
-            // Create AsyncCallback closure - just pass the raw JSValue
-            // The async bridge will handle the callback invocation
-            // We don't capture ctx because it's not Send
             w.push_line(format!(
-                "let {name}: mquickjs_rs::async_bridge::AsyncCallback<String> = Box::new(move |_result| {{ /* callback will be invoked by async bridge */ }});"
+                "let {name}_fn = match {name}_val.try_into_function(&scope) {{ Ok(f) => f, Err(_) => return js_throw_type_error(ctx, \"{err}\") }};",
+                name = name,
+                err = err
+            ));
+            // 注册：函数值进入 JSGCRef 槽位，直至 unregister / ctx 销毁。
+            w.push_line(format!(
+                "let {name}: mquickjs_rs::CallbackHandle = h.callbacks().register(&scope, {name}_fn);",
+                name = name
             ));
         }
         Type::Optional(inner) => {
@@ -1810,6 +1863,13 @@ fn emit_single_param_extract_from_jsvalue(
             }
 
             match cur {
+                Type::Callback | Type::CallbackWithParams(_) => {
+                    return Err(askama::Error::Custom(format!(
+                        "optional callback parameter '{name}': not supported in v1 -- \
+                         use a non-optional callback parameter"
+                    )
+                    .into()));
+                }
                 Type::Any | Type::Object => {
                     // Optional(any/object) param decoding:
                     // - null/undefined => None
@@ -1888,6 +1948,20 @@ fn emit_single_param_extract_from_jsvalue(
         Type::Map(key_ty, value_ty) => {
             let map_rust_ty = rust_type_from_idl(ty)?;
             let key_rust_ty = rust_type_from_idl(key_ty)?;
+
+            // callback 不能作为 map 的 key/value：map 提取运行在循环体内，
+            // 没有 trampoline/h 上下文可注册回调（注册需要 `h` + `scope`）。
+            if crate::generator::is_callback_like(key_ty)
+                || crate::generator::is_callback_like(value_ty)
+            {
+                return Err(askama::Error::Custom(
+                    "map<K, V> does not support callback keys/values in v1: callback params \
+                     must be direct method parameters (the map extraction loop has no JS \
+                     context for callback registration)"
+                        .to_string()
+                        .into(),
+                ));
+            }
 
             // std::collections::HashMap requires K: Eq + Hash. f32/f64 do not implement these.
             // For now we only support primitive keys that satisfy Eq+Hash.

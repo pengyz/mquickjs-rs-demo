@@ -1,0 +1,3 @@
+// 切片 2 聚合头测试 fixture：具名 callback（string + i32 参数，覆盖
+// trampoline C ABI 的堆值与立即值两种参数形态）。
+callback myEvent(text: string, code: i32);
