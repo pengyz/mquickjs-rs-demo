@@ -37,6 +37,7 @@
 - [RIDL 解析器测试策略](pattern_ridl_parser_testing.md) — 三层测试架构：语法单元→集成→端到端
 - [RIDL 代码生成器测试策略](pattern_ridl_codegen_testing.md) — 类型映射、模板渲染、端到端编译
 - [named-type override pass 范式](pattern_named_type_override_pass.md) — 聚合级命名类型走渲染前覆写（union 先行），不改无状态 filter
+- [RIDL 同步回调桥](pattern_ridl_callback_bridge.md) — many-shot 同步回调：CallbackHandle + registry invoke；与 async bridge 正交；grammar keyword/parse_type 早返回两坑
 - [RIDL 全局函数架构](pattern_ridl_global_function_architecture.md) — glue 生成 C FFI，用户在 impls 提供实现，api.rs 不生成
 - 【已作废】[RIDL 自动生成 gc_mark](pattern_ridl_gc_mark_auto_gen.md) — 有致命 ABI 缺陷且已冗余，机制整体移除
 

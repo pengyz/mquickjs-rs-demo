@@ -1,6 +1,9 @@
 # C3 设计：RIDL 同步回调桥（many-shot callback）
 
-> 状态：草案 → 用户裁定关键决策 → 实现（subagent-driven + 两阶段审查）
+> 状态：**已完成 2026-10-10**（切片 1 c1b8c2f / 切片 2 095d4d9 / 切片 3 6f47714；
+> ridl-tool 435/0、workspace 635/0、语料 33/33）。实现中的两个额外解析修复
+> （grammar callback 关键字、parse_type callback_type 早返回）见
+> docs/knowledge/pattern_ridl_callback_bridge.md。
 > 日期：2026-10-10
 > 背景：对抗复核 C3 发现 RIDL 回调 codegen 是 no-op stub（空 AsyncCallback
 > 闭包，无人调用）。本设计把回调做成真能力——这是 LVGL 绑定（生态方案阶段
