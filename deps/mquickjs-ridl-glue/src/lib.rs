@@ -29,6 +29,30 @@ pub struct Config {
 /// # 何时调用
 ///
 /// 在应用自己的 `build.rs` 中调用（通常紧跟 `ridl-tool module` 之后）。
+///
+/// 需要在 emit 前探测产物是否存在时（如 library crate 的纯构建无需链接、
+/// 不应因产物缺失而 panic），先用 [`ridl_stdlib_lib_path`] 查路径。
+pub fn ridl_stdlib_lib_path() -> PathBuf {
+    let target_dir = resolve_target_dir();
+
+    let triple = env::var("TARGET").expect("TARGET is set by cargo for build scripts");
+    let mode = match env::var("PROFILE").as_deref() {
+        Ok("release") => "release",
+        _ => "debug",
+    };
+
+    // 与 ridl-builder 写入产物的路径保持一致：
+    //   target/mquickjs-build/framework/<triple>/<mode>/{base,ridl}
+    target_dir
+        .join("mquickjs-build")
+        .join("framework")
+        .join(triple)
+        .join(mode)
+        .join("ridl")
+        .join("lib")
+        .join("libmquickjs_stdlib_ridl.a")
+}
+
 pub fn emit_native_stdlib_link() {
     let target_dir = resolve_target_dir();
 

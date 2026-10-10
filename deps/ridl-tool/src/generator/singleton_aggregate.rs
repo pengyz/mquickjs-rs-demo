@@ -255,7 +255,7 @@ pub(super) fn generate_ridl_context_ext(
     Ok(())
 }
 
-fn sanitize_ident(name: &str) -> String {
+pub(crate) fn sanitize_ident(name: &str) -> String {
     // Keep it simple: allow [A-Za-z_][A-Za-z0-9_]*; otherwise map to underscores.
     // Also avoid Rust keywords minimally.
     let mut out = String::new();

@@ -1928,7 +1928,14 @@ pub fn generate_aggregate_consolidated(
     }
 
     // (3) ridl_bootstrap.rs (modules keep-alive + process initialize)
-    let mut crate_names: Vec<&str> = plan.modules.iter().map(|m| m.crate_name.as_str()).collect();
+    // Crate names here are PACKAGE names, which may contain '-' (e.g.
+    // "mquickjs-ui"); the Rust path the generated code links through is the
+    // lib-target ident (hyphens -> underscores), so normalize before emitting.
+    let mut crate_names: Vec<String> = plan
+        .modules
+        .iter()
+        .map(|m| crate::generator::singleton_aggregate::sanitize_ident(&m.crate_name))
+        .collect();
     crate_names.sort();
     crate_names.dedup();
 
@@ -1938,7 +1945,9 @@ pub fn generate_aggregate_consolidated(
         crate_names: Vec<&'a str>,
     }
 
-    let t = RidlBootstrapTemplate { crate_names };
+    let t = RidlBootstrapTemplate {
+        crate_names: crate_names.iter().map(String::as_str).collect(),
+    };
     std::fs::write(output_dir.join("ridl_bootstrap.rs"), t.render()?)?;
 
     Ok(())

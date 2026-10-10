@@ -1,0 +1,5 @@
+module mquickjs_ui@1.0
+
+class Label {
+    fn setText(text: string) -> void;
+}
