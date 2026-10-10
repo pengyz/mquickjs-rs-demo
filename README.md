@@ -355,6 +355,50 @@ impl MyServiceSingleton for DefaultMyService {
 }
 ```
 
+## 同步回调 — RIDL callback 桥
+
+RIDL 方法的 `callback` 参数提供**同步、多次触发**的事件回调：JS 传入函数，
+SDK 经引擎 JSGCRef 安全持有（GC 标记 + 压缩重定位自动处理），Rust/C 侧凭
+`CallbackHandle` 句柄多次调用。
+
+### IDL 语法
+
+```typescript
+class Button {
+    fn setOnClick(cb: callback(code: i32)) -> void;
+    fn fire(code: i32) -> void;   // 触发入口（模拟 C 事件点）
+}
+```
+
+### Rust impl
+
+```rust
+impl ButtonClass for DefaultButton {
+    fn set_on_click(&mut self, _env: &mut Env<'ctx>, cb: CallbackHandle) {
+        self.on_click = Some(cb);
+    }
+
+    fn fire(&mut self, code: i32) {
+        let h = ContextToken::current().unwrap();
+        let _ = h.callbacks().invoke(self.on_click.unwrap(), &[unsafe {
+            mquickjs_ffi::JS_NewInt32(h.ctx, code)
+        }]);  // Err(JsException) 已清除 ctx 异常，打印上报即可
+    }
+}
+```
+
+### JS 侧
+
+```javascript
+var b = new Button();
+b.setOnClick(function (code) { clicks += code; });
+b.fire(2); b.fire(3);   // many-shot：多次触发
+```
+
+v1 参数白名单：`bool / i32 / f64 / string / string?`（NULL = None，
+error-first 约定）；回调无返回值；传非函数报 TypeError；回调体内 throw
+受控不崩。完整语义与保证见 [回调桥指南](docs/callback-guide.md)。
+
 ## 测试
 
 ```bash

@@ -132,6 +132,12 @@ interface CallbackExample {
 }
 ```
 
+> **实现状态（2026-10-10）**：callback 已实现为**同步 many-shot 回调桥**
+> （JSGCRef 持有 + CallbackHandle + C trampoline）。v1 限制：回调**无返回值**
+> （下文 `-> callback` 返回值形态不支持）；参数白名单
+> bool/i32/f64/string/Optional(String)；Optional(callback) 暂不支持。
+> 用法详见 [回调桥指南](../callback-guide.md)。
+
 3. **命名Callback声明**：callback 可以有自己的名字，定义格式为 `callback Name(param: Type)`，与函数类似但使用 `callback` 关键字。注意，回调函数不具有返回值，主要用于传递异步结果：
 
 ```

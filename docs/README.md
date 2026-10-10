@@ -12,6 +12,7 @@
   - [RIDL 语义总览](ridl/overview.md)
   - [ridl_context_init(ctx)](ridl/context-init.md)
   - [require materialize 语义](ridl/require-materialize.md)
+- [同步回调使用指南（callback 桥）](../callback-guide.md)
   - [聚合产物与边界](ridl/codegen-outputs.md)
 
 - 架构：
